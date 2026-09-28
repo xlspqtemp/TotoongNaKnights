@@ -62,6 +62,12 @@ public class ConsoleLogUI : MonoBehaviour
         Instance = this;
     }
 
+    private void OnDestroy()
+    {
+        if (Instance == this)
+            Instance = null;
+    }
+
     private void Update()
     {
         UpdateScrollReadingState();

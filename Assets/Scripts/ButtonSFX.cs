@@ -1,15 +1,15 @@
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.EventSystems;
 using UnityEngine.UIElements;
 using ToolkitButton = UnityEngine.UIElements.Button;
 
-/// <summary>
-/// Plays an assigned sound when a UGUI or named UI Toolkit button is clicked.
-/// </summary>
+/// <summary>Plays assigned hover and click sounds for UGUI or named UI Toolkit buttons.</summary>
 [RequireComponent(typeof(AudioSource))]
-public class ButtonSFX : MonoBehaviour, IPointerClickHandler
+public class ButtonSFX : MonoBehaviour, IPointerClickHandler, IPointerEnterHandler
 {
     [SerializeField] private AudioClip clickClip;
+    [SerializeField] private AudioClip hoverClip;
     [SerializeField] private string uiToolkitButtonName;
 
     private AudioSource audioSource;
@@ -45,11 +45,33 @@ public class ButtonSFX : MonoBehaviour, IPointerClickHandler
         }
     }
 
+    /// <summary>Plays the click sound when a pointer clicks this button.</summary>
     public void OnPointerClick(PointerEventData eventData)
     {
         PlayClick();
     }
 
+    /// <summary>Plays the hover sound when a pointer enters this button.</summary>
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (hoverClip != null && audioSource != null)
+            audioSource.PlayOneShot(hoverClip);
+    }
+
+    /// <summary>Configures sounds and mixer routing for buttons created at runtime.</summary>
+    public void ConfigureFeedback(AudioClip assignedClickClip, AudioClip assignedHoverClip, AudioMixerGroup outputGroup)
+    {
+        clickClip = assignedClickClip;
+        hoverClip = assignedHoverClip;
+
+        if (audioSource == null)
+            audioSource = GetComponent<AudioSource>();
+
+        if (audioSource != null && outputGroup != null)
+            audioSource.outputAudioMixerGroup = outputGroup;
+    }
+
+    /// <summary>Plays this button's click sound.</summary>
     public void PlayClick()
     {
         if (clickClip != null && audioSource != null)

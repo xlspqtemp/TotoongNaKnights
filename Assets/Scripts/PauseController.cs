@@ -23,6 +23,25 @@ public class PauseController : MonoBehaviour
     }
 
     /// <summary>
+    /// Clears run-local state and reloads the current gameplay scene from its configured start state.
+    /// </summary>
+    public void RestartGame()
+    {
+        isPaused = false;
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
+
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.ClearLog();
+
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    /// <summary>
     /// Resumes time before returning to the main menu.
     /// </summary>
     public void LoadMainMenu()

@@ -27,6 +27,7 @@ public class WellnessManager : MonoBehaviour
     public static WellnessManager Instance { get; private set; }
 
     public event Action<float, float> OnWellnessChanged;
+    public event Action<float> OnWellnessDeltaApplied;
     public event Action OnCriticalEntered;
     public event Action<WellnessRunResult> OnGameWon;
     public event Action<WellnessRunResult> OnGameLost;
@@ -211,7 +212,7 @@ public class WellnessManager : MonoBehaviour
         {
             int wholeSeconds = Mathf.FloorToInt(bacteremiaDrainTimer);
             bacteremiaDrainTimer -= wholeSeconds;
-            ApplyWellnessDelta("BacteremiaDrain", -bacteremiaDrainPerSecond * wholeSeconds);
+            ApplyWellnessDelta("BacteremiaDrain", -bacteremiaDrainPerSecond * wholeSeconds, false);
         }
     }
 
@@ -321,7 +322,7 @@ public class WellnessManager : MonoBehaviour
         }
     }
 
-    private void ApplyWellnessDelta(string eventId, float requestedDelta)
+    private void ApplyWellnessDelta(string eventId, float requestedDelta, bool showChangeIndicator = true)
     {
         if (runHasEnded)
             return;
@@ -335,6 +336,8 @@ public class WellnessManager : MonoBehaviour
         if (!Mathf.Approximately(previousWellness, currentWellness))
         {
             PublishWellnessChanged();
+            if (showChangeIndicator)
+                OnWellnessDeltaApplied?.Invoke(appliedDelta);
 
             if (!criticalWasEntered && previousWellness > criticalThreshold && currentWellness <= criticalThreshold)
                 EnterCriticalState();

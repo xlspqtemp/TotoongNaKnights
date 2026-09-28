@@ -20,6 +20,8 @@ AudioMixerController:
     name: MusicVolume
   - guid: 8b3f1a0f11f84d2f9c50f1aa7e9d2c22
     name: SFXVolume
+  - guid: a3f1592c1c8e4c9b955074a2116203d7
+    name: MasterVolume
   m_AudioMixerGroupViews:
   - guids:
     - 1a1b1c1d1e1f20212223242526272829
@@ -40,7 +42,7 @@ AudioMixerGroupController:
   m_Children:
   - {fileID: 24300002}
   - {fileID: 24300003}
-  m_Volume: 00000000000000000000000000000000
+  m_Volume: a3f1592c1c8e4c9b955074a2116203d7
   m_Pitch: 00000000000000000000000000000000
   m_Send: 00000000000000000000000000000000
   m_Effects:
