@@ -51,6 +51,9 @@ public class DayCounterUI : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField] private float objectiveCompletionThreshold = 1f;
 
+    [Header("Run Length")]
+    [SerializeField, Min(1)] private int totalGameDays = 14;
+
     [Header("Start State")]
     [SerializeField] private bool isRunning = true;
     [SerializeField] private int startDay = 1;
@@ -239,4 +242,5 @@ public class DayCounterUI : MonoBehaviour
     public int CurrentMinute => currentMinute;
     public bool IsRunning => isRunning;
     public ProgressionMode CurrentMode => progressionMode;
+    public int TotalGameDays => totalGameDays;
 }
