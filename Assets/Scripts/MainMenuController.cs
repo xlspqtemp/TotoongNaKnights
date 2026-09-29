@@ -48,6 +48,8 @@ public class MainMenuController : MonoBehaviour
     private Slider defenseSlider;
     private Slider randomEventsSlider;
 
+
+
     /// <summary>
     /// Opens the demo confirmation window when the Play button is selected.
     /// </summary>
@@ -73,6 +75,22 @@ public class MainMenuController : MonoBehaviour
         overlay.transform.SetAsLastSibling();
         promptPanel.SetActive(true);
         difficultyPanel.SetActive(false);
+    }
+
+    /// <summary>
+    /// Opens the static placeholder leaderboards panel over the main menu.
+    /// </summary>
+    public void ShowLeaderboards()
+    {
+        if (menuCanvas == null)
+        {
+            menuCanvas = FindFirstObjectByType<Canvas>();
+        }
+
+        if (menuCanvas != null)
+        {
+            LeaderboardsScreen.Show(menuCanvas.transform);
+        }
     }
 
     /// <summary>
