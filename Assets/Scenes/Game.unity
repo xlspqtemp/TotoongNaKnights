@@ -31300,6 +31300,20 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!114 &1898174451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1898174446}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1af5b8f1a24d36a45bb02bac4a7349a5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UnitSelectionController
+  targetCamera: {fileID: 1854060992}
+  hudCanvas: {fileID: 447793135}
 --- !u!1 &1906858308
 GameObject:
   m_ObjectHideFlags: 0
@@ -34008,6 +34022,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4749651613382924225, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1898174450}
+    - targetCorrespondingSourceObject: {fileID: 4749651613382924225, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1898174451}
   m_SourcePrefab: {fileID: 100100000, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
 --- !u!1001 &3004891328046425654
 PrefabInstance:

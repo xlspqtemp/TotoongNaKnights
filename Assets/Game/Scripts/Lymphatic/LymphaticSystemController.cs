@@ -49,6 +49,11 @@ public sealed class LymphaticSystemController : MonoBehaviour
         }
 
         GameObject cell = Instantiate(cellPrefab, spawnHit.position, Quaternion.identity, transform);
+        SelectableUnit selectableUnit = cell.GetComponent<SelectableUnit>();
+        if (selectableUnit == null)
+            selectableUnit = cell.AddComponent<SelectableUnit>();
+        selectableUnit.Initialize(cellPrefab.name);
+
         NavMeshAgent agent = cell.GetComponent<NavMeshAgent>();
         if (agent == null)
         {
