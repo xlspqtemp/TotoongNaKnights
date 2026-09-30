@@ -166,6 +166,9 @@ public class RandomEventSystem : MonoBehaviour
         }
 
         RandomEventData eventData = CreateEventData(eventId, severity, day, hour);
+        if (eventData.triggersQTE)
+            GameplaySpeed.BeginQTE(eventData.eventName);
+
         string logMessage = $"{RANDOM_EVENT_PREFIX} Day {day}, Hour {hour:00}:00: " +
                             $"{eventData.eventName} ({eventData.severity}) — {eventData.eventDescription}";
         Debug.Log(logMessage);

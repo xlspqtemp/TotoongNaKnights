@@ -89,7 +89,7 @@ public class HumanSnapshotAnimator : MonoBehaviour
                 displayImage.sprite = frames[frameIndex];
 
             frameIndex = (frameIndex + 1) % frames.Length;
-            yield return new WaitForSecondsRealtime(frameDuration);
+            yield return GameplaySpeed.WaitForGameplaySeconds(frameDuration);
 
             if (activity == RoutineActivity.Idle)
                 continue;

@@ -14,6 +14,8 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const float CoughCooldownSeconds = 5f;
     private const float NavMeshSampleRadius = 50f;
     private const float ArrivalDistance = 1f;
+    private const string DustQTEId = "Inhaled dust/allergen";
+    private const string ColdQTEId = "Caught a cold from a sick classmate/coworker";
 
     [SerializeField] private Transform airwaySpawnPoint;
     [SerializeField] private Transform leftLung;
@@ -23,8 +25,8 @@ public sealed class RespiratorySystemController : MonoBehaviour
     [SerializeField] private Button coughButton;
     [SerializeField] private TextMeshProUGUI coughButtonLabel;
 
-    private float coughReadyAt;
-    private float contaminatedAirUntil;
+    private float coughCooldownRemaining;
+    private float contaminatedAirRemaining;
     private Coroutine spawnRoutine;
 
     private void OnEnable()
@@ -73,22 +75,25 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void Update()
     {
+        float gameplayDelta = GameplaySpeed.DeltaTime;
+        coughCooldownRemaining = Mathf.Max(0f, coughCooldownRemaining - gameplayDelta);
+        contaminatedAirRemaining = Mathf.Max(0f, contaminatedAirRemaining - gameplayDelta);
         RefreshCoughButton();
     }
 
     private void HandleRandomEventTriggered(RandomEventData eventData)
     {
-        if (eventData != null && eventData.eventName == "Inhaled dust/allergen")
-            contaminatedAirUntil = Mathf.Max(contaminatedAirUntil, Time.time + ContaminatedAirDurationSeconds);
+        if (eventData != null && eventData.eventName == DustQTEId)
+            contaminatedAirRemaining = Mathf.Max(contaminatedAirRemaining, ContaminatedAirDurationSeconds);
     }
 
     private IEnumerator RunSpawnLoop()
     {
         while (true)
         {
-            GameObject prefab = Time.time < contaminatedAirUntil ? contaminatedAirPrefab : airPrefab;
+            GameObject prefab = contaminatedAirRemaining > 0f ? contaminatedAirPrefab : airPrefab;
             SpawnAir(prefab);
-            yield return new WaitForSeconds(SpawnIntervalSeconds);
+            yield return GameplaySpeed.WaitForGameplaySeconds(SpawnIntervalSeconds);
         }
     }
 
@@ -129,6 +134,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             return;
         }
 
+        GameplaySpeedNavMeshAgent.Register(agent);
         RespiratoryAirAgent airAgent = air.GetComponent<RespiratoryAirAgent>();
         if (airAgent == null)
             airAgent = air.AddComponent<RespiratoryAirAgent>();
@@ -145,7 +151,9 @@ public sealed class RespiratorySystemController : MonoBehaviour
         if (coughButton == null || !coughButton.interactable)
             return;
 
-        coughReadyAt = Time.time + CoughCooldownSeconds;
+        coughCooldownRemaining = CoughCooldownSeconds;
+        GameplaySpeed.ResolveQTE(DustQTEId);
+        GameplaySpeed.ResolveQTE(ColdQTEId);
         Transform[] respiratoryChildren = GetComponentsInChildren<Transform>(true);
         foreach (Transform candidate in respiratoryChildren)
         {
@@ -177,7 +185,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
         if (coughButton == null)
             return;
 
-        float remainingCooldown = coughReadyAt - Time.time;
+        float remainingCooldown = coughCooldownRemaining;
         bool isOnCooldown = remainingCooldown > 0f;
         coughButton.interactable = !isOnCooldown;
         if (coughButtonLabel != null)

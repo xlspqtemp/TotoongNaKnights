@@ -77,7 +77,7 @@ public class TacticalOrdersController : MonoBehaviour
         {
             label.text = $"{spawnPointName}\n{Mathf.CeilToInt(remainingTime)}s";
             yield return null;
-            remainingTime -= Time.deltaTime;
+            remainingTime -= GameplaySpeed.DeltaTime;
         }
 
         label.text = spawnPointName;

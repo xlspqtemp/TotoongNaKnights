@@ -34,6 +34,7 @@ public sealed class LymphaticCellRoute : MonoBehaviour
         Transform[] lungPoints)
     {
         agent = cellAgent;
+        GameplaySpeedNavMeshAgent.Register(agent);
         lymphaticExitPoint = exitPoint;
         circulatoryEntryPoint = circulatoryEntry;
         heart = heartPoint;
