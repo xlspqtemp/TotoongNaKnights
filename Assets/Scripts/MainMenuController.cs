@@ -48,7 +48,34 @@ public class MainMenuController : MonoBehaviour
     private Slider defenseSlider;
     private Slider randomEventsSlider;
 
+    private void Start()
+    {
+        if (menuCanvas == null)
+        {
+            menuCanvas = FindFirstObjectByType<Canvas>();
+        }
 
+        if (menuCanvas != null)
+        {
+            ManualScreen.AddMenuEntry(menuCanvas.transform, ShowManual);
+        }
+    }
+
+    /// <summary>
+    /// Opens the Manual overlay over the main menu.
+    /// </summary>
+    public void ShowManual()
+    {
+        if (menuCanvas == null)
+        {
+            menuCanvas = FindFirstObjectByType<Canvas>();
+        }
+
+        if (menuCanvas != null)
+        {
+            ManualScreen.Show(menuCanvas.transform);
+        }
+    }
 
     /// <summary>
     /// Opens the demo confirmation window when the Play button is selected.

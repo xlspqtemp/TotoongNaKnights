@@ -2,6 +2,8 @@ using UnityEngine;
 
 public class CameraScript : MonoBehaviour
 {
+    private const int LayerCount = 4;
+
     public float panSpeed = 5f;
 
     /* 08/19, (4)Transform variables allotted for all four(4) systems */
@@ -23,10 +25,11 @@ public class CameraScript : MonoBehaviour
 
     private bool wasPanInputActive;
     private bool wasZoomInputActive;
+    private int selectedLayer = 1;
 
     private void Start()
     {
-        HideAllSystemControls();
+        SetSelectedLayer(1, false);
     }
 
     private void Update()
@@ -43,34 +46,75 @@ public class CameraScript : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.F))
         {
-            transform.position = floor1.position;
-            HideAllSystemControls();
-            SetLymphaticOrdersVisible(true);
-            PlayLayerSwitchSound();
+            SetSelectedLayer(1, true);
         }
         else if (Input.GetKeyDown(KeyCode.G))
         {
-            transform.position = floor2.position;
-            HideAllSystemControls();
-            SetTacticalOrdersVisible(true);
-            PlayLayerSwitchSound();
+            SetSelectedLayer(2, true);
         }
         else if (Input.GetKeyDown(KeyCode.H))
         {
-            transform.position = floor3.position;
-            HideAllSystemControls();
-            SetDigestiveOrdersVisible(true);
-            PlayLayerSwitchSound();
+            SetSelectedLayer(3, true);
         }
         else if (Input.GetKeyDown(KeyCode.J))
         {
-            transform.position = floor4.position;
-            HideAllSystemControls();
-            SetRespiratoryOrdersVisible(true);
-            PlayLayerSwitchSound();
+            SetSelectedLayer(4, true);
         }
 
         UpdateMovementAudio(Mathf.Abs(horizontal) > 0.01f || Mathf.Abs(vertical) > 0.01f);
+    }
+
+    /// <summary>
+    /// Advances to the next body-system layer and wraps from layer four to layer one.
+    /// </summary>
+    public void SelectNextLayer()
+    {
+        int nextLayer = selectedLayer % LayerCount + 1;
+        SetSelectedLayer(nextLayer, true);
+    }
+
+    private void SetSelectedLayer(int layerNumber, bool playSwitchSound)
+    {
+        if (layerNumber < 1 || layerNumber > LayerCount)
+        {
+            return;
+        }
+
+        selectedLayer = layerNumber;
+        HideAllSystemControls();
+
+        Transform destination = null;
+        switch (selectedLayer)
+        {
+            case 1:
+                destination = floor1;
+                SetLymphaticOrdersVisible(true);
+                break;
+            case 2:
+                destination = floor2;
+                SetTacticalOrdersVisible(true);
+                break;
+            case 3:
+                destination = floor3;
+                SetDigestiveOrdersVisible(true);
+                break;
+            case 4:
+                destination = floor4;
+                SetRespiratoryOrdersVisible(true);
+                break;
+        }
+
+        if (destination != null)
+        {
+            transform.position = destination.position;
+        }
+
+        LayerSelectionHUD.SetSelectedLayer(selectedLayer);
+
+        if (playSwitchSound)
+        {
+            PlayLayerSwitchSound();
+        }
     }
 
     private void HideAllSystemControls()
@@ -104,7 +148,9 @@ public class CameraScript : MonoBehaviour
     private static void SetCanvasGroupVisible(CanvasGroup canvasGroup, bool isVisible)
     {
         if (canvasGroup == null)
+        {
             return;
+        }
 
         canvasGroup.alpha = isVisible ? 1f : 0f;
         canvasGroup.interactable = isVisible;
@@ -114,7 +160,9 @@ public class CameraScript : MonoBehaviour
     private void PlayLayerSwitchSound()
     {
         if (movementAudioSource != null && layerSwitchSfx != null)
+        {
             movementAudioSource.PlayOneShot(layerSwitchSfx);
+        }
     }
 
     private void UpdateMovementAudio(bool panInputActive)
@@ -125,7 +173,9 @@ public class CameraScript : MonoBehaviour
         bool newZoomAction = zoomInputActive && !wasZoomInputActive;
 
         if ((newPanAction || newZoomAction) && movementAudioSource != null && movementSfx != null)
+        {
             movementAudioSource.PlayOneShot(movementSfx);
+        }
 
         wasPanInputActive = panInputActive;
         wasZoomInputActive = zoomInputActive;
