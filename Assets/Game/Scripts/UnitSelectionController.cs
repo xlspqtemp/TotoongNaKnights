@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -16,6 +17,8 @@ public sealed class UnitSelectionController : MonoBehaviour
     [SerializeField] private Canvas hudCanvas;
 
     private TextMeshProUGUI infoLabel;
+    private RectTransform infoPanelRect;
+    private GameObject infoPanelObject;
     private SelectableUnit selectedUnit;
 
     private void Start()
@@ -33,15 +36,20 @@ public sealed class UnitSelectionController : MonoBehaviour
 
     private void Update()
     {
-        if (selectedUnit == null && infoLabel != null && infoLabel.transform.parent.gameObject.activeSelf)
+        if (selectedUnit == null && infoPanelObject != null && infoPanelObject.activeSelf)
             SetSelectedUnit(null);
 
-        if (Time.timeScale <= 0f || !Input.GetMouseButtonDown(0))
+        if (!Input.GetMouseButtonDown(0))
             return;
 
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-            return;
-        if (targetCamera == null)
+        EventSystem eventSystem = EventSystem.current;
+        GameObject selectedUIObject = eventSystem != null ? eventSystem.currentSelectedGameObject : null;
+        bool pointerOnInteractiveUI = TryGetInteractiveUIHit(Input.mousePosition, out string uiHitName, out string clickHandlerName);
+        Debug.Log(
+            $"Unit selection click at {Input.mousePosition}: UI hit='{uiHitName}', click handler='{clickHandlerName}', current UI selection='{(selectedUIObject != null ? selectedUIObject.name : "none")}'; interactive UI={(pointerOnInteractiveUI ? "yes" : "no")}.",
+            this);
+
+        if (Time.timeScale <= 0f || pointerOnInteractiveUI || targetCamera == null)
             return;
 
         Ray selectionRay = targetCamera.ScreenPointToRay(Input.mousePosition);
@@ -54,11 +62,26 @@ public sealed class UnitSelectionController : MonoBehaviour
             if (unit == null)
                 continue;
 
+            Debug.Log($"Unit selection physics hit: collider='{hit.collider.gameObject.name}', selected unit='{unit.name}'.", this);
             SetSelectedUnit(unit);
             return;
         }
 
+        string firstPhysicsHit = hits.Length > 0 ? hits[0].collider.gameObject.name : "none";
+        Debug.Log($"Unit selection found no unit; first physics hit='{firstPhysicsHit}'.", this);
         SetSelectedUnit(null);
+    }
+
+    private void LateUpdate()
+    {
+        if (selectedUnit == null)
+        {
+            if (infoPanelObject != null && infoPanelObject.activeSelf)
+                infoPanelObject.SetActive(false);
+            return;
+        }
+
+        UpdateInfoPanelPosition();
     }
 
     private void CreateInfoPanel()
@@ -70,26 +93,25 @@ public sealed class UnitSelectionController : MonoBehaviour
             return;
         }
 
-        GameObject panelObject = new GameObject("SelectedUnitInfoPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
-        panelObject.transform.SetParent(hudCanvas.transform, false);
-        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(1f, 0f);
-        panelRect.anchorMax = new Vector2(1f, 0f);
-        panelRect.pivot = new Vector2(1f, 0f);
-        panelRect.anchoredPosition = new Vector2(-ScreenPadding, ScreenPadding);
-        panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+        infoPanelObject = new GameObject("SelectedUnitInfoPanel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Outline));
+        infoPanelObject.transform.SetParent(hudCanvas.transform, false);
+        infoPanelRect = infoPanelObject.GetComponent<RectTransform>();
+        infoPanelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        infoPanelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        infoPanelRect.pivot = new Vector2(0.5f, 0.5f);
+        infoPanelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
 
-        Image panelImage = panelObject.GetComponent<Image>();
+        Image panelImage = infoPanelObject.GetComponent<Image>();
         panelImage.color = PanelColor;
         panelImage.raycastTarget = false;
 
-        Outline outline = panelObject.GetComponent<Outline>();
+        Outline outline = infoPanelObject.GetComponent<Outline>();
         outline.effectColor = AccentColor;
         outline.effectDistance = new Vector2(1.5f, -1.5f);
         outline.useGraphicAlpha = true;
 
         GameObject labelObject = new GameObject("SelectedUnitInfoLabel", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
-        labelObject.transform.SetParent(panelObject.transform, false);
+        labelObject.transform.SetParent(infoPanelObject.transform, false);
         RectTransform labelRect = labelObject.GetComponent<RectTransform>();
         labelRect.anchorMin = Vector2.zero;
         labelRect.anchorMax = Vector2.one;
@@ -104,18 +126,97 @@ public sealed class UnitSelectionController : MonoBehaviour
         infoLabel.color = AccentColor;
         infoLabel.textWrappingMode = TextWrappingModes.NoWrap;
         infoLabel.raycastTarget = false;
-        panelObject.SetActive(false);
+        infoPanelObject.SetActive(false);
+    }
+
+    private bool TryGetInteractiveUIHit(Vector2 screenPosition, out string uiHitName, out string clickHandlerName)
+    {
+        uiHitName = "none";
+        clickHandlerName = "none";
+
+        EventSystem eventSystem = EventSystem.current;
+        if (eventSystem == null)
+            return false;
+
+        PointerEventData pointerData = new PointerEventData(eventSystem)
+        {
+            position = screenPosition
+        };
+        List<RaycastResult> raycastResults = new List<RaycastResult>();
+        eventSystem.RaycastAll(pointerData, raycastResults);
+
+        foreach (RaycastResult result in raycastResults)
+        {
+            if (!(result.module is GraphicRaycaster))
+                continue;
+
+            uiHitName = result.gameObject.name;
+            GameObject clickHandler = ExecuteEvents.GetEventHandler<IPointerClickHandler>(result.gameObject);
+            if (clickHandler == null)
+                return false;
+
+            clickHandlerName = clickHandler.name;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void UpdateInfoPanelPosition()
+    {
+        if (infoPanelRect == null || infoPanelObject == null || targetCamera == null || hudCanvas == null)
+        {
+            if (infoPanelObject != null)
+                infoPanelObject.SetActive(false);
+            return;
+        }
+
+        Vector3 screenPosition = targetCamera.WorldToScreenPoint(selectedUnit.transform.position);
+        bool isInFrontOfCamera = screenPosition.z > 0f;
+        bool isOnScreen = screenPosition.x >= 0f && screenPosition.x <= Screen.width
+            && screenPosition.y >= 0f && screenPosition.y <= Screen.height;
+        if (!isInFrontOfCamera || !isOnScreen)
+        {
+            infoPanelObject.SetActive(false);
+            return;
+        }
+
+        Camera canvasCamera = hudCanvas.renderMode == RenderMode.ScreenSpaceOverlay
+            ? null
+            : (hudCanvas.worldCamera != null ? hudCanvas.worldCamera : targetCamera);
+        RectTransform canvasRect = hudCanvas.transform as RectTransform;
+        if (canvasRect == null || !RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, canvasCamera, out Vector2 localPosition))
+        {
+            infoPanelObject.SetActive(false);
+            return;
+        }
+
+        localPosition.y += PanelHeight * 0.5f + ScreenPadding;
+        Rect canvasBounds = canvasRect.rect;
+        float halfPanelWidth = PanelWidth * 0.5f;
+        float halfPanelHeight = PanelHeight * 0.5f;
+        localPosition.x = Mathf.Clamp(localPosition.x, canvasBounds.xMin + halfPanelWidth + ScreenPadding, canvasBounds.xMax - halfPanelWidth - ScreenPadding);
+        localPosition.y = Mathf.Clamp(localPosition.y, canvasBounds.yMin + halfPanelHeight + ScreenPadding, canvasBounds.yMax - halfPanelHeight - ScreenPadding);
+
+        infoPanelRect.anchoredPosition = localPosition;
+        if (!infoPanelObject.activeSelf)
+            infoPanelObject.SetActive(true);
+        infoLabel.text = $"{selectedUnit.DisplayName}\nHP: {selectedUnit.CurrentHitPoints}";
     }
 
     private void SetSelectedUnit(SelectableUnit unit)
     {
         selectedUnit = unit;
-        if (infoLabel == null)
+        if (infoLabel == null || infoPanelObject == null)
             return;
 
-        bool hasSelection = selectedUnit != null;
-        infoLabel.transform.parent.gameObject.SetActive(hasSelection);
-        if (hasSelection)
-            infoLabel.text = $"{selectedUnit.DisplayName}\nHP: {selectedUnit.CurrentHitPoints}";
+        if (selectedUnit == null)
+        {
+            infoPanelObject.SetActive(false);
+            return;
+        }
+
+        infoLabel.text = $"{selectedUnit.DisplayName}\nHP: {selectedUnit.CurrentHitPoints}";
+        UpdateInfoPanelPosition();
     }
 }
