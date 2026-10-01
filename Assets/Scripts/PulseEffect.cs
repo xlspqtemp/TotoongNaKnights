@@ -8,9 +8,12 @@ public class CharacterPulse : MonoBehaviour
     [SerializeField] private float maxAlpha = 1f;
     [SerializeField] private float speed = 1.5f;
 
+    private float gameplayElapsedTime;
+
     private void Update()
     {
-        float t = (Mathf.Sin(Time.time * speed) + 1f) / 2f; // oscillates 0..1
+        gameplayElapsedTime += GameplaySpeed.DeltaTime;
+        float t = (Mathf.Sin(gameplayElapsedTime * speed) + 1f) / 2f;
         float alpha = Mathf.Lerp(minAlpha, maxAlpha, t);
 
         Color c = targetImage.color;

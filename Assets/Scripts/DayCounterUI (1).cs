@@ -75,6 +75,7 @@ public class DayCounterUI : MonoBehaviour
 
     private void Awake()
     {
+        GameplaySpeed.ResetForNewRun();
         currentDay = startDay;
         currentHour = startHour;
         currentMinute = startMinute;
@@ -84,6 +85,8 @@ public class DayCounterUI : MonoBehaviour
     private void Start()
     {
         RefreshAll();
+        if (GetComponent<GameplaySpeedButton>() == null)
+            gameObject.AddComponent<GameplaySpeedButton>();
     }
 
     private void OnValidate()
@@ -105,7 +108,7 @@ public class DayCounterUI : MonoBehaviour
 
         if (!clockShouldRun) return;
 
-        minuteTimer += Time.deltaTime * Mathf.Max(0.01f, timeScale);
+        minuteTimer += Time.deltaTime * Mathf.Max(0.01f, timeScale) * GameplaySpeed.Multiplier;
         if (minuteTimer >= runtimeSecondsPerGameMinute)
         {
             minuteTimer -= runtimeSecondsPerGameMinute;

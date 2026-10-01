@@ -20,6 +20,7 @@ public class CirculatoryCellRoute : MonoBehaviour
     public void Configure(NavMeshAgent cellAgent, Transform cellSpawnPoint, Transform heartTransform, Transform lungTransform)
     {
         agent = cellAgent;
+        GameplaySpeedNavMeshAgent.Register(agent);
         spawnPoint = cellSpawnPoint;
         heart = heartTransform;
         destinationLung = lungTransform;

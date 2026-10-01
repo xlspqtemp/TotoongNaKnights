@@ -85,7 +85,7 @@ public class DemoSceneController : MonoBehaviour
 
     private IEnumerator ReopenPromptAfterDelay()
     {
-        yield return new WaitForSeconds(RetryDelaySeconds);
+        yield return GameplaySpeed.WaitForGameplaySeconds(RetryDelaySeconds);
         if (promptOverlay != null)
         {
             promptOverlay.SetActive(true);

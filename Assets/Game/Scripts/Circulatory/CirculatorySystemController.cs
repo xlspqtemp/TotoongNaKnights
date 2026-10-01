@@ -69,6 +69,11 @@ public class CirculatorySystemController : MonoBehaviour
     private void SpawnCell(GameObject cellPrefab, Vector3 spawnPosition, Transform spawnPoint, Transform destinationLung)
     {
         GameObject cell = Instantiate(cellPrefab, spawnPosition, Quaternion.identity, transform);
+        SelectableUnit selectableUnit = cell.GetComponent<SelectableUnit>();
+        if (selectableUnit == null)
+            selectableUnit = cell.AddComponent<SelectableUnit>();
+        selectableUnit.Initialize(cellPrefab.name);
+
         NavMeshAgent agent = cell.GetComponent<NavMeshAgent>();
         CirculatoryCellRoute route = cell.GetComponent<CirculatoryCellRoute>();
         if (route == null)

@@ -197,7 +197,7 @@ public class WellnessManager : MonoBehaviour
         if (!bacteremiaIsActive || runHasEnded)
             return;
 
-        float elapsed = Time.deltaTime;
+        float elapsed = GameplaySpeed.DeltaTime;
         bacteremiaActiveSeconds += elapsed;
         bacteremiaDrainTimer += elapsed;
 
@@ -372,6 +372,7 @@ public class WellnessManager : MonoBehaviour
             return;
 
         runHasEnded = true;
+        GameplaySpeed.ResetForRunEnd();
         Time.timeScale = 0f;
 
         string resultMessage = $"[WELLNESS] Final result: {result} ({Mathf.RoundToInt(currentWellness)}/{Mathf.RoundToInt(maxWellness)}).";

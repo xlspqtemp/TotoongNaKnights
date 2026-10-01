@@ -17,6 +17,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private const float NavMeshSampleRadius = 50f;
     private const float ArrivalDistance = 1f;
     private const string OrdersContainerPath = "HUDCanvas/DigestiveOrdersContainer";
+    private const string SpoiledFoodQTEId = "Ate expired/spoiled food";
 
     [SerializeField] private GameObject foodPrefab;
     [SerializeField] private GameObject contaminatedFoodPrefab;
@@ -32,8 +33,8 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private TextMeshProUGUI vomitLabel;
     private Coroutine batchQueueRoutine;
     private FoodBatchRequest currentBatch;
-    private float eatCooldownUntil;
-    private float vomitCooldownUntil;
+    private float eatCooldownRemaining;
+    private float vomitCooldownRemaining;
     private int lastContaminatedEventDay = int.MinValue;
     private int lastContaminatedEventHour = -1;
 
@@ -121,6 +122,9 @@ public sealed class DigestiveSystemController : MonoBehaviour
         if (routineSystem == null)
             routineSystem = RoutineSystem.Instance;
 
+        float gameplayDelta = GameplaySpeed.DeltaTime;
+        eatCooldownRemaining = Mathf.Max(0f, eatCooldownRemaining - gameplayDelta);
+        vomitCooldownRemaining = Mathf.Max(0f, vomitCooldownRemaining - gameplayDelta);
         RefreshButtonStates();
     }
 
@@ -168,10 +172,10 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void HandleEatPressed()
     {
-        if (IsSleeping || IsBatchRunning || Time.unscaledTime < eatCooldownUntil)
+        if (IsSleeping || IsBatchRunning || eatCooldownRemaining > 0f)
             return;
 
-        eatCooldownUntil = Time.unscaledTime + ManualCooldownSeconds;
+        eatCooldownRemaining = ManualCooldownSeconds;
         QueueFoodBatch(foodPrefab, false, dayCounter != null ? dayCounter.CurrentDay : -1,
             dayCounter != null ? dayCounter.CurrentHour : -1);
         RefreshButtonStates();
@@ -179,10 +183,11 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void HandleVomitPressed()
     {
-        if (IsSleeping || Time.unscaledTime < vomitCooldownUntil)
+        if (IsSleeping || vomitCooldownRemaining > 0f)
             return;
 
-        vomitCooldownUntil = Time.unscaledTime + ManualCooldownSeconds;
+        vomitCooldownRemaining = ManualCooldownSeconds;
+        GameplaySpeed.ResolveQTE(SpoiledFoodQTEId);
         StopPendingBatches();
         DestroyFoodOnDigestiveSystem();
         RefreshButtonStates();
@@ -222,7 +227,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
                     currentBatch.spawnedFood.Add(spawnedFood);
 
                 if (index < FoodPerBatch - 1)
-                    yield return new WaitForSeconds(SpawnIntervalSeconds);
+                    yield return GameplaySpeed.WaitForGameplaySeconds(SpawnIntervalSeconds);
             }
 
             currentBatch = null;
@@ -268,6 +273,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
             return null;
         }
 
+        GameplaySpeedNavMeshAgent.Register(agent);
         if (!agent.SetDestination(destinationHit.position))
         {
             Debug.LogWarning($"Spawned food '{food.name}' could not set its Anus destination.", food);
@@ -339,8 +345,8 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private void RefreshButtonStates()
     {
         bool sleeping = IsSleeping;
-        float eatCooldownRemaining = Mathf.Max(0f, eatCooldownUntil - Time.unscaledTime);
-        float vomitCooldownRemaining = Mathf.Max(0f, vomitCooldownUntil - Time.unscaledTime);
+        float eatCooldownRemaining = this.eatCooldownRemaining;
+        float vomitCooldownRemaining = this.vomitCooldownRemaining;
 
         if (eatButton != null)
         {
