@@ -57,7 +57,12 @@ public class WellnessManager : MonoBehaviour
         new WellnessEventDelta("Bathing", 0f),
         new WellnessEventDelta("CommutingToWorkOrSchool", 0f),
         new WellnessEventDelta("WorkingOrStudying", 0f),
-        new WellnessEventDelta("Relaxing", 0f)
+        new WellnessEventDelta("Relaxing", 0f),
+        new WellnessEventDelta("DrinkingWater", 3f),
+        new WellnessEventDelta("WalkingLightActivity", 2f),
+        new WellnessEventDelta("RecoveryBreak", 3f),
+        new WellnessEventDelta("SleepingIn", -2f),
+        new WellnessEventDelta("ProlongedInactivity", -2f)
     };
 
     [Header("Random Event Deltas (unlisted random events default to -3)")]
@@ -72,7 +77,12 @@ public class WellnessManager : MonoBehaviour
         new WellnessEventDelta("ArgumentOrConflict", -3f),
         new WellnessEventDelta("ColdFromSickPerson", -3f),
         new WellnessEventDelta("SunOrFreshAir", -3f),
-        new WellnessEventDelta("NickedOrScraped", -3f)
+        new WellnessEventDelta("NickedOrScraped", -3f),
+        new WellnessEventDelta("ContaminatedWater", -5f),
+        new WellnessEventDelta("TrippedAndScratched", -5f),
+        new WellnessEventDelta("AccidentallyAteSpoiledFood", -5f),
+        new WellnessEventDelta("ContactWithSickPerson", -4f),
+        new WellnessEventDelta("SmokedCigarette", -6f)
     };
 
     [Header("Hazard and QTE Result Deltas")]
@@ -133,6 +143,8 @@ public class WellnessManager : MonoBehaviour
 
         Instance = this;
         EnsureRoutineEventEntry("SkippingMeal", -3f);
+        EnsureAddedRoutineEventEntries();
+        EnsureAddedRandomEventEntries();
         if (dayCounter == null)
             dayCounter = FindFirstObjectByType<DayCounterUI>();
 
@@ -184,6 +196,8 @@ public class WellnessManager : MonoBehaviour
     private void OnValidate()
     {
         EnsureRoutineEventEntry("SkippingMeal", -3f);
+        EnsureAddedRoutineEventEntries();
+        EnsureAddedRandomEventEntries();
         maxWellness = Mathf.Max(1f, maxWellness);
         criticalThreshold = Mathf.Clamp(criticalThreshold, 0f, maxWellness);
         winThreshold = Mathf.Clamp(winThreshold, criticalThreshold, maxWellness);
@@ -283,6 +297,11 @@ public class WellnessManager : MonoBehaviour
             case "Caught a cold from a sick classmate/coworker": eventId = "ColdFromSickPerson"; break;
             case "Sat in the sun / got fresh air": eventId = "SunOrFreshAir"; break;
             case "Nicked by a sharp object or tripped and scraped knees": eventId = "NickedOrScraped"; break;
+            case "Accidentally Drank Contaminated Water": eventId = "ContaminatedWater"; break;
+            case "Tripped on a Rock and Got Scratches": eventId = "TrippedAndScratched"; break;
+            case "Accidentally Ate Spoiled Food": eventId = "AccidentallyAteSpoiledFood"; break;
+            case "Came Into Contact With Someone Who Was Sick": eventId = "ContactWithSickPerson"; break;
+            case "Smoked cigarette": eventId = "SmokedCigarette"; break;
             default: eventId = eventData.eventName; break;
         }
 
@@ -461,6 +480,38 @@ public class WellnessManager : MonoBehaviour
         }
 
         routineEventDeltas.Add(new WellnessEventDelta(eventId, defaultDelta));
+    }
+
+    private void EnsureAddedRoutineEventEntries()
+    {
+        EnsureRoutineEventEntry("DrinkingWater", 3f);
+        EnsureRoutineEventEntry("WalkingLightActivity", 2f);
+        EnsureRoutineEventEntry("RecoveryBreak", 3f);
+        EnsureRoutineEventEntry("SleepingIn", -2f);
+        EnsureRoutineEventEntry("ProlongedInactivity", -2f);
+    }
+
+    private void EnsureAddedRandomEventEntries()
+    {
+        EnsureRandomEventEntry("ContaminatedWater", -5f);
+        EnsureRandomEventEntry("TrippedAndScratched", -5f);
+        EnsureRandomEventEntry("AccidentallyAteSpoiledFood", -5f);
+        EnsureRandomEventEntry("ContactWithSickPerson", -4f);
+        EnsureRandomEventEntry("SmokedCigarette", -6f);
+    }
+
+    private void EnsureRandomEventEntry(string eventId, float defaultDelta)
+    {
+        if (randomEventDeltas == null)
+            randomEventDeltas = new List<WellnessEventDelta>();
+
+        foreach (WellnessEventDelta entry in randomEventDeltas)
+        {
+            if (entry != null && string.Equals(entry.eventId, eventId, StringComparison.Ordinal))
+                return;
+        }
+
+        randomEventDeltas.Add(new WellnessEventDelta(eventId, defaultDelta));
     }
 
     private float FindDelta(List<WellnessEventDelta> deltas, string eventId, float fallback)

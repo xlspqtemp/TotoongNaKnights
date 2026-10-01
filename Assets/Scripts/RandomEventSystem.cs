@@ -254,6 +254,16 @@ public class RandomEventSystem : MonoBehaviour
                 return new RandomEventData("Sat in the sun / got fresh air", "Fresh air and sunlight provided a minor health benefit.", RandomEventType.PsychologicalPhysical, severity, false, false, 2f, activeDifficulty, day, hour);
             case RandomEventId.NickedOrScraped:
                 return new RandomEventData("Nicked by a sharp object or tripped and scraped knees", "A direct physical breach needs wound-clean QTE resolution; unresolved infection may escalate later.", RandomEventType.Physical, severity, true, true, -6f, activeDifficulty, day, hour);
+            case RandomEventId.ContaminatedWater:
+                return new RandomEventData("Accidentally Drank Contaminated Water", "Contaminated water caused a digestive health impact.", RandomEventType.Digestive, severity, false, false, -5f, activeDifficulty, day, hour);
+            case RandomEventId.TrippedAndScratched:
+                return new RandomEventData("Tripped on a Rock and Got Scratches", "A fall caused minor scratches and a physical health impact.", RandomEventType.Physical, severity, false, false, -5f, activeDifficulty, day, hour);
+            case RandomEventId.AccidentallyAteSpoiledFood:
+                return new RandomEventData("Accidentally Ate Spoiled Food", "Spoiled food caused a digestive health impact.", RandomEventType.Digestive, severity, false, false, -5f, activeDifficulty, day, hour);
+            case RandomEventId.ContactWithSickPerson:
+                return new RandomEventData("Came Into Contact With Someone Who Was Sick", "Contact with a sick person caused a respiratory health impact.", RandomEventType.Respiratory, severity, false, false, -4f, activeDifficulty, day, hour);
+            case RandomEventId.SmokedCigarette:
+                return new RandomEventData("Smoked cigarette", "Smoking caused a respiratory health impact.", RandomEventType.Respiratory, severity, false, false, -6f, activeDifficulty, day, hour);
             default:
                 throw new ArgumentOutOfRangeException(nameof(eventId), eventId, "Unknown random event id.");
         }
@@ -289,9 +299,38 @@ public class RandomEventSystem : MonoBehaviour
             {
                 difficultyPresets.Add(CreateDefaultPreset(difficulty));
             }
-            else if (preset.eventPoolWeights == null || preset.eventPoolWeights.Length != 10)
+            else
             {
-                preset.eventPoolWeights = CreateDefaultEventPool(difficulty);
+                EnsureEventPoolEntries(preset);
+            }
+        }
+    }
+
+    private void EnsureEventPoolEntries(RandomEventDifficultyPreset preset)
+    {
+        if (preset.eventPoolWeights == null)
+            preset.eventPoolWeights = new RandomEventPoolWeight[0];
+
+        RandomEventPoolWeight[] defaultEntries = CreateDefaultEventPool(preset.difficulty);
+        foreach (RandomEventPoolWeight defaultEntry in defaultEntries)
+        {
+            bool hasEntry = false;
+            foreach (RandomEventPoolWeight existingEntry in preset.eventPoolWeights)
+            {
+                if (existingEntry != null && existingEntry.eventId == defaultEntry.eventId)
+                {
+                    hasEntry = true;
+                    break;
+                }
+            }
+
+            if (!hasEntry)
+            {
+                List<RandomEventPoolWeight> expandedPool = new List<RandomEventPoolWeight>(preset.eventPoolWeights)
+                {
+                    new RandomEventPoolWeight(defaultEntry.eventId, defaultEntry.weight)
+                };
+                preset.eventPoolWeights = expandedPool.ToArray();
             }
         }
     }
@@ -316,13 +355,13 @@ public class RandomEventSystem : MonoBehaviour
         switch (difficulty)
         {
             case RandomEventDifficulty.Easy:
-                return CreatePool(5f, 10f, 5f, 10f, 10f, 5f, 8f, 8f, 35f, 4f);
+                return CreatePool(5f, 10f, 5f, 10f, 10f, 5f, 8f, 8f, 35f, 4f, 4f, 5f, 4f, 5f, 2f);
             case RandomEventDifficulty.Medium:
-                return CreatePool(15f, 15f, 15f, 10f, 15f, 20f, 12f, 8f, 5f, 12f);
+                return CreatePool(15f, 15f, 15f, 10f, 15f, 20f, 12f, 8f, 5f, 12f, 10f, 12f, 12f, 12f, 10f);
             case RandomEventDifficulty.Hard:
-                return CreatePool(20f, 15f, 15f, 7f, 15f, 25f, 10f, 10f, 2f, 13f);
+                return CreatePool(20f, 15f, 15f, 7f, 15f, 25f, 10f, 10f, 2f, 13f, 12f, 15f, 15f, 15f, 15f);
             default:
-                return CreatePool(10f, 12f, 10f, 12f, 15f, 11f, 12f, 8f, 15f, 8f);
+                return CreatePool(10f, 12f, 10f, 12f, 15f, 11f, 12f, 8f, 15f, 8f, 8f, 10f, 8f, 10f, 6f);
         }
     }
 
@@ -336,7 +375,12 @@ public class RandomEventSystem : MonoBehaviour
         float argument,
         float cold,
         float sunOrFreshAir,
-        float nickedOrScraped)
+        float nickedOrScraped,
+        float contaminatedWater,
+        float trippedAndScratched,
+        float accidentallyAteSpoiledFood,
+        float contactWithSickPerson,
+        float smokedCigarette)
     {
         return new[]
         {
@@ -349,7 +393,12 @@ public class RandomEventSystem : MonoBehaviour
             new RandomEventPoolWeight(RandomEventId.ArgumentOrConflict, argument),
             new RandomEventPoolWeight(RandomEventId.ColdFromSickPerson, cold),
             new RandomEventPoolWeight(RandomEventId.SunOrFreshAir, sunOrFreshAir),
-            new RandomEventPoolWeight(RandomEventId.NickedOrScraped, nickedOrScraped)
+            new RandomEventPoolWeight(RandomEventId.NickedOrScraped, nickedOrScraped),
+            new RandomEventPoolWeight(RandomEventId.ContaminatedWater, contaminatedWater),
+            new RandomEventPoolWeight(RandomEventId.TrippedAndScratched, trippedAndScratched),
+            new RandomEventPoolWeight(RandomEventId.AccidentallyAteSpoiledFood, accidentallyAteSpoiledFood),
+            new RandomEventPoolWeight(RandomEventId.ContactWithSickPerson, contactWithSickPerson),
+            new RandomEventPoolWeight(RandomEventId.SmokedCigarette, smokedCigarette)
         };
     }
 

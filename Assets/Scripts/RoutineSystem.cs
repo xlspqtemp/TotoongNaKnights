@@ -255,6 +255,102 @@ public class RoutineSystem : MonoBehaviour
                 schedule.entries = CreateDefaultEntries(difficulty);
             }
         }
+
+        foreach (RoutineDifficultySchedule schedule in schedules)
+        {
+            if (schedule != null)
+                EnsureRoutineActivities(schedule);
+        }
+    }
+
+    private void EnsureRoutineActivities(RoutineDifficultySchedule schedule)
+    {
+        int sleepingInHour;
+        int drinkingWaterHour = 12;
+        int walkingLightActivityHour;
+        int recoveryBreakHour;
+        int prolongedInactivityHour;
+
+        switch (schedule.difficulty)
+        {
+            case RoutineDifficulty.Easy:
+                sleepingInHour = 6;
+                walkingLightActivityHour = 16;
+                recoveryBreakHour = 14;
+                prolongedInactivityHour = 21;
+                break;
+            case RoutineDifficulty.Medium:
+                sleepingInHour = 7;
+                walkingLightActivityHour = 16;
+                recoveryBreakHour = 15;
+                prolongedInactivityHour = 21;
+                break;
+            case RoutineDifficulty.Hard:
+                sleepingInHour = 9;
+                walkingLightActivityHour = 17;
+                recoveryBreakHour = 15;
+                prolongedInactivityHour = 20;
+                break;
+            default:
+                sleepingInHour = 6;
+                walkingLightActivityHour = 16;
+                recoveryBreakHour = 14;
+                prolongedInactivityHour = 22;
+                break;
+        }
+
+        EnsureRoutineActivityEntry(schedule, RoutineActivity.DrinkingWater, drinkingWaterHour);
+        EnsureRoutineActivityEntry(schedule, RoutineActivity.WalkingLightActivity, walkingLightActivityHour);
+        EnsureRoutineActivityEntry(schedule, RoutineActivity.RecoveryBreak, recoveryBreakHour);
+        EnsureRoutineActivityEntry(schedule, RoutineActivity.SleepingIn, sleepingInHour);
+        EnsureRoutineActivityEntry(schedule, RoutineActivity.ProlongedInactivity, prolongedInactivityHour);
+    }
+
+    private static void EnsureRoutineActivityEntry(RoutineDifficultySchedule schedule, RoutineActivity activity, int preferredHour)
+    {
+        if (schedule.entries == null)
+            schedule.entries = new RoutineScheduleEntry[0];
+
+        foreach (RoutineScheduleEntry entry in schedule.entries)
+        {
+            if (entry != null && entry.activity == activity)
+                return;
+        }
+
+        for (int offset = 0; offset < HOURS_PER_DAY; offset++)
+        {
+            int laterHour = preferredHour + offset;
+            if (laterHour < HOURS_PER_DAY && !IsRoutineHourOccupied(schedule.entries, laterHour))
+            {
+                AddRoutineActivityEntry(schedule, activity, laterHour);
+                return;
+            }
+
+            int earlierHour = preferredHour - offset;
+            if (offset > 0 && earlierHour >= 0 && !IsRoutineHourOccupied(schedule.entries, earlierHour))
+            {
+                AddRoutineActivityEntry(schedule, activity, earlierHour);
+                return;
+            }
+        }
+    }
+
+    private static bool IsRoutineHourOccupied(RoutineScheduleEntry[] entries, int hour)
+    {
+        foreach (RoutineScheduleEntry entry in entries)
+        {
+            if (entry != null && entry.hour == hour)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static void AddRoutineActivityEntry(RoutineDifficultySchedule schedule, RoutineActivity activity, int hour)
+    {
+        List<RoutineScheduleEntry> entries = new List<RoutineScheduleEntry>(schedule.entries);
+        entries.Add(new RoutineScheduleEntry(hour, activity));
+        schedule.entries = entries.ToArray();
     }
 
     private RoutineDifficultySchedule CreateDefaultSchedule(RoutineDifficulty difficulty)
@@ -269,51 +365,72 @@ public class RoutineSystem : MonoBehaviour
             case RoutineDifficulty.Easy:
                 return CreateEntries(
                     new RoutineScheduleEntry(0, RoutineActivity.Sleeping),
-                    new RoutineScheduleEntry(6, RoutineActivity.WakingUp),
-                    new RoutineScheduleEntry(7, RoutineActivity.Bathing),
-                    new RoutineScheduleEntry(8, RoutineActivity.EatingBreakfast),
-                    new RoutineScheduleEntry(9, RoutineActivity.CommutingToWorkOrSchool),
-                    new RoutineScheduleEntry(10, RoutineActivity.WorkingOrStudying),
+                    new RoutineScheduleEntry(6, RoutineActivity.SleepingIn),
+                    new RoutineScheduleEntry(7, RoutineActivity.WakingUp),
+                    new RoutineScheduleEntry(8, RoutineActivity.Bathing),
+                    new RoutineScheduleEntry(9, RoutineActivity.EatingBreakfast),
+                    new RoutineScheduleEntry(10, RoutineActivity.CommutingToWorkOrSchool),
+                    new RoutineScheduleEntry(11, RoutineActivity.WorkingOrStudying),
+                    new RoutineScheduleEntry(12, RoutineActivity.DrinkingWater),
+                    new RoutineScheduleEntry(13, RoutineActivity.WorkingOrStudying),
+                    new RoutineScheduleEntry(14, RoutineActivity.RecoveryBreak),
+                    new RoutineScheduleEntry(15, RoutineActivity.WorkingOrStudying),
+                    new RoutineScheduleEntry(16, RoutineActivity.WalkingLightActivity),
                     new RoutineScheduleEntry(17, RoutineActivity.Exercising),
                     new RoutineScheduleEntry(18, RoutineActivity.EatingDinner),
                     new RoutineScheduleEntry(20, RoutineActivity.Relaxing),
+                    new RoutineScheduleEntry(21, RoutineActivity.ProlongedInactivity),
                     new RoutineScheduleEntry(22, RoutineActivity.Sleeping));
             case RoutineDifficulty.Medium:
                 return CreateEntries(
                     new RoutineScheduleEntry(0, RoutineActivity.Sleeping),
-                    new RoutineScheduleEntry(7, RoutineActivity.WakingUp),
-                    new RoutineScheduleEntry(8, RoutineActivity.Bathing),
-                    new RoutineScheduleEntry(9, RoutineActivity.EatingBreakfast),
-                    new RoutineScheduleEntry(10, RoutineActivity.WorkingOrStudying),
-                    new RoutineScheduleEntry(12, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(7, RoutineActivity.SleepingIn),
+                    new RoutineScheduleEntry(8, RoutineActivity.WakingUp),
+                    new RoutineScheduleEntry(9, RoutineActivity.Bathing),
+                    new RoutineScheduleEntry(10, RoutineActivity.EatingBreakfast),
+                    new RoutineScheduleEntry(11, RoutineActivity.WorkingOrStudying),
+                    new RoutineScheduleEntry(12, RoutineActivity.DrinkingWater),
+                    new RoutineScheduleEntry(13, RoutineActivity.WorkingOrStudying),
                     new RoutineScheduleEntry(14, RoutineActivity.EatingJunkFood),
-                    new RoutineScheduleEntry(15, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(15, RoutineActivity.RecoveryBreak),
+                    new RoutineScheduleEntry(16, RoutineActivity.WalkingLightActivity),
                     new RoutineScheduleEntry(18, RoutineActivity.EatingDinner),
                     new RoutineScheduleEntry(20, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(21, RoutineActivity.ProlongedInactivity),
                     new RoutineScheduleEntry(23, RoutineActivity.Sleeping));
             case RoutineDifficulty.Hard:
                 return CreateEntries(
                     new RoutineScheduleEntry(0, RoutineActivity.LeisureTime),
                     new RoutineScheduleEntry(2, RoutineActivity.Sleeping),
-                    new RoutineScheduleEntry(9, RoutineActivity.WakingUp),
-                    new RoutineScheduleEntry(10, RoutineActivity.EatingJunkFood),
-                    new RoutineScheduleEntry(12, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(9, RoutineActivity.SleepingIn),
+                    new RoutineScheduleEntry(10, RoutineActivity.WakingUp),
+                    new RoutineScheduleEntry(11, RoutineActivity.EatingJunkFood),
+                    new RoutineScheduleEntry(12, RoutineActivity.DrinkingWater),
                     new RoutineScheduleEntry(14, RoutineActivity.EatingJunkFood),
+                    new RoutineScheduleEntry(15, RoutineActivity.RecoveryBreak),
                     new RoutineScheduleEntry(16, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(17, RoutineActivity.WalkingLightActivity),
                     new RoutineScheduleEntry(19, RoutineActivity.EatingJunkFood),
-                    new RoutineScheduleEntry(21, RoutineActivity.LeisureTime));
+                    new RoutineScheduleEntry(20, RoutineActivity.ProlongedInactivity),
+                    new RoutineScheduleEntry(21, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(22, RoutineActivity.Sleeping));
             default:
                 return CreateEntries(
                     new RoutineScheduleEntry(0, RoutineActivity.Sleeping),
-                    new RoutineScheduleEntry(6, RoutineActivity.WakingUp),
-                    new RoutineScheduleEntry(7, RoutineActivity.Bathing),
-                    new RoutineScheduleEntry(8, RoutineActivity.EatingBreakfast),
-                    new RoutineScheduleEntry(9, RoutineActivity.CommutingToWorkOrSchool),
-                    new RoutineScheduleEntry(10, RoutineActivity.WorkingOrStudying),
-                    new RoutineScheduleEntry(12, RoutineActivity.EatingLunch),
+                    new RoutineScheduleEntry(6, RoutineActivity.SleepingIn),
+                    new RoutineScheduleEntry(7, RoutineActivity.WakingUp),
+                    new RoutineScheduleEntry(8, RoutineActivity.Bathing),
+                    new RoutineScheduleEntry(9, RoutineActivity.EatingBreakfast),
+                    new RoutineScheduleEntry(10, RoutineActivity.CommutingToWorkOrSchool),
+                    new RoutineScheduleEntry(11, RoutineActivity.WorkingOrStudying),
+                    new RoutineScheduleEntry(12, RoutineActivity.DrinkingWater),
+                    new RoutineScheduleEntry(13, RoutineActivity.EatingLunch),
+                    new RoutineScheduleEntry(14, RoutineActivity.RecoveryBreak),
                     new RoutineScheduleEntry(15, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(16, RoutineActivity.WalkingLightActivity),
                     new RoutineScheduleEntry(18, RoutineActivity.EatingDinner),
-                    new RoutineScheduleEntry(21, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(20, RoutineActivity.LeisureTime),
+                    new RoutineScheduleEntry(22, RoutineActivity.ProlongedInactivity),
                     new RoutineScheduleEntry(23, RoutineActivity.Sleeping));
         }
     }

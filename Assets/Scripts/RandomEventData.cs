@@ -40,7 +40,12 @@ public enum RandomEventId
     ArgumentOrConflict,
     ColdFromSickPerson,
     SunOrFreshAir,
-    NickedOrScraped
+    NickedOrScraped,
+    ContaminatedWater,
+    TrippedAndScratched,
+    AccidentallyAteSpoiledFood,
+    ContactWithSickPerson,
+    SmokedCigarette
 }
 
 /// <summary>Weighted reference to one event in a difficulty preset's event pool.</summary>
