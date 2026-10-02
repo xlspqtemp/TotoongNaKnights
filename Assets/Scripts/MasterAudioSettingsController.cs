@@ -173,8 +173,6 @@ public class MasterAudioSettingsController : MonoBehaviour
             Vector2.zero, new Vector2(620f, 360f), true);
         CreateText(card.transform, "SettingsTitle", "SETTINGS", 34, FontStyles.Bold,
             new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(520f, 54f), TextAlignmentOptions.Center);
-        CreateText(card.transform, "MasterVolumeLabel", "MASTER VOLUME", 22, FontStyles.Bold,
-            new Vector2(0f, 0.62f), new Vector2(72f, 0f), new Vector2(260f, 44f), TextAlignmentOptions.Left);
 
         percentageLabel = CreateText(card.transform, "MasterVolumePercentage", "100%", 22, FontStyles.Bold,
             new Vector2(1f, 0.62f), new Vector2(-72f, 0f), new Vector2(100f, 44f), TextAlignmentOptions.Right);
