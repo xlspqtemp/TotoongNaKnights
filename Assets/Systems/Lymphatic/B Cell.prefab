@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 757926689969146515}
   - component: {fileID: 7094062300077635479}
   - component: {fileID: 232030131259527427}
+  - component: {fileID: 5708476187306577869}
   m_Layer: 0
   m_Name: B Cell
   m_TagString: Untagged
@@ -77,6 +78,20 @@ NavMeshAgent:
   m_BaseOffset: 0.5
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
+--- !u!114 &5708476187306577869
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3209765441278268071}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db5f50b20e6e08a4896799ba9ef9e16b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BacteriaCellResponder
+  scanIntervalSeconds: 0.5
+  contactDistance: 2.25
 --- !u!1001 &2357689642183913350
 PrefabInstance:
   m_ObjectHideFlags: 0

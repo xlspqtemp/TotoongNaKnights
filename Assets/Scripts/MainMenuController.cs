@@ -158,11 +158,11 @@ public class MainMenuController : MonoBehaviour
             FontStyle.Normal, MutedTextColor, TextAnchor.MiddleCenter, new Vector2(0, 232),
             new Vector2(800, 42));
 
-        enemySlider = CreateDifficultyRow(difficultyPanel.transform, "Enemy", DifficultyRowTop,
+        enemySlider = CreateDifficultyRow(difficultyPanel.transform, "Enemy", "Infection Severity", DifficultyRowTop,
             DifficultySettings.EnemyLevel);
-        defenseSlider = CreateDifficultyRow(difficultyPanel.transform, "Defense", DifficultyRowTop - DifficultyRowSpacing,
+        defenseSlider = CreateDifficultyRow(difficultyPanel.transform, "Defense", "Immune System", DifficultyRowTop - DifficultyRowSpacing,
             DifficultySettings.DefenseLevel);
-        randomEventsSlider = CreateDifficultyRow(difficultyPanel.transform, "Random Events",
+        randomEventsSlider = CreateDifficultyRow(difficultyPanel.transform, "Random Events", "Lifestyle",
             DifficultyRowTop - DifficultyRowSpacing * 2, DifficultySettings.RandomEventsLevel);
 
         CreateButton(difficultyPanel.transform, "StartGameButton", "Start Game", ButtonWidth, ButtonHeight,
@@ -183,7 +183,7 @@ public class MainMenuController : MonoBehaviour
         return panel;
     }
 
-    private Slider CreateDifficultyRow(Transform parent, string settingName, int anchoredY, int initialValue)
+    private Slider CreateDifficultyRow(Transform parent, string settingName, string displayLabel, int anchoredY, int initialValue)
     {
         GameObject row = new GameObject(settingName + "DifficultyRow", typeof(RectTransform), typeof(Image));
         row.transform.SetParent(parent, false);
@@ -194,7 +194,7 @@ public class MainMenuController : MonoBehaviour
         rowImage.color = RowColor;
         rowImage.raycastTarget = false;
 
-        CreateText(row.transform, settingName + "Label", settingName, RowTitleFontSize, FontStyle.Bold,
+        CreateText(row.transform, settingName + "Label", displayLabel, RowTitleFontSize, FontStyle.Bold,
             TextColor, TextAnchor.MiddleLeft, new Vector2(24, 30), new Vector2(RowLabelWidth, 34),
             new Vector2(0, 0.5f));
         Text valueText = CreateText(row.transform, settingName + "Value", initialValue.ToString(), ValueFontSize,

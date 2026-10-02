@@ -1,12 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-
-/// <summary>
-/// Generates difficulty-weighted health and lifestyle events on each in-game hour.
-/// This prototype only rolls, logs, and broadcasts event data; it does not resolve QTEs
-/// or apply health changes directly.
-/// </summary>
 public class RandomEventSystem : MonoBehaviour
 {
     private const float EASY_TRIGGER_CHANCE = 0.12f;
@@ -19,7 +13,6 @@ public class RandomEventSystem : MonoBehaviour
 
     public static RandomEventSystem Instance { get; private set; }
 
-    /// <summary>Raised after an event is generated, before any future resolver handles it.</summary>
     public static event Action<RandomEventData> OnRandomEventTriggered;
 
     [Header("References")]
@@ -95,7 +88,6 @@ public class RandomEventSystem : MonoBehaviour
         RollForEvent(currentDay, currentHour, false);
     }
 
-    /// <summary>Force-generates an event immediately using the active preset.</summary>
     [ContextMenu("Random Event/Force Trigger")]
     public void ForceTriggerEvent()
     {
@@ -104,7 +96,6 @@ public class RandomEventSystem : MonoBehaviour
         RollForEvent(day, hour, true);
     }
 
-    /// <summary>Changes the active preset used by future hourly rolls.</summary>
     public void SetDifficulty(RandomEventDifficulty difficulty)
     {
         activeDifficulty = difficulty;
@@ -113,7 +104,6 @@ public class RandomEventSystem : MonoBehaviour
         LogToConsole(message, ConsoleLogUI.LogType.System);
     }
 
-    /// <summary>Cycles Easy, Normal, Medium, and Hard for runtime weighting tests.</summary>
     [ContextMenu("Random Event/Cycle Difficulty")]
     public void CycleDifficulty()
     {
@@ -121,7 +111,6 @@ public class RandomEventSystem : MonoBehaviour
         SetDifficulty((RandomEventDifficulty)nextDifficulty);
     }
 
-    /// <summary>Rebuilds only missing or empty preset data using the prototype defaults.</summary>
     [ContextMenu("Random Event/Reset Missing Presets")]
     public void ResetMissingPresets()
     {
@@ -402,6 +391,5 @@ public class RandomEventSystem : MonoBehaviour
         };
     }
 
-    /// <summary>Returns the active difficulty used by future hourly rolls.</summary>
     public RandomEventDifficulty ActiveDifficulty => activeDifficulty;
 }

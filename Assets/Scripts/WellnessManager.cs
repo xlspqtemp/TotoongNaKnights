@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>Owns wellness, connects existing routine and random-event broadcasts, and resolves the run outcome.</summary>
@@ -109,9 +110,19 @@ public class WellnessManager : MonoBehaviour
     public WellnessResultUnityEvent onGameWon = new WellnessResultUnityEvent();
     public WellnessResultUnityEvent onGameLost = new WellnessResultUnityEvent();
 
+    private const string GameOverMessage = "Your human has reached a critical state.\nGame over!";
+    private const string VictoryMessage = "Human survived. You won!";
+    private const string MainMenuSceneName = "MainMenu";
+    private const int OutcomeButtonWidth = 300;
+    private const int OutcomeButtonHeight = 76;
+    private const float OutcomeButtonFontSize = 28f;
+    private static readonly Color OutcomeButtonColor = new Color(0.08f, 0.38f, 0.42f, 1f);
+
     private Canvas hudCanvas;
     private GameObject outcomePanel;
     private TextMeshProUGUI outcomeLabel;
+    private Button restartButton;
+    private Button mainMenuButton;
     private bool criticalWasEntered;
     private bool finalDayWasEvaluated;
     private bool runHasEnded;
@@ -120,6 +131,9 @@ public class WellnessManager : MonoBehaviour
     private float bacteremiaActiveSeconds;
     private float bacteremiaDrainTimer;
     private int runStartDay;
+
+    /// <summary>Returns whether this gameplay run has ended and its world simulation should remain stopped.</summary>
+    public bool HasRunEnded => runHasEnded;
 
     /// <summary>Returns the current wellness value.</summary>
     public float CurrentWellness => currentWellness;
@@ -323,22 +337,7 @@ public class WellnessManager : MonoBehaviour
 
     private void EvaluateFinalWellness()
     {
-        if (Mathf.Approximately(currentWellness, maxWellness))
-        {
-            EndRun(WellnessRunResult.PerfectWin);
-        }
-        else if (currentWellness >= winThreshold)
-        {
-            EndRun(WellnessRunResult.Win);
-        }
-        else if (currentWellness > criticalThreshold)
-        {
-            EndRun(WellnessRunResult.Loss);
-        }
-        else
-        {
-            EndRun(WellnessRunResult.SevereLoss);
-        }
+        EndRun(WellnessRunResult.Win);
     }
 
     private void ApplyWellnessDelta(string eventId, float requestedDelta, bool showChangeIndicator = true)
@@ -393,6 +392,8 @@ public class WellnessManager : MonoBehaviour
         runHasEnded = true;
         GameplaySpeed.ResetForRunEnd();
         Time.timeScale = 0f;
+        if (dayCounter != null)
+            dayCounter.SetActive(false);
 
         string resultMessage = $"[WELLNESS] Final result: {result} ({Mathf.RoundToInt(currentWellness)}/{Mathf.RoundToInt(maxWellness)}).";
         Debug.Log(resultMessage);
@@ -402,14 +403,14 @@ public class WellnessManager : MonoBehaviour
             LogToConsole(resultMessage, ConsoleLogUI.LogType.Success);
             OnGameWon?.Invoke(result);
             onGameWon?.Invoke(result);
-            ShowOutcome("YOU WIN", result);
+            ShowOutcome(VictoryMessage, false, "Return to Main Menu");
         }
         else
         {
             LogToConsole(resultMessage, ConsoleLogUI.LogType.Danger);
             OnGameLost?.Invoke(result);
             onGameLost?.Invoke(result);
-            ShowOutcome("HOSPITAL - GAME OVER", result);
+            ShowOutcome(GameOverMessage, true, "Back to Main Menu");
         }
     }
 
@@ -450,16 +451,82 @@ public class WellnessManager : MonoBehaviour
         outcomeLabel.textWrappingMode = TextWrappingModes.Normal;
         outcomeLabel.raycastTarget = false;
 
+        restartButton = CreateOutcomeButton("RestartButton", "Restart", new Vector2(-170f, -132f), RestartRun);
+        mainMenuButton = CreateOutcomeButton("MainMenuButton", "Back to Main Menu", new Vector2(170f, -132f), ReturnToMainMenu);
+        restartButton.gameObject.SetActive(false);
+        mainMenuButton.gameObject.SetActive(false);
         outcomePanel.SetActive(false);
     }
 
-    private void ShowOutcome(string title, WellnessRunResult result)
+    private Button CreateOutcomeButton(string objectName, string label, Vector2 anchoredPosition, UnityAction onClick)
     {
-        if (outcomePanel == null || outcomeLabel == null)
+        GameObject buttonObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        buttonObject.transform.SetParent(outcomePanel.transform, false);
+        RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+        buttonRect.pivot = new Vector2(0.5f, 0.5f);
+        buttonRect.anchoredPosition = anchoredPosition;
+        buttonRect.sizeDelta = new Vector2(OutcomeButtonWidth, OutcomeButtonHeight);
+
+        Image buttonImage = buttonObject.GetComponent<Image>();
+        buttonImage.color = OutcomeButtonColor;
+        buttonImage.raycastTarget = true;
+
+        Button button = buttonObject.GetComponent<Button>();
+        button.targetGraphic = buttonImage;
+        button.onClick.AddListener(onClick);
+
+        GameObject labelObject = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        labelObject.transform.SetParent(buttonObject.transform, false);
+        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+        labelRect.anchorMin = Vector2.zero;
+        labelRect.anchorMax = Vector2.one;
+        labelRect.offsetMin = Vector2.zero;
+        labelRect.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI buttonLabel = labelObject.GetComponent<TextMeshProUGUI>();
+        buttonLabel.font = TMP_Settings.defaultFontAsset;
+        buttonLabel.text = label;
+        buttonLabel.fontSize = OutcomeButtonFontSize;
+        buttonLabel.fontWeight = FontWeight.Bold;
+        buttonLabel.alignment = TextAlignmentOptions.Center;
+        buttonLabel.color = Color.white;
+        buttonLabel.raycastTarget = false;
+        return button;
+    }
+
+    private void ShowOutcome(string message, bool showRestartButton, string mainMenuLabel)
+    {
+        if (outcomePanel == null || outcomeLabel == null || mainMenuButton == null)
             return;
 
-        outcomeLabel.text = $"{title}\n{result}";
+        outcomeLabel.text = message;
+        restartButton.gameObject.SetActive(showRestartButton);
+        mainMenuButton.GetComponentInChildren<TextMeshProUGUI>().text = mainMenuLabel;
+
+        RectTransform mainMenuRect = mainMenuButton.GetComponent<RectTransform>();
+        mainMenuRect.anchoredPosition = showRestartButton ? new Vector2(170f, -132f) : new Vector2(0f, -132f);
+        mainMenuButton.gameObject.SetActive(true);
         outcomePanel.SetActive(true);
+    }
+
+    /// <summary>Restarts the gameplay scene without changing the selected difficulty settings.</summary>
+    public void RestartRun()
+    {
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    /// <summary>Returns to the MainMenu scene after restoring normal time and cursor visibility.</summary>
+    public void ReturnToMainMenu()
+    {
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        SceneManager.LoadScene(MainMenuSceneName);
     }
 
     private void LogToConsole(string message, ConsoleLogUI.LogType logType)

@@ -13,6 +13,7 @@ public class CirculatoryCellRoute : MonoBehaviour
 
     private Transform[] route;
     private int currentDestinationIndex;
+    private bool isPausedForThreat;
 
     /// <summary>
     /// Configures the cell's repeating route from its spawn point through the heart and assigned lung.
@@ -46,7 +47,7 @@ public class CirculatoryCellRoute : MonoBehaviour
 
     private void Update()
     {
-        if (route == null || route.Length == 0 || agent == null || !agent.isOnNavMesh)
+        if (isPausedForThreat || route == null || route.Length == 0 || agent == null || !agent.isOnNavMesh)
         {
             return;
         }
@@ -56,6 +57,24 @@ public class CirculatoryCellRoute : MonoBehaviour
             currentDestinationIndex = (currentDestinationIndex + 1) % route.Length;
             SetCurrentDestination();
         }
+    }
+
+    /// <summary>Pauses waypoint advancement while the cell responds to a pathogen.</summary>
+    public void PauseForThreat()
+    {
+        isPausedForThreat = true;
+    }
+
+    /// <summary>Resumes the existing waypoint loop after the pathogen is cleared or lost.</summary>
+    public void ResumeAfterThreat()
+    {
+        if (!isPausedForThreat)
+        {
+            return;
+        }
+
+        isPausedForThreat = false;
+        SetCurrentDestination();
     }
 
     private void SetCurrentDestination()
