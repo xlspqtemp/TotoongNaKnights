@@ -10,6 +10,11 @@ public class MasterAudioSettingsController : MonoBehaviour
     private const string MasterVolumeParameterName = "MasterVolume";
     private const float DefaultMasterVolume = 1f;
     private const float MinimumMasterDecibels = -80f;
+    private const float VolumeRowAnchorY = 0.62f;
+    private const float VolumeSliderWidth = 360f;
+    private const float VolumeSliderHorizontalOffset = -68f;
+    private const float VolumePercentageWidth = 120f;
+    private const float VolumePercentageHorizontalOffset = 180f;
 
     private static readonly Color OverlayColor = new Color(0.005f, 0.015f, 0.025f, 0.88f);
     private static readonly Color PanelColor = new Color(0.02f, 0.055f, 0.075f, 0.99f);
@@ -175,7 +180,9 @@ public class MasterAudioSettingsController : MonoBehaviour
             new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(520f, 54f), TextAlignmentOptions.Center);
 
         percentageLabel = CreateText(card.transform, "MasterVolumePercentage", "100%", 22, FontStyles.Bold,
-            new Vector2(1f, 0.62f), new Vector2(-72f, 0f), new Vector2(100f, 44f), TextAlignmentOptions.Right);
+            new Vector2(0.5f, VolumeRowAnchorY), new Vector2(VolumePercentageHorizontalOffset, 0f),
+            new Vector2(VolumePercentageWidth, 44f), TextAlignmentOptions.Right);
+        percentageLabel.overflowMode = TextOverflowModes.Overflow;
         masterVolumeSlider = CreateMasterSlider(card.transform);
 
         CreateButton(card.transform, "SettingsBackButton", "BACK", new Vector2(0.5f, 0f),
@@ -188,8 +195,9 @@ public class MasterAudioSettingsController : MonoBehaviour
     {
         GameObject sliderObject = new GameObject("MasterVolumeSlider", typeof(RectTransform), typeof(Slider));
         sliderObject.transform.SetParent(parent, false);
-        SetRect(sliderObject.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 36f), new Vector2(420f, 30f));
+        SetRect(sliderObject.GetComponent<RectTransform>(), new Vector2(0.5f, VolumeRowAnchorY),
+            new Vector2(0.5f, VolumeRowAnchorY), new Vector2(0.5f, 0.5f),
+            new Vector2(VolumeSliderHorizontalOffset, 0f), new Vector2(VolumeSliderWidth, 30f));
 
         Image background = CreateImage(sliderObject.transform, "Background", new Color(0.035f, 0.09f, 0.11f, 1f),
             Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, true);

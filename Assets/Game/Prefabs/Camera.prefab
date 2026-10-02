@@ -184,6 +184,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Camera
   panSpeed: 5
+  floor1: {fileID: 0}
+  floor2: {fileID: 0}
+  floor3: {fileID: 0}
+  floor4: {fileID: 0}
+  lymphaticOrdersCanvasGroup: {fileID: 0}
+  tacticalOrdersCanvasGroup: {fileID: 0}
+  digestiveOrdersCanvasGroup: {fileID: 0}
+  respiratoryOrdersCanvasGroup: {fileID: 0}
+  movementAudioSource: {fileID: 0}
+  movementSfx: {fileID: 0}
+  layerSwitchSfx: {fileID: 0}
 --- !u!114 &5786811088908549749
 MonoBehaviour:
   m_ObjectHideFlags: 0
