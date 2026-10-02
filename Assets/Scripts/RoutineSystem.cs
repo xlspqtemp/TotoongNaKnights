@@ -1,11 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-
-/// <summary>
-/// Drives the character's scheduled daily routine independently from random events.
-/// It reads the shared day/hour clock, logs activity changes, and broadcasts a reusable signal.
-/// </summary>
 public class RoutineSystem : MonoBehaviour
 {
     private const int HOURS_PER_DAY = 24;
@@ -14,7 +9,6 @@ public class RoutineSystem : MonoBehaviour
 
     public static RoutineSystem Instance { get; private set; }
 
-    /// <summary>Raised only when the scheduled activity changes.</summary>
     public static event Action<RoutineActivity> OnRoutineActivityChanged;
 
     [Header("References")]
@@ -103,7 +97,6 @@ public class RoutineSystem : MonoBehaviour
         UpdateCurrentActivity(currentDay, currentHour);
     }
 
-    /// <summary>Advances the existing day counter by one in-game hour for testing.</summary>
     [ContextMenu("Routine/Force Advance One Hour")]
     public void ForceAdvanceHour()
     {
@@ -116,7 +109,6 @@ public class RoutineSystem : MonoBehaviour
         dayCounter.TickMinutes(60);
     }
 
-    /// <summary>Jumps the day counter to a specific hour and evaluates that schedule immediately.</summary>
     public void JumpToHour(int hour)
     {
         if (dayCounter == null)
@@ -130,14 +122,12 @@ public class RoutineSystem : MonoBehaviour
         UpdateCurrentActivity(dayCounter.CurrentDay, clampedHour);
     }
 
-    /// <summary>Jumps to the inspector-configured debug hour.</summary>
     [ContextMenu("Routine/Jump To Configured Hour")]
     public void JumpToConfiguredHour()
     {
         JumpToHour(debugJumpHour);
     }
 
-    /// <summary>Changes the schedule used by future hourly evaluations.</summary>
     public void SetDifficulty(RoutineDifficulty difficulty)
     {
         if (activeDifficulty == difficulty)
@@ -150,7 +140,6 @@ public class RoutineSystem : MonoBehaviour
             UpdateCurrentActivity(dayCounter.CurrentDay, dayCounter.CurrentHour);
     }
 
-    /// <summary>Cycles Easy, Normal, Medium, and Hard for routine testing.</summary>
     [ContextMenu("Routine/Cycle Difficulty")]
     public void CycleDifficulty()
     {
@@ -158,7 +147,6 @@ public class RoutineSystem : MonoBehaviour
         SetDifficulty((RoutineDifficulty)nextDifficulty);
     }
 
-    /// <summary>Restores any missing default schedule or schedule entries.</summary>
     [ContextMenu("Routine/Reset Missing Schedules")]
     public void ResetMissingSchedules()
     {
@@ -323,13 +311,10 @@ public class RoutineSystem : MonoBehaviour
         return entries;
     }
 
-    /// <summary>Returns the active routine difficulty.</summary>
     public RoutineDifficulty ActiveDifficulty => activeDifficulty;
 
-    /// <summary>Returns the currently broadcast routine activity.</summary>
     public RoutineActivity CurrentActivity => currentActivity;
 
-    /// <summary>Returns whether the active schedule marks the supplied hour as sleeping.</summary>
     public bool IsSleepingAtHour(int hour)
     {
         return GetActivityForHour(activeDifficulty, hour) == RoutineActivity.Sleeping;

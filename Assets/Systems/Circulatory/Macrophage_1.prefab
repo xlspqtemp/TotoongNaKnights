@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 6724428812371110344}
   - component: {fileID: 1211034880874814307}
   - component: {fileID: 2298780155758711810}
+  - component: {fileID: 2450957734260466083}
   m_Layer: 0
   m_Name: Macrophage_1
   m_TagString: Cell
@@ -153,3 +154,17 @@ MonoBehaviour:
   radius: 5
   damage: 1
   health: 60
+--- !u!114 &2450957734260466083
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5201823894453661281}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db5f50b20e6e08a4896799ba9ef9e16b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BacteriaCellResponder
+  scanIntervalSeconds: 0.5
+  contactDistance: 2.25

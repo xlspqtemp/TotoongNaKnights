@@ -4,9 +4,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.UI;
 
-/// <summary>
-/// Spawns respiratory air from Airway, routes it through a lung and back, and handles allergen and cough behavior.
-/// </summary>
+/// <summary>Spawns respiratory air, routes it through a lung, and handles allergen, infection, test, and cough behavior.</summary>
 public sealed class RespiratorySystemController : MonoBehaviour
 {
     private const float SpawnIntervalSeconds = 1f;
@@ -22,6 +20,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     [SerializeField] private GameObject contaminatedAirPrefab;
     [SerializeField] private Button coughButton;
     [SerializeField] private TextMeshProUGUI coughButtonLabel;
+    [SerializeField] private Button testContaminatedAirButton;
 
     private float coughReadyAt;
     private float contaminatedAirUntil;
@@ -35,9 +34,18 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private void Start()
     {
         if (coughButton != null)
+        {
             coughButton.onClick.AddListener(HandleCoughPressed);
+        }
         else
+        {
             Debug.LogError("RespiratorySystemController requires a Cough button.", this);
+        }
+
+        if (testContaminatedAirButton != null)
+        {
+            testContaminatedAirButton.onClick.AddListener(ForceSpawnContaminatedAir);
+        }
 
         if (airwaySpawnPoint == null || leftLung == null || rightLung == null)
         {
@@ -68,7 +76,14 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private void OnDestroy()
     {
         if (coughButton != null)
+        {
             coughButton.onClick.RemoveListener(HandleCoughPressed);
+        }
+
+        if (testContaminatedAirButton != null)
+        {
+            testContaminatedAirButton.onClick.RemoveListener(ForceSpawnContaminatedAir);
+        }
     }
 
     private void Update()
@@ -79,7 +94,9 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private void HandleRandomEventTriggered(RandomEventData eventData)
     {
         if (eventData != null && eventData.eventName == "Inhaled dust/allergen")
+        {
             contaminatedAirUntil = Mathf.Max(contaminatedAirUntil, Time.time + ContaminatedAirDurationSeconds);
+        }
     }
 
     private IEnumerator RunSpawnLoop()
@@ -92,8 +109,25 @@ public sealed class RespiratorySystemController : MonoBehaviour
         }
     }
 
+    /// <summary>Immediately spawns one contaminated-air instance for testing lung infection behavior.</summary>
+    public void ForceSpawnContaminatedAir()
+    {
+        if (contaminatedAirPrefab == null || airwaySpawnPoint == null || leftLung == null || rightLung == null)
+        {
+            Debug.LogWarning("RespiratorySystemController cannot run the contaminated-air test because required references are missing.", this);
+            return;
+        }
+
+        SpawnAir(contaminatedAirPrefab);
+    }
+
     private void SpawnAir(GameObject prefab)
     {
+        if (prefab == null)
+        {
+            return;
+        }
+
         NavMeshAgent prefabAgent = prefab.GetComponent<NavMeshAgent>();
         if (prefabAgent == null)
         {
@@ -131,9 +165,30 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
         RespiratoryAirAgent airAgent = air.GetComponent<RespiratoryAirAgent>();
         if (airAgent == null)
+        {
             airAgent = air.AddComponent<RespiratoryAirAgent>();
+        }
 
-        if (!airAgent.Initialize(agent, lungHit.position, airwayHit.position, ArrivalDistance))
+        bool isContaminatedAir = prefab == contaminatedAirPrefab;
+        bool routeStarted;
+        if (isContaminatedAir)
+        {
+            LungInfectionResponse infectionResponse = lungPoint.GetComponent<LungInfectionResponse>();
+            if (infectionResponse == null)
+            {
+                Debug.LogError($"Lung point '{lungPoint.name}' requires a LungInfectionResponse component.", lungPoint);
+                Destroy(air);
+                return;
+            }
+
+            routeStarted = airAgent.InitializeForLungInfection(agent, lungHit.position, infectionResponse, ArrivalDistance);
+        }
+        else
+        {
+            routeStarted = airAgent.Initialize(agent, lungHit.position, airwayHit.position, ArrivalDistance);
+        }
+
+        if (!routeStarted)
         {
             Debug.LogWarning($"Spawned air '{air.name}' could not start its route.", air);
             Destroy(air);
@@ -143,20 +198,26 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private void HandleCoughPressed()
     {
         if (coughButton == null || !coughButton.interactable)
+        {
             return;
+        }
 
         coughReadyAt = Time.time + CoughCooldownSeconds;
         Transform[] respiratoryChildren = GetComponentsInChildren<Transform>(true);
         foreach (Transform candidate in respiratoryChildren)
         {
             if (candidate == transform)
+            {
                 continue;
+            }
 
             bool hasAirAgent = candidate.GetComponent<RespiratoryAirAgent>() != null;
             bool matchesAirPrefab = HasPrefabName(candidate.name, airPrefab) ||
                                     HasPrefabName(candidate.name, contaminatedAirPrefab);
             if (hasAirAgent || matchesAirPrefab)
+            {
                 Destroy(candidate.gameObject);
+            }
         }
 
         RefreshCoughButton();
@@ -165,7 +226,9 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private static bool HasPrefabName(string objectName, GameObject prefab)
     {
         if (prefab == null)
+        {
             return false;
+        }
 
         return objectName == prefab.name ||
                objectName == prefab.name + "(Clone)" ||
@@ -175,12 +238,16 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private void RefreshCoughButton()
     {
         if (coughButton == null)
+        {
             return;
+        }
 
         float remainingCooldown = coughReadyAt - Time.time;
         bool isOnCooldown = remainingCooldown > 0f;
         coughButton.interactable = !isOnCooldown;
         if (coughButtonLabel != null)
+        {
             coughButtonLabel.text = isOnCooldown ? $"COUGH ({Mathf.CeilToInt(remainingCooldown)}s)" : "COUGH";
+        }
     }
 }

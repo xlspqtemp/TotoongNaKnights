@@ -21,6 +21,8 @@ public sealed class LymphaticCellRoute : MonoBehaviour
     private Transform[] circulatoryRoute;
     private int currentDestinationIndex;
     private bool isInCirculatoryMode;
+    private bool isPausedForThreat;
+    private Transform currentRouteDestination;
 
     /// <summary>
     /// Initializes the cell's lymphatic exit and circulatory destinations.
@@ -55,7 +57,7 @@ public sealed class LymphaticCellRoute : MonoBehaviour
 
     private void Update()
     {
-        if (agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending)
+        if (isPausedForThreat || agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending)
         {
             return;
         }
@@ -72,6 +74,24 @@ public sealed class LymphaticCellRoute : MonoBehaviour
         }
 
         AdvanceCirculatoryRoute();
+    }
+
+    /// <summary>Pauses waypoint advancement while the cell responds to a pathogen.</summary>
+    public void PauseForThreat()
+    {
+        isPausedForThreat = true;
+    }
+
+    /// <summary>Resumes the saved lymphatic or circulatory waypoint after the pathogen is cleared or lost.</summary>
+    public void ResumeAfterThreat()
+    {
+        if (!isPausedForThreat)
+        {
+            return;
+        }
+
+        isPausedForThreat = false;
+        SetDestination(currentRouteDestination);
     }
 
     private void BeginCirculatoryMode()
@@ -189,6 +209,7 @@ public sealed class LymphaticCellRoute : MonoBehaviour
 
     private void SetDestination(Transform destination)
     {
+        currentRouteDestination = destination;
         if (agent != null && agent.enabled && agent.isOnNavMesh && destination != null)
         {
             agent.SetDestination(destination.position);

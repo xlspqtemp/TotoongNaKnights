@@ -64,13 +64,13 @@ public static class DifficultyHUD
         CreateText(panel.transform, "DifficultyIndicatorTitle", "DIFFICULTY", HeadingFontSize,
             HeadingColor, new Vector2(16f, -12f), new Vector2(PanelWidth - 32f, 24f),
             new Vector2(0f, 1f), new Vector2(0f, 1f));
-        CreateText(panel.transform, "EnemyDifficultyValue", "Enemy  " + DifficultySettings.EnemyLevel,
+        CreateText(panel.transform, "EnemyDifficultyValue", "Infection Severity  " + DifficultySettings.EnemyLevel,
             LevelFontSize, LevelColor, new Vector2(16f, -42f), new Vector2(PanelWidth - 32f, 20f),
             new Vector2(0f, 1f), new Vector2(0f, 1f));
-        CreateText(panel.transform, "DefenseDifficultyValue", "Defense  " + DifficultySettings.DefenseLevel,
+        CreateText(panel.transform, "DefenseDifficultyValue", "Immune System  " + DifficultySettings.DefenseLevel,
             LevelFontSize, LevelColor, new Vector2(16f, -67f), new Vector2(PanelWidth - 32f, 20f),
             new Vector2(0f, 1f), new Vector2(0f, 1f));
-        CreateText(panel.transform, "RandomEventsDifficultyValue", "Random Events  " + DifficultySettings.RandomEventsLevel,
+        CreateText(panel.transform, "RandomEventsDifficultyValue", "Lifestyle  " + DifficultySettings.RandomEventsLevel,
             LevelFontSize, LevelColor, new Vector2(16f, -92f), new Vector2(PanelWidth - 32f, 20f),
             new Vector2(0f, 1f), new Vector2(0f, 1f));
     }
