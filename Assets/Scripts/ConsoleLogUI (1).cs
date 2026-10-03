@@ -104,6 +104,12 @@ public class ConsoleLogUI : MonoBehaviour
         }
     }
 
+    /// <summary>Logs a random event as an ordinary console line without a pinned highlight.</summary>
+    public void LogRandomEvent(string message, RandomEventData eventData, LogType type)
+    {
+        Log(message, type);
+    }
+
     private void UpdateScrollReadingState()
     {
         if (scrollRect == null)

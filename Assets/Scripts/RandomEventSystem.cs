@@ -161,7 +161,7 @@ public class RandomEventSystem : MonoBehaviour
         string logMessage = $"{RANDOM_EVENT_PREFIX} Day {day}, Hour {hour:00}:00: " +
                             $"{eventData.eventName} ({eventData.severity}) — {eventData.eventDescription}";
         Debug.Log(logMessage);
-        LogToConsole(logMessage, GetConsoleLogType(eventData));
+        LogRandomEventToConsole(logMessage, eventData, GetConsoleLogType(eventData));
         OnRandomEventTriggered?.Invoke(eventData);
     }
 
@@ -267,6 +267,12 @@ public class RandomEventSystem : MonoBehaviour
         if (eventData.severity == RandomEventSeverity.Moderate)
             return ConsoleLogUI.LogType.Warning;
         return ConsoleLogUI.LogType.Info;
+    }
+
+    private void LogRandomEventToConsole(string message, RandomEventData eventData, ConsoleLogUI.LogType logType)
+    {
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogRandomEvent(message, eventData, logType);
     }
 
     private void LogToConsole(string message, ConsoleLogUI.LogType logType)

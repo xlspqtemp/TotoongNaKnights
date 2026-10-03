@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 
 /// <summary>
 /// Drives the "DAY COUNTER" panel (mock region #1):
@@ -84,9 +85,48 @@ public class DayCounterUI : MonoBehaviour
 
     private void Start()
     {
+        ConfigureCompactHeader();
         RefreshAll();
         if (GetComponent<GameplaySpeedButton>() == null)
             gameObject.AddComponent<GameplaySpeedButton>();
+    }
+
+    private void ConfigureCompactHeader()
+    {
+        VerticalLayoutGroup layoutGroup = GetComponent<VerticalLayoutGroup>();
+        if (layoutGroup != null)
+            layoutGroup.enabled = false;
+
+        ConfigureHeaderLabel(dayLabel, new Vector2(12f, 0f), new Vector2(84f, 0f));
+        ConfigureHeaderLabel(timeLabel, new Vector2(98f, 0f), new Vector2(94f, 0f));
+
+        if (dayLabel != null)
+        {
+            dayLabel.fontSize = 16f;
+            dayLabel.fontStyle = FontStyles.Normal;
+            dayLabel.alignment = TextAlignmentOptions.MidlineLeft;
+            dayLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        }
+
+        if (timeLabel != null)
+        {
+            timeLabel.fontSize = 16f;
+            timeLabel.alignment = TextAlignmentOptions.MidlineLeft;
+            timeLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        }
+    }
+
+    private static void ConfigureHeaderLabel(TextMeshProUGUI label, Vector2 position, Vector2 size)
+    {
+        if (label == null)
+            return;
+
+        RectTransform labelRect = label.rectTransform;
+        labelRect.anchorMin = new Vector2(0f, 0.5f);
+        labelRect.anchorMax = new Vector2(0f, 0.5f);
+        labelRect.pivot = new Vector2(0f, 0.5f);
+        labelRect.anchoredPosition = position;
+        labelRect.sizeDelta = size;
     }
 
     private void OnValidate()
@@ -227,7 +267,7 @@ public class DayCounterUI : MonoBehaviour
     private void RefreshDay()
     {
         if (dayLabel != null)
-            dayLabel.text = $"DAY {currentDay}";
+            dayLabel.text = $"Day {currentDay} |";
     }
 
     private void RefreshTime()

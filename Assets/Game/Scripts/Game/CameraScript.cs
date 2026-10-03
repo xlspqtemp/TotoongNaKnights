@@ -44,24 +44,17 @@ public class CameraScript : MonoBehaviour
         const float cameraMoveSpeed = 100f;
         transform.position += movement * cameraMoveSpeed * Time.deltaTime;
 
-        if (Input.GetKeyDown(KeyCode.F))
-        {
-            SetSelectedLayer(1, true);
-        }
-        else if (Input.GetKeyDown(KeyCode.G))
-        {
-            SetSelectedLayer(2, true);
-        }
-        else if (Input.GetKeyDown(KeyCode.H))
-        {
-            SetSelectedLayer(3, true);
-        }
-        else if (Input.GetKeyDown(KeyCode.J))
-        {
-            SetSelectedLayer(4, true);
-        }
+        // Body-system layers are selected through the HUD controls.
 
         UpdateMovementAudio(Mathf.Abs(horizontal) > 0.01f || Mathf.Abs(vertical) > 0.01f);
+    }
+
+    /// <summary>
+    /// Selects the requested body-system layer and plays the layer-switch sound.
+    /// </summary>
+    public void SelectLayer(int layerNumber)
+    {
+        SetSelectedLayer(layerNumber, true);
     }
 
     /// <summary>

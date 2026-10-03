@@ -96,7 +96,7 @@ public sealed class GameplaySpeedButton : MonoBehaviour
         };
         speedButton.onClick.AddListener(GameplaySpeed.Cycle);
 
-        CreateText("FastForwardSymbol", buttonRect, "▶▶", 21f, FontStyles.Bold,
+        CreateText("FastForwardSymbol", buttonRect, ">>", 21f, FontStyles.Bold,
             new Vector2(0f, 0.36f), new Vector2(1f, 1f), AccentColor, out _);
         CreateText("SpeedModeLabel", buttonRect, "1x", 12f, FontStyles.Bold,
             new Vector2(0f, 0.1f), new Vector2(1f, 0.4f), AccentColor, out speedLabel);

@@ -2,24 +2,19 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>
-/// Displays the selected difficulty levels in the lower-right corner of the game HUD.
-/// </summary>
+/// <summary>Displays all three selected difficulty levels in a compact row beside Pause.</summary>
 public static class DifficultyHUD
 {
     private const string BuiltInFontName = "LegacyRuntime.ttf";
     private const string GameSceneName = "Game";
     private const string HudCanvasName = "HUDCanvas";
-    private const int PanelWidth = 286;
-    private const int PanelHeight = 128;
-    private const int PanelRightInset = 32;
-    private const int PanelTopInset = 82;
-    private const int HeadingFontSize = 16;
-    private const int LevelFontSize = 15;
+    private const string IndicatorObjectName = "DifficultyIndicator";
+    private const float PanelHeight = 46f;
+    private const float MaximumPanelWidth = 340f;
+    private const float PauseGap = 10f;
 
     private static readonly Color PanelColor = new Color(0.025f, 0.05f, 0.067f, 0.9f);
-    private static readonly Color HeadingColor = new Color(0.3f, 0.88f, 0.82f, 1f);
-    private static readonly Color LevelColor = new Color(0.92f, 0.96f, 0.96f, 1f);
+    private static readonly Color TextColor = new Color(0.92f, 0.96f, 0.96f, 1f);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneLoaded()
@@ -31,72 +26,142 @@ public static class DifficultyHUD
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         if (scene.name != GameSceneName)
-        {
             return;
-        }
 
         GameObject hudCanvasObject = GameObject.Find(HudCanvasName);
         Canvas hudCanvas = hudCanvasObject != null ? hudCanvasObject.GetComponent<Canvas>() : null;
-        if (hudCanvas == null || hudCanvas.transform.Find("DifficultyIndicator") != null)
-        {
+        if (hudCanvas == null)
             return;
-        }
 
-        CreateIndicator(hudCanvas.transform);
+        Transform existingIndicator = hudCanvas.transform.Find(IndicatorObjectName);
+        RectTransform indicatorRect = existingIndicator as RectTransform;
+        if (indicatorRect == null)
+            indicatorRect = CreateIndicator(hudCanvas.transform);
+        else
+            UpdateIndicatorText(indicatorRect);
+
+        DifficultyHudResponsiveLayout responsiveLayout = hudCanvas.GetComponent<DifficultyHudResponsiveLayout>();
+        if (responsiveLayout == null)
+            responsiveLayout = hudCanvas.gameObject.AddComponent<DifficultyHudResponsiveLayout>();
+
+        RectTransform pauseButtonRect = hudCanvas.transform.Find("PauseButton") as RectTransform;
+        responsiveLayout.Configure(hudCanvas.transform as RectTransform, indicatorRect, pauseButtonRect);
     }
 
-    private static void CreateIndicator(Transform parent)
+    private static RectTransform CreateIndicator(Transform parent)
     {
-        GameObject panel = new GameObject("DifficultyIndicator", typeof(RectTransform), typeof(Image));
+        GameObject panel = new GameObject(IndicatorObjectName, typeof(RectTransform), typeof(Image));
         panel.transform.SetParent(parent, false);
         RectTransform panelRect = panel.GetComponent<RectTransform>();
         panelRect.anchorMin = new Vector2(1f, 1f);
         panelRect.anchorMax = new Vector2(1f, 1f);
         panelRect.pivot = new Vector2(1f, 1f);
-        panelRect.anchoredPosition = new Vector2(-PanelRightInset, -PanelTopInset);
-        panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
         panelRect.localScale = Vector3.one;
 
         Image panelImage = panel.GetComponent<Image>();
         panelImage.color = PanelColor;
         panelImage.raycastTarget = false;
 
-        CreateText(panel.transform, "DifficultyIndicatorTitle", "DIFFICULTY", HeadingFontSize,
-            HeadingColor, new Vector2(16f, -12f), new Vector2(PanelWidth - 32f, 24f),
-            new Vector2(0f, 1f), new Vector2(0f, 1f));
-        CreateText(panel.transform, "EnemyDifficultyValue", "Infection Severity  " + DifficultySettings.EnemyLevel,
-            LevelFontSize, LevelColor, new Vector2(16f, -42f), new Vector2(PanelWidth - 32f, 20f),
-            new Vector2(0f, 1f), new Vector2(0f, 1f));
-        CreateText(panel.transform, "DefenseDifficultyValue", "Immune System  " + DifficultySettings.DefenseLevel,
-            LevelFontSize, LevelColor, new Vector2(16f, -67f), new Vector2(PanelWidth - 32f, 20f),
-            new Vector2(0f, 1f), new Vector2(0f, 1f));
-        CreateText(panel.transform, "RandomEventsDifficultyValue", "Lifestyle  " + DifficultySettings.RandomEventsLevel,
-            LevelFontSize, LevelColor, new Vector2(16f, -92f), new Vector2(PanelWidth - 32f, 20f),
-            new Vector2(0f, 1f), new Vector2(0f, 1f));
+        GameObject valueObject = new GameObject("DifficultyValues", typeof(RectTransform), typeof(Text));
+        valueObject.transform.SetParent(panel.transform, false);
+        RectTransform valueRect = valueObject.GetComponent<RectTransform>();
+        valueRect.anchorMin = Vector2.zero;
+        valueRect.anchorMax = Vector2.one;
+        valueRect.offsetMin = new Vector2(12f, 4f);
+        valueRect.offsetMax = new Vector2(-12f, -4f);
+
+        Text valueText = valueObject.GetComponent<Text>();
+        valueText.font = Resources.GetBuiltinResource<Font>(BuiltInFontName);
+        valueText.fontSize = 14;
+        valueText.resizeTextForBestFit = true;
+        valueText.resizeTextMinSize = 9;
+        valueText.resizeTextMaxSize = 14;
+        valueText.fontStyle = FontStyle.Bold;
+        valueText.color = TextColor;
+        valueText.alignment = TextAnchor.MiddleLeft;
+        valueText.horizontalOverflow = HorizontalWrapMode.Overflow;
+        valueText.verticalOverflow = VerticalWrapMode.Overflow;
+        valueText.raycastTarget = false;
+        UpdateIndicatorText(panelRect);
+        return panelRect;
     }
 
-    private static void CreateText(Transform parent, string objectName, string content, int fontSize,
-        Color color, Vector2 position, Vector2 size, Vector2 anchor, Vector2 pivot)
+    private static void UpdateIndicatorText(RectTransform panelRect)
     {
-        GameObject textObject = new GameObject(objectName, typeof(RectTransform), typeof(Text));
-        textObject.transform.SetParent(parent, false);
-        RectTransform textRect = textObject.GetComponent<RectTransform>();
-        textRect.anchorMin = anchor;
-        textRect.anchorMax = anchor;
-        textRect.pivot = pivot;
-        textRect.anchoredPosition = position;
-        textRect.sizeDelta = size;
-        textRect.localScale = Vector3.one;
+        if (panelRect == null)
+            return;
 
-        Text text = textObject.GetComponent<Text>();
-        text.font = Resources.GetBuiltinResource<Font>(BuiltInFontName);
-        text.text = content;
-        text.fontSize = fontSize;
-        text.fontStyle = FontStyle.Bold;
-        text.color = color;
-        text.alignment = TextAnchor.MiddleLeft;
-        text.horizontalOverflow = HorizontalWrapMode.Wrap;
-        text.verticalOverflow = VerticalWrapMode.Overflow;
-        text.raycastTarget = false;
+        Transform valueTransform = panelRect.Find("DifficultyValues");
+        Text valueText = valueTransform != null ? valueTransform.GetComponent<Text>() : null;
+        if (valueText != null)
+        {
+            valueText.text = "Infection Severity " + DifficultySettings.EnemyLevel +
+                             "  |  Immune System " + DifficultySettings.DefenseLevel +
+                             "  |  Lifestyle " + DifficultySettings.RandomEventsLevel;
+            valueText.resizeTextForBestFit = true;
+            valueText.horizontalOverflow = HorizontalWrapMode.Overflow;
+        }
+    }
+}
+
+/// <summary>Tracks the Pause control and sizes the difficulty strip to the available HUD width.</summary>
+internal sealed class DifficultyHudResponsiveLayout : MonoBehaviour
+{
+    private const float PanelHeight = 46f;
+    private const float MaximumPanelWidth = 340f;
+    private const float PauseGap = 10f;
+
+    private RectTransform canvasRect;
+    private RectTransform panelRect;
+    private RectTransform pauseButtonRect;
+    private float previousWidth = -1f;
+    private float previousHeight = -1f;
+
+    internal void Configure(RectTransform canvas, RectTransform panel, RectTransform pauseButton)
+    {
+        canvasRect = canvas;
+        panelRect = panel;
+        pauseButtonRect = pauseButton;
+        ApplyLayout();
+    }
+
+    private void LateUpdate()
+    {
+        if (canvasRect == null || panelRect == null)
+            return;
+
+        Rect canvasBounds = canvasRect.rect;
+        if (Mathf.Abs(canvasBounds.width - previousWidth) > 1f || Mathf.Abs(canvasBounds.height - previousHeight) > 1f)
+            ApplyLayout();
+    }
+
+    private void ApplyLayout()
+    {
+        if (canvasRect == null || panelRect == null)
+            return;
+
+        Rect bounds = canvasRect.rect;
+        previousWidth = bounds.width;
+        previousHeight = bounds.height;
+
+        float margin = Mathf.Clamp(Mathf.Min(bounds.width, bounds.height) * 0.025f, 14f, 32f);
+        float pauseWidth = pauseButtonRect != null ? pauseButtonRect.rect.width : 82f;
+        float availableWidth = Mathf.Max(180f, bounds.width - margin * 2f - pauseWidth - PauseGap);
+        float panelWidth = Mathf.Min(MaximumPanelWidth, availableWidth);
+        float rightInset = margin;
+        float topInset = margin;
+
+        if (pauseButtonRect != null)
+        {
+            rightInset = Mathf.Max(margin, -pauseButtonRect.anchoredPosition.x + pauseWidth + PauseGap);
+            topInset = Mathf.Max(margin, -pauseButtonRect.anchoredPosition.y);
+        }
+
+        panelRect.anchorMin = new Vector2(1f, 1f);
+        panelRect.anchorMax = new Vector2(1f, 1f);
+        panelRect.pivot = new Vector2(1f, 1f);
+        panelRect.anchoredPosition = new Vector2(-rightInset, -topInset);
+        panelRect.sizeDelta = new Vector2(panelWidth, PanelHeight);
+        panelRect.localScale = Vector3.one;
     }
 }
