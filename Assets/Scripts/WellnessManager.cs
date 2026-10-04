@@ -25,6 +25,13 @@ public class WellnessManager : MonoBehaviour
     [Serializable] public sealed class WellnessChangedUnityEvent : UnityEvent<float, float> { }
     [Serializable] public sealed class WellnessResultUnityEvent : UnityEvent<WellnessRunResult> { }
 
+    private sealed class WellnessEventProgress
+    {
+        public string qteId;
+        public bool reachedTarget;
+        public readonly HashSet<string> awardedStages = new HashSet<string>(StringComparer.Ordinal);
+    }
+
     public static WellnessManager Instance { get; private set; }
 
     public event Action<float, float> OnWellnessChanged;
@@ -42,13 +49,13 @@ public class WellnessManager : MonoBehaviour
     [Header("Routine Event Deltas")]
     [SerializeField] private List<WellnessEventDelta> routineEventDeltas = new List<WellnessEventDelta>
     {
-        new WellnessEventDelta("EatingBreakfast", 5f),
-        new WellnessEventDelta("SkippingMeal", -3f),
-        new WellnessEventDelta("SleepingOnSchedule", 6f),
-        new WellnessEventDelta("SleepingLate", -3f),
-        new WellnessEventDelta("Jogging", 4f),
-        new WellnessEventDelta("Overexertion", -2f),
-        new WellnessEventDelta("PlayingOrRecreation", 3f),
+        new WellnessEventDelta("EatingBreakfast", 0f),
+        new WellnessEventDelta("SkippingMeal", 0f),
+        new WellnessEventDelta("SleepingOnSchedule", 0f),
+        new WellnessEventDelta("SleepingLate", 0f),
+        new WellnessEventDelta("Jogging", 0f),
+        new WellnessEventDelta("Overexertion", 0f),
+        new WellnessEventDelta("PlayingOrRecreation", 0f),
         new WellnessEventDelta("LeisureTime", 0f),
         new WellnessEventDelta("Idling", 0f),
         new WellnessEventDelta("EatingLunch", 0f),
@@ -59,31 +66,31 @@ public class WellnessManager : MonoBehaviour
         new WellnessEventDelta("CommutingToWorkOrSchool", 0f),
         new WellnessEventDelta("WorkingOrStudying", 0f),
         new WellnessEventDelta("Relaxing", 0f),
-        new WellnessEventDelta("DrinkingWater", 3f),
-        new WellnessEventDelta("WalkingLightActivity", 2f),
-        new WellnessEventDelta("RecoveryBreak", 3f),
-        new WellnessEventDelta("SleepingIn", -2f),
-        new WellnessEventDelta("ProlongedInactivity", -2f)
+        new WellnessEventDelta("DrinkingWater", 0f),
+        new WellnessEventDelta("WalkingLightActivity", 0f),
+        new WellnessEventDelta("RecoveryBreak", 0f),
+        new WellnessEventDelta("SleepingIn", 0f),
+        new WellnessEventDelta("ProlongedInactivity", 0f)
     };
 
-    [Header("Random Event Deltas (unlisted random events default to -3)")]
+    [Header("Random Event Deltas")]
     [SerializeField] private List<WellnessEventDelta> randomEventDeltas = new List<WellnessEventDelta>
     {
-        new WellnessEventDelta("AteExpiredFood", -3f),
-        new WellnessEventDelta("InhaledDustOrAllergen", -3f),
-        new WellnessEventDelta("SkippedMeal", -3f),
-        new WellnessEventDelta("Overexertion", -3f),
-        new WellnessEventDelta("StressOrPoorHydration", -3f),
-        new WellnessEventDelta("JunkFoodBinge", -3f),
-        new WellnessEventDelta("ArgumentOrConflict", -3f),
-        new WellnessEventDelta("ColdFromSickPerson", -3f),
-        new WellnessEventDelta("SunOrFreshAir", -3f),
-        new WellnessEventDelta("NickedOrScraped", -3f),
+        new WellnessEventDelta("AteExpiredFood", -5f),
+        new WellnessEventDelta("InhaledDustOrAllergen", -5f),
+        new WellnessEventDelta("SkippedMeal", 0f),
+        new WellnessEventDelta("Overexertion", 0f),
+        new WellnessEventDelta("StressOrPoorHydration", 0f),
+        new WellnessEventDelta("JunkFoodBinge", 0f),
+        new WellnessEventDelta("ArgumentOrConflict", 0f),
+        new WellnessEventDelta("ColdFromSickPerson", -5f),
+        new WellnessEventDelta("SunOrFreshAir", 0f),
+        new WellnessEventDelta("NickedOrScraped", -5f),
         new WellnessEventDelta("ContaminatedWater", -5f),
         new WellnessEventDelta("TrippedAndScratched", -5f),
         new WellnessEventDelta("AccidentallyAteSpoiledFood", -5f),
-        new WellnessEventDelta("ContactWithSickPerson", -4f),
-        new WellnessEventDelta("SmokedCigarette", -6f)
+        new WellnessEventDelta("ContactWithSickPerson", -5f),
+        new WellnessEventDelta("SmokedCigarette", -5f)
     };
 
     [Header("Hazard and QTE Result Deltas")]
@@ -131,6 +138,7 @@ public class WellnessManager : MonoBehaviour
     private float bacteremiaActiveSeconds;
     private float bacteremiaDrainTimer;
     private int runStartDay;
+    private readonly Dictionary<string, WellnessEventProgress> wellnessEventProgress = new Dictionary<string, WellnessEventProgress>(StringComparer.Ordinal);
 
     /// <summary>Returns whether this gameplay run has ended and its world simulation should remain stopped.</summary>
     public bool HasRunEnded => runHasEnded;
@@ -156,7 +164,6 @@ public class WellnessManager : MonoBehaviour
         }
 
         Instance = this;
-        EnsureRoutineEventEntry("SkippingMeal", -3f);
         EnsureAddedRoutineEventEntries();
         EnsureAddedRandomEventEntries();
         if (dayCounter == null)
@@ -209,7 +216,6 @@ public class WellnessManager : MonoBehaviour
 
     private void OnValidate()
     {
-        EnsureRoutineEventEntry("SkippingMeal", -3f);
         EnsureAddedRoutineEventEntries();
         EnsureAddedRandomEventEntries();
         maxWellness = Mathf.Max(1f, maxWellness);
@@ -244,7 +250,7 @@ public class WellnessManager : MonoBehaviour
         }
     }
 
-    /// <summary>Applies a configured wellness event; unlisted external/random event IDs default to -3.</summary>
+    /// <summary>Applies a configured wellness event; unlisted event IDs do not change wellness.</summary>
     public void ApplyEvent(string eventId)
     {
         if (string.IsNullOrWhiteSpace(eventId) || runHasEnded)
@@ -252,8 +258,56 @@ public class WellnessManager : MonoBehaviour
 
         float delta = FindDelta(hazardEventDeltas, eventId,
             FindDelta(randomEventDeltas, eventId,
-                FindDelta(routineEventDeltas, eventId, -3f)));
+                FindDelta(routineEventDeltas, eventId, 0f)));
         ApplyWellnessDelta(eventId, delta);
+    }
+
+    /// <summary>Creates a stable key for one random event occurrence.</summary>
+    public static string BuildEventKey(string eventId, int day, int hour)
+    {
+        return $"{eventId}:{day}:{hour}";
+    }
+
+    /// <summary>Marks that contamination from an active random event reached its target organ.</summary>
+    public void MarkEventReachedTarget(string eventKey)
+    {
+        if (!string.IsNullOrWhiteSpace(eventKey) && wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress))
+            progress.reachedTarget = true;
+    }
+
+    /// <summary>Awards one wellness milestone for an active random event, at most once per milestone.</summary>
+    public bool TryAwardEventPoints(string eventKey, string rewardStage, float points)
+    {
+        if (string.IsNullOrWhiteSpace(eventKey) || string.IsNullOrWhiteSpace(rewardStage) || runHasEnded ||
+            !wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress) ||
+            !progress.awardedStages.Add(rewardStage))
+        {
+            return false;
+        }
+
+        ApplyWellnessDelta($"{eventKey}:{rewardStage}", points);
+        return true;
+    }
+
+    /// <summary>Awards a response reward based on whether contamination had reached its target.</summary>
+    public bool TryAwardEventResponse(string eventKey, string rewardStage, float pointsAfterTarget, float pointsBeforeTarget, bool onlyBeforeTarget = false)
+    {
+        if (string.IsNullOrWhiteSpace(eventKey) || string.IsNullOrWhiteSpace(rewardStage) || runHasEnded ||
+            !wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress) ||
+            (onlyBeforeTarget && progress.reachedTarget) || progress.awardedStages.Contains(rewardStage))
+        {
+            return false;
+        }
+
+        float points = progress.reachedTarget ? pointsAfterTarget : pointsBeforeTarget;
+        return TryAwardEventPoints(eventKey, rewardStage, points);
+    }
+
+    /// <summary>Resolves the QTE associated with an event after the player completes its response.</summary>
+    public void ResolveEventQTE(string eventKey)
+    {
+        if (!string.IsNullOrWhiteSpace(eventKey) && wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress))
+            GameplaySpeed.ResolveQTE(progress.qteId);
     }
 
     /// <summary>Sets whether the currently unwired bacteremia state is active.</summary>
@@ -269,33 +323,11 @@ public class WellnessManager : MonoBehaviour
 
     private void HandleRoutineActivityChanged(RoutineActivity activity)
     {
-        if (runHasEnded)
-            return;
-
-        string eventId = activity.ToString();
-        switch (activity)
-        {
-            case RoutineActivity.Sleeping:
-                eventId = dayCounter != null && dayCounter.CurrentHour < 6 ? "SleepingLate" : "SleepingOnSchedule";
-                break;
-            case RoutineActivity.Exercising:
-                eventId = "Jogging";
-                break;
-            case RoutineActivity.Playing:
-                eventId = "PlayingOrRecreation";
-                break;
-            case RoutineActivity.Idle:
-                eventId = "Idling";
-                break;
-        }
-
-        float delta = FindDelta(routineEventDeltas, eventId, 0f);
-        ApplyWellnessDelta(eventId, delta);
     }
 
     private void HandleRandomEventTriggered(RandomEventData eventData)
     {
-        if (eventData == null)
+        if (eventData == null || runHasEnded)
             return;
 
         string eventId;
@@ -316,10 +348,19 @@ public class WellnessManager : MonoBehaviour
             case "Accidentally Ate Spoiled Food": eventId = "AccidentallyAteSpoiledFood"; break;
             case "Came Into Contact With Someone Who Was Sick": eventId = "ContactWithSickPerson"; break;
             case "Smoked cigarette": eventId = "SmokedCigarette"; break;
-            default: eventId = eventData.eventName; break;
+            default: return;
         }
 
-        ApplyEvent(eventId);
+        if (eventId != "AteExpiredFood" && eventId != "ContaminatedWater" && eventId != "AccidentallyAteSpoiledFood" &&
+            eventId != "InhaledDustOrAllergen" && eventId != "ColdFromSickPerson" && eventId != "ContactWithSickPerson" &&
+            eventId != "SmokedCigarette" && eventId != "NickedOrScraped" && eventId != "TrippedAndScratched")
+        {
+            return;
+        }
+
+        string eventKey = BuildEventKey(eventId, eventData.day, eventData.hour);
+        wellnessEventProgress[eventKey] = new WellnessEventProgress { qteId = eventData.triggersQTE ? eventData.eventName : null };
+        ApplyWellnessDelta(eventId, -5f);
     }
 
     private void HandleDayAdvanced(int currentDay)
@@ -543,7 +584,10 @@ public class WellnessManager : MonoBehaviour
         foreach (WellnessEventDelta entry in routineEventDeltas)
         {
             if (entry != null && string.Equals(entry.eventId, eventId, StringComparison.Ordinal))
+            {
+                entry.delta = defaultDelta;
                 return;
+            }
         }
 
         routineEventDeltas.Add(new WellnessEventDelta(eventId, defaultDelta));
@@ -551,20 +595,40 @@ public class WellnessManager : MonoBehaviour
 
     private void EnsureAddedRoutineEventEntries()
     {
-        EnsureRoutineEventEntry("DrinkingWater", 3f);
-        EnsureRoutineEventEntry("WalkingLightActivity", 2f);
-        EnsureRoutineEventEntry("RecoveryBreak", 3f);
-        EnsureRoutineEventEntry("SleepingIn", -2f);
-        EnsureRoutineEventEntry("ProlongedInactivity", -2f);
+        if (routineEventDeltas == null)
+            routineEventDeltas = new List<WellnessEventDelta>();
+
+        foreach (WellnessEventDelta entry in routineEventDeltas)
+        {
+            if (entry != null)
+                entry.delta = 0f;
+        }
+
+        EnsureRoutineEventEntry("SkippingMeal", 0f);
+        EnsureRoutineEventEntry("DrinkingWater", 0f);
+        EnsureRoutineEventEntry("WalkingLightActivity", 0f);
+        EnsureRoutineEventEntry("RecoveryBreak", 0f);
+        EnsureRoutineEventEntry("SleepingIn", 0f);
+        EnsureRoutineEventEntry("ProlongedInactivity", 0f);
     }
 
     private void EnsureAddedRandomEventEntries()
     {
+        EnsureRandomEventEntry("AteExpiredFood", -5f);
+        EnsureRandomEventEntry("InhaledDustOrAllergen", -5f);
+        EnsureRandomEventEntry("SkippedMeal", 0f);
+        EnsureRandomEventEntry("Overexertion", 0f);
+        EnsureRandomEventEntry("StressOrPoorHydration", 0f);
+        EnsureRandomEventEntry("JunkFoodBinge", 0f);
+        EnsureRandomEventEntry("ArgumentOrConflict", 0f);
+        EnsureRandomEventEntry("ColdFromSickPerson", -5f);
+        EnsureRandomEventEntry("SunOrFreshAir", 0f);
+        EnsureRandomEventEntry("NickedOrScraped", -5f);
         EnsureRandomEventEntry("ContaminatedWater", -5f);
         EnsureRandomEventEntry("TrippedAndScratched", -5f);
         EnsureRandomEventEntry("AccidentallyAteSpoiledFood", -5f);
-        EnsureRandomEventEntry("ContactWithSickPerson", -4f);
-        EnsureRandomEventEntry("SmokedCigarette", -6f);
+        EnsureRandomEventEntry("ContactWithSickPerson", -5f);
+        EnsureRandomEventEntry("SmokedCigarette", -5f);
     }
 
     private void EnsureRandomEventEntry(string eventId, float defaultDelta)
@@ -575,7 +639,10 @@ public class WellnessManager : MonoBehaviour
         foreach (WellnessEventDelta entry in randomEventDeltas)
         {
             if (entry != null && string.Equals(entry.eventId, eventId, StringComparison.Ordinal))
+            {
+                entry.delta = defaultDelta;
                 return;
+            }
         }
 
         randomEventDeltas.Add(new WellnessEventDelta(eventId, defaultDelta));

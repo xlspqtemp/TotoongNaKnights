@@ -1,107 +1,235 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class CirculatorySystemController : MonoBehaviour
+/// <summary>Spawns paired immune cells and assigns them a randomized one-way circulatory loop.</summary>
+public sealed class CirculatorySystemController : MonoBehaviour
 {
-    private const int DefaultPairsPerSpawnPoint = 1;
+    private const int DefaultPairsToSpawn = 5;
+    private const float DefaultSpawnIntervalSeconds = 1f;
     private const float DefaultNavMeshSampleRadius = 10f;
+ 
+    private const string DestinationTargetName = "Destination - Target";
+    private const string LungPointName = "Point - Lung";
 
     [SerializeField] private GameObject neutrophilPrefab;
     [SerializeField] private GameObject macrophagePrefab;
-    [SerializeField] private Transform[] spawnPoints;
+    [SerializeField] private Transform destinationPointContainer;
     [SerializeField] private Transform heart;
-    [SerializeField] private Transform leftLung;
-    [SerializeField] private Transform rightLung;
-    [SerializeField] private int pairsPerSpawnPoint = DefaultPairsPerSpawnPoint;
-    [SerializeField] private float navMeshSampleRadius = DefaultNavMeshSampleRadius;
+    [SerializeField, Min(0)] private int pairsToSpawn = DefaultPairsToSpawn;
+    [SerializeField, Min(0.1f)] private float spawnIntervalSeconds = DefaultSpawnIntervalSeconds;
+    [SerializeField, Min(0.1f)] private float navMeshSampleRadius = DefaultNavMeshSampleRadius;
+
+    private Transform[] destinationPoints;
+    private Transform[] lungPoints;
 
     private void Start()
     {
-        SpawnInitialCells();
-    }
-
-    private void SpawnInitialCells()
-    {
+        ResolveWaypoints();
         if (!HasRequiredSpawnData())
         {
-            Debug.LogError("CirculatorySystemController requires both prefabs, the heart, and both lungs.", this);
+            Debug.LogError("CirculatorySystemController requires both cell prefabs, the heart, and destination and lung waypoints under its waypoint container.", this);
             return;
         }
 
-        int spawnCount = Mathf.Max(0, pairsPerSpawnPoint);
-        if (spawnPoints == null)
+        StartCoroutine(SpawnPairsOverTime());
+    }
+
+
+    private void ResolveWaypoints()
+    {
+        if (destinationPointContainer == null)
         {
+            destinationPoints = new Transform[0];
+            lungPoints = new Transform[0];
             return;
         }
 
-        foreach (Transform spawnPoint in spawnPoints)
+        Transform[] candidates = destinationPointContainer.GetComponentsInChildren<Transform>(true);
+        destinationPoints = FindNamedWaypoints(candidates, DestinationTargetName);
+        lungPoints = FindNamedWaypoints(candidates, LungPointName);
+    }
+
+    private static Transform[] FindNamedWaypoints(Transform[] candidates, string waypointName)
+    {
+        int matchingCount = 0;
+        foreach (Transform candidate in candidates)
         {
-            for (int pairIndex = 0; pairIndex < spawnCount; pairIndex++)
+            if (candidate != null && candidate.name == waypointName)
             {
-                SpawnPairAt(spawnPoint);
+                matchingCount++;
+            }
+        }
+
+        Transform[] matches = new Transform[matchingCount];
+        int matchIndex = 0;
+        foreach (Transform candidate in candidates)
+        {
+            if (candidate != null && candidate.name == waypointName)
+            {
+                matches[matchIndex] = candidate;
+                matchIndex++;
+            }
+        }
+
+        return matches;
+    }
+
+    private IEnumerator SpawnPairsOverTime()
+    {
+        int pairCount = Mathf.Max(0, pairsToSpawn);
+        float intervalSeconds = Mathf.Max(0.1f, spawnIntervalSeconds);
+
+        for (int pairIndex = 0; pairIndex < pairCount; pairIndex++)
+        {
+            SpawnRandomPair();
+            if (pairIndex + 1 < pairCount)
+            {
+                yield return new WaitForSeconds(intervalSeconds);
             }
         }
     }
 
-    /// <summary>
-    /// Spawns one neutrophil and one macrophage at the requested anatomical spawn point.
-    /// </summary>
+    private void SpawnRandomPair()
+    {
+        Transform destinationPoint = SelectRandomDestinationPoint();
+        if (destinationPoint == null)
+        {
+            Debug.LogWarning("CirculatorySystemController could not find a valid external destination point.", this);
+            return;
+        }
+
+        SpawnCellPairMember(neutrophilPrefab, destinationPoint, heart.position);
+        SpawnCellPairMember(macrophagePrefab, destinationPoint, heart.position);
+    }
+
+    /// <summary>Spawns a requested immune-cell pair at a tactical spawn point while keeping a randomized route target.</summary>
     public bool SpawnPairAt(Transform spawnPoint)
     {
-        if (spawnPoint == null || !HasRequiredSpawnData())
+        Transform destinationPoint = SelectRandomDestinationPoint();
+        if (spawnPoint == null || destinationPoint == null || !HasRequiredSpawnData())
         {
-            Debug.LogError("CirculatorySystemController cannot spawn a pair because its references are incomplete.", this);
             return false;
         }
 
-        Transform destinationLung = IsLeftSide(spawnPoint.name) ? leftLung : rightLung;
-        Vector3 spawnPosition = GetNavMeshPosition(spawnPoint.position);
-        SpawnCell(neutrophilPrefab, spawnPosition, spawnPoint, destinationLung);
-        SpawnCell(macrophagePrefab, spawnPosition, spawnPoint, destinationLung);
-        return true;
+        bool spawnedNeutrophil = SpawnCellPairMember(neutrophilPrefab, destinationPoint, spawnPoint.position);
+        bool spawnedMacrophage = SpawnCellPairMember(macrophagePrefab, destinationPoint, spawnPoint.position);
+        return spawnedNeutrophil && spawnedMacrophage;
     }
 
-    private bool HasRequiredSpawnData()
+    private bool SpawnCellPairMember(GameObject cellPrefab, Transform destinationPoint, Vector3 requestedPosition)
     {
-        return neutrophilPrefab != null && macrophagePrefab != null && heart != null && leftLung != null && rightLung != null;
-    }
+        NavMeshAgent prefabAgent = cellPrefab.GetComponent<NavMeshAgent>();
+        if (prefabAgent == null)
+        {
+            Debug.LogError($"Immune cell prefab '{cellPrefab.name}' requires a NavMeshAgent.", cellPrefab);
+            return false;
+        }
+        NavMeshQueryFilter filter = new NavMeshQueryFilter
+        {
+            agentTypeID = prefabAgent.agentTypeID,
+            areaMask = NavMesh.AllAreas
+        };
 
-    private void SpawnCell(GameObject cellPrefab, Vector3 spawnPosition, Transform spawnPoint, Transform destinationLung)
-    {
-        GameObject cell = Instantiate(cellPrefab, spawnPosition, Quaternion.identity, transform);
+        if (!NavMesh.SamplePosition(requestedPosition, out NavMeshHit spawnHit, Mathf.Max(0.1f, navMeshSampleRadius), filter))
+        {
+            Debug.LogWarning("CirculatorySystemController could not find a NavMesh position near the requested immune-cell spawn point; an immune cell was skipped.", this);
+            return false;
+        }
+
+        GameObject cell = Instantiate(cellPrefab, spawnHit.position, Quaternion.identity);
+        NavMeshAgent agent = cell.GetComponent<NavMeshAgent>();
+        if (agent == null || !agent.enabled || !agent.Warp(spawnHit.position))
+        {
+            Debug.LogError($"Immune cell '{cellPrefab.name}' could not be placed on the circulatory NavMesh.", cell);
+            Destroy(cell);
+            return false;
+        }
+
         SelectableUnit selectableUnit = cell.GetComponent<SelectableUnit>();
         if (selectableUnit == null)
+        {
             selectableUnit = cell.AddComponent<SelectableUnit>();
+        }
         selectableUnit.Initialize(cellPrefab.name);
 
-        NavMeshAgent agent = cell.GetComponent<NavMeshAgent>();
         CirculatoryCellRoute route = cell.GetComponent<CirculatoryCellRoute>();
         if (route == null)
         {
             route = cell.AddComponent<CirculatoryCellRoute>();
         }
 
-        if (agent == null || route == null)
+        if (!route.Configure(agent, heart, destinationPoint, lungPoints))
         {
-            Debug.LogError($"{cellPrefab.name} requires a NavMeshAgent component.", cell);
-            return;
+            Debug.LogError($"CirculatorySystemController could not configure the route for '{cellPrefab.name}'.", cell);
+            Destroy(cell);
+            return false;
         }
 
-        route.Configure(agent, spawnPoint, heart, destinationLung);
+        return true;
     }
 
-    private Vector3 GetNavMeshPosition(Vector3 requestedPosition)
+    private Transform SelectRandomDestinationPoint()
     {
-        if (NavMesh.SamplePosition(requestedPosition, out NavMeshHit hit, navMeshSampleRadius, NavMesh.AllAreas))
+        if (destinationPoints == null)
         {
-            return hit.position;
+            return null;
         }
 
-        return requestedPosition;
+        int validCount = 0;
+        foreach (Transform point in destinationPoints)
+        {
+            if (point != null)
+            {
+                validCount++;
+            }
+        }
+
+        if (validCount == 0)
+        {
+            return null;
+        }
+
+        int selectedIndex = Random.Range(0, validCount);
+        foreach (Transform point in destinationPoints)
+        {
+            if (point == null)
+            {
+                continue;
+            }
+
+            if (selectedIndex == 0)
+            {
+                return point;
+            }
+
+            selectedIndex--;
+        }
+
+        return null;
     }
 
-    private static bool IsLeftSide(string markerName)
+    private bool HasRequiredSpawnData()
     {
-        return markerName.ToLowerInvariant().Contains("left");
+        return neutrophilPrefab != null && macrophagePrefab != null && heart != null && destinationPointContainer != null &&
+            HasAnyTarget(destinationPoints) && HasAnyTarget(lungPoints);
+    }
+
+    private static bool HasAnyTarget(Transform[] targets)
+    {
+        if (targets == null)
+        {
+            return false;
+        }
+
+        foreach (Transform target in targets)
+        {
+            if (target != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

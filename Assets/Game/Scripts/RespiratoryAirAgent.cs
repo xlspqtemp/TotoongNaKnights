@@ -10,6 +10,10 @@ public sealed class RespiratoryAirAgent : MonoBehaviour
     private bool isReturningToAirway;
     private bool destroyOnLungArrival;
     private LungInfectionResponse lungInfectionResponse;
+    private string wellnessEventKey;
+
+    /// <summary>Returns the wellness event occurrence carried by this air instance, if any.</summary>
+    public string WellnessEventKey => wellnessEventKey;
 
     /// <summary>Starts the normal air route to a lung and back to Airway.</summary>
     /// <param name="agent">The NavMeshAgent that moves this air instance.</param>
@@ -25,6 +29,7 @@ public sealed class RespiratoryAirAgent : MonoBehaviour
         isReturningToAirway = false;
         destroyOnLungArrival = false;
         lungInfectionResponse = null;
+        wellnessEventKey = null;
 
         return navMeshAgent != null && navMeshAgent.isOnNavMesh && navMeshAgent.SetDestination(lungPosition);
     }
@@ -34,14 +39,16 @@ public sealed class RespiratoryAirAgent : MonoBehaviour
     /// <param name="lungPosition">The sampled position of the selected lung.</param>
     /// <param name="infectionResponse">The infection state associated with the destination lung.</param>
     /// <param name="destinationArrivalDistance">Distance at which arrival is considered complete.</param>
+    /// <param name="eventKey">The wellness event occurrence carried by this contamination.</param>
     /// <returns>True when the lung destination was accepted by the agent.</returns>
-    public bool InitializeForLungInfection(NavMeshAgent agent, Vector3 lungPosition, LungInfectionResponse infectionResponse, float destinationArrivalDistance)
+    public bool InitializeForLungInfection(NavMeshAgent agent, Vector3 lungPosition, LungInfectionResponse infectionResponse, float destinationArrivalDistance, string eventKey)
     {
         navMeshAgent = agent;
         arrivalDistance = Mathf.Max(0f, destinationArrivalDistance);
         isReturningToAirway = false;
         destroyOnLungArrival = true;
         lungInfectionResponse = infectionResponse;
+        wellnessEventKey = eventKey;
 
         return navMeshAgent != null && navMeshAgent.isOnNavMesh && navMeshAgent.SetDestination(lungPosition);
     }
@@ -60,7 +67,7 @@ public sealed class RespiratoryAirAgent : MonoBehaviour
         {
             if (lungInfectionResponse != null)
             {
-                lungInfectionResponse.RegisterInfiltration();
+                lungInfectionResponse.RegisterInfiltration(wellnessEventKey);
             }
 
             Destroy(gameObject);

@@ -80,6 +80,7 @@ public sealed class BacteriaOutbreakController : MonoBehaviour
             return;
         }
 
+        string eventKey = WoundRepairPoint.GetActiveWellnessEventKey();
         for (int index = 0; index < spawnPoints.Length; index++)
         {
             Transform spawnPoint = spawnPoints[index];
@@ -116,7 +117,7 @@ public sealed class BacteriaOutbreakController : MonoBehaviour
             }
 
             if (bacteriaNavMeshAgent == null || bacteriaAgent == null ||
-                !bacteriaAgent.InitializeStationary(bacteriaNavMeshAgent, spawnHit.position))
+                !bacteriaAgent.InitializeStationary(bacteriaNavMeshAgent, spawnHit.position, eventKey))
             {
                 Debug.LogWarning($"Bacteria '{bacteriaObject.name}' could not be placed as a stationary NavMesh target.", bacteriaObject);
                 Destroy(bacteriaObject);

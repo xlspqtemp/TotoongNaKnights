@@ -1,71 +1,109 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-public class CirculatoryCellRoute : MonoBehaviour
+/// <summary>Routes an immune cell through its assigned body destination, heart, and a random lung in one direction.</summary>
+public sealed class CirculatoryCellRoute : MonoBehaviour
 {
     private const float DefaultArrivalDistance = 1f;
+    private const float DefaultScanCorridorRadius = 3f;
 
     [SerializeField] private NavMeshAgent agent;
-    [SerializeField] private Transform spawnPoint;
     [SerializeField] private Transform heart;
-    [SerializeField] private Transform destinationLung;
-    [SerializeField] private float arrivalDistance = DefaultArrivalDistance;
+    [SerializeField] private Transform assignedDestination;
+    [SerializeField] private Transform[] lungPoints;
+    [SerializeField, Min(0f)] private float arrivalDistance = DefaultArrivalDistance;
+    [SerializeField, Min(0f)] private float scanCorridorRadius = DefaultScanCorridorRadius;
 
-    private Transform[] route;
-    private int currentDestinationIndex;
+    private int routeStep;
+    private int previousLungIndex = -1;
+    private bool isConfigured;
+    private bool hasDestination;
     private bool isPausedForThreat;
 
-    /// <summary>
-    /// Configures the cell's repeating route from its spawn point through the heart and assigned lung.
-    /// </summary>
-    public void Configure(NavMeshAgent cellAgent, Transform cellSpawnPoint, Transform heartTransform, Transform lungTransform)
+    /// <summary>Configures the repeating destination → heart → lung → heart route.</summary>
+    public bool Configure(NavMeshAgent cellAgent, Transform heartTransform, Transform destinationTransform, Transform[] availableLungPoints)
     {
         agent = cellAgent;
-        GameplaySpeedNavMeshAgent.Register(agent);
-        spawnPoint = cellSpawnPoint;
         heart = heartTransform;
-        destinationLung = lungTransform;
-        route = new[] { spawnPoint, heart, destinationLung, heart };
-        currentDestinationIndex = 1;
-    }
+        assignedDestination = destinationTransform;
+        lungPoints = availableLungPoints;
+        routeStep = 0;
+        previousLungIndex = -1;
+        hasDestination = false;
+        isConfigured = HasRequiredRouteData();
 
-    private void Start()
-    {
-        if (agent == null)
+        if (isConfigured)
         {
-            agent = GetComponent<NavMeshAgent>();
+            GameplaySpeedNavMeshAgent.Register(agent);
+            SetCurrentDestination();
         }
 
-        if (route == null && spawnPoint != null && heart != null && destinationLung != null)
-        {
-            route = new[] { spawnPoint, heart, destinationLung, heart };
-            currentDestinationIndex = 1;
-        }
-
-        SetCurrentDestination();
+        return isConfigured;
     }
 
     private void Update()
     {
-        if (isPausedForThreat || route == null || route.Length == 0 || agent == null || !agent.isOnNavMesh)
+        if (!isConfigured || isPausedForThreat || agent == null || !agent.enabled || !agent.isOnNavMesh)
         {
             return;
         }
 
-        if (!agent.pathPending && agent.remainingDistance <= arrivalDistance)
+        if (!hasDestination)
         {
-            currentDestinationIndex = (currentDestinationIndex + 1) % route.Length;
             SetCurrentDestination();
+            return;
         }
+
+        if (agent.pathPending || !agent.hasPath || agent.pathStatus != NavMeshPathStatus.PathComplete)
+        {
+            return;
+        }
+
+        if (agent.remainingDistance > Mathf.Max(arrivalDistance, agent.stoppingDistance))
+        {
+            return;
+        }
+
+        routeStep = (routeStep + 1) % 4;
+        hasDestination = false;
+        SetCurrentDestination();
     }
 
-    /// <summary>Pauses waypoint advancement while the cell responds to a pathogen.</summary>
+    /// <summary>Returns true only while the cell is moving outward and the wound lies along its current NavMesh path.</summary>
+    public bool IsScanningAccessPoint(Transform accessPoint)
+    {
+        if (!isConfigured || isPausedForThreat || routeStep != 0 || accessPoint == null ||
+            agent == null || !agent.enabled || !agent.isOnNavMesh || !agent.hasPath ||
+            agent.pathStatus != NavMeshPathStatus.PathComplete)
+        {
+            return false;
+        }
+
+        Vector3[] corners = agent.path.corners;
+        Vector3 segmentStart = agent.transform.position;
+        float maximumDistance = Mathf.Max(scanCorridorRadius, agent.radius);
+
+        for (int index = 0; index < corners.Length; index++)
+        {
+            Vector3 segmentEnd = corners[index];
+            if (DistanceToSegment(accessPoint.position, segmentStart, segmentEnd) <= maximumDistance)
+            {
+                return true;
+            }
+
+            segmentStart = segmentEnd;
+        }
+
+        return false;
+    }
+
+    /// <summary>Pauses waypoint advancement while the cell responds to another threat.</summary>
     public void PauseForThreat()
     {
         isPausedForThreat = true;
     }
 
-    /// <summary>Resumes the existing waypoint loop after the pathogen is cleared or lost.</summary>
+    /// <summary>Resumes the existing waypoint loop after the threat response ends.</summary>
     public void ResumeAfterThreat()
     {
         if (!isPausedForThreat)
@@ -77,17 +115,109 @@ public class CirculatoryCellRoute : MonoBehaviour
         SetCurrentDestination();
     }
 
+    private bool HasRequiredRouteData()
+    {
+        if (agent == null || heart == null || assignedDestination == null || lungPoints == null)
+        {
+            return false;
+        }
+
+        foreach (Transform point in lungPoints)
+        {
+            if (point != null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void SetCurrentDestination()
     {
-        if (route == null || route.Length == 0 || agent == null || !agent.isOnNavMesh)
+        if (!isConfigured || agent == null || !agent.enabled || !agent.isOnNavMesh)
         {
+            hasDestination = false;
             return;
         }
 
-        Transform destination = route[currentDestinationIndex];
-        if (destination != null)
+        Transform destination;
+        switch (routeStep)
         {
-            agent.SetDestination(destination.position);
+            case 0:
+                destination = assignedDestination;
+                break;
+            case 1:
+            case 3:
+                destination = heart;
+                break;
+            default:
+                destination = SelectRandomLungPoint();
+                break;
         }
+
+        hasDestination = destination != null && agent.SetDestination(destination.position);
+    }
+
+    private Transform SelectRandomLungPoint()
+    {
+        int validCount = 0;
+        for (int index = 0; index < lungPoints.Length; index++)
+        {
+            if (lungPoints[index] != null && (lungPoints.Length == 1 || index != previousLungIndex))
+            {
+                validCount++;
+            }
+        }
+
+        bool avoidPreviousLung = validCount > 0;
+        if (!avoidPreviousLung)
+        {
+            for (int index = 0; index < lungPoints.Length; index++)
+            {
+                if (lungPoints[index] != null)
+                {
+                    validCount++;
+                }
+            }
+        }
+
+        if (validCount == 0)
+        {
+            return null;
+        }
+
+        int selectedIndex = Random.Range(0, validCount);
+        for (int index = 0; index < lungPoints.Length; index++)
+        {
+            Transform point = lungPoints[index];
+            if (point == null || (avoidPreviousLung && lungPoints.Length > 1 && index == previousLungIndex))
+            {
+                continue;
+            }
+
+            if (selectedIndex == 0)
+            {
+                previousLungIndex = index;
+                return point;
+            }
+
+            selectedIndex--;
+        }
+
+        return null;
+    }
+
+    private static float DistanceToSegment(Vector3 point, Vector3 start, Vector3 end)
+    {
+        Vector3 segment = end - start;
+        float segmentLengthSquared = segment.sqrMagnitude;
+        if (segmentLengthSquared <= Mathf.Epsilon)
+        {
+            return Vector3.Distance(point, start);
+        }
+
+        float projection = Mathf.Clamp01(Vector3.Dot(point - start, segment) / segmentLengthSquared);
+        return Vector3.Distance(point, start + segment * projection);
     }
 }

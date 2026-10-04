@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
@@ -10,6 +11,10 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const float SpawnIntervalSeconds = 1f;
     private const float ContaminatedAirDurationSeconds = 5f;
     private const float CoughCooldownSeconds = 5f;
+    private const string InhaledDustOrAllergenEventName = "Inhaled dust/allergen";
+    private const string ColdFromSickPersonEventName = "Caught a cold from a sick classmate/coworker";
+    private const string ContactWithSickPersonEventName = "Came Into Contact With Someone Who Was Sick";
+    private const string SmokedCigaretteEventName = "Smoked cigarette";
     private const float NavMeshSampleRadius = 50f;
     private const float ArrivalDistance = 1f;
 
@@ -22,8 +27,14 @@ public sealed class RespiratorySystemController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI coughButtonLabel;
     [SerializeField] private Button testContaminatedAirButton;
 
+    private sealed class ContaminationWindow
+    {
+        public string eventKey;
+        public float expiresAt;
+    }
+
+    private readonly List<ContaminationWindow> contaminationWindows = new List<ContaminationWindow>();
     private float coughReadyAt;
-    private float contaminatedAirUntil;
     private Coroutine spawnRoutine;
 
     private void OnEnable()
@@ -93,20 +104,52 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void HandleRandomEventTriggered(RandomEventData eventData)
     {
-        if (eventData != null && eventData.eventName == "Inhaled dust/allergen")
+        if (eventData == null)
         {
-            contaminatedAirUntil = Mathf.Max(contaminatedAirUntil, Time.time + ContaminatedAirDurationSeconds);
+            return;
         }
+
+        string eventId;
+        if (eventData.eventName == InhaledDustOrAllergenEventName)
+            eventId = "InhaledDustOrAllergen";
+        else if (eventData.eventName == ColdFromSickPersonEventName)
+            eventId = "ColdFromSickPerson";
+        else if (eventData.eventName == ContactWithSickPersonEventName)
+            eventId = "ContactWithSickPerson";
+        else if (eventData.eventName == SmokedCigaretteEventName)
+            eventId = "SmokedCigarette";
+        else
+            return;
+
+        contaminationWindows.Add(new ContaminationWindow
+        {
+            eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour),
+            expiresAt = Time.time + ContaminatedAirDurationSeconds
+        });
     }
 
     private IEnumerator RunSpawnLoop()
     {
         while (true)
         {
-            GameObject prefab = Time.time < contaminatedAirUntil ? contaminatedAirPrefab : airPrefab;
-            SpawnAir(prefab);
+            string eventKey = GetActiveContaminationEventKey();
+            GameObject prefab = eventKey != null ? contaminatedAirPrefab : airPrefab;
+            SpawnAir(prefab, eventKey);
             yield return new WaitForSeconds(SpawnIntervalSeconds);
         }
+    }
+
+    private string GetActiveContaminationEventKey()
+    {
+        for (int index = contaminationWindows.Count - 1; index >= 0; index--)
+        {
+            if (Time.time >= contaminationWindows[index].expiresAt)
+                contaminationWindows.RemoveAt(index);
+        }
+
+        return contaminationWindows.Count > 0
+            ? contaminationWindows[contaminationWindows.Count - 1].eventKey
+            : null;
     }
 
     /// <summary>Immediately spawns one contaminated-air instance for testing lung infection behavior.</summary>
@@ -118,10 +161,10 @@ public sealed class RespiratorySystemController : MonoBehaviour
             return;
         }
 
-        SpawnAir(contaminatedAirPrefab);
+        SpawnAir(contaminatedAirPrefab, null);
     }
 
-    private void SpawnAir(GameObject prefab)
+    private void SpawnAir(GameObject prefab, string eventKey)
     {
         if (prefab == null)
         {
@@ -181,7 +224,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
                 return;
             }
 
-            routeStarted = airAgent.InitializeForLungInfection(agent, lungHit.position, infectionResponse, ArrivalDistance);
+            routeStarted = airAgent.InitializeForLungInfection(agent, lungHit.position, infectionResponse, ArrivalDistance, eventKey);
         }
         else
         {
@@ -203,6 +246,13 @@ public sealed class RespiratorySystemController : MonoBehaviour
         }
 
         coughReadyAt = Time.time + CoughCooldownSeconds;
+        HashSet<string> eventKeys = new HashSet<string>();
+        foreach (ContaminationWindow window in contaminationWindows)
+        {
+            if (!string.IsNullOrWhiteSpace(window.eventKey))
+                eventKeys.Add(window.eventKey);
+        }
+
         Transform[] respiratoryChildren = GetComponentsInChildren<Transform>(true);
         foreach (Transform candidate in respiratoryChildren)
         {
@@ -211,12 +261,27 @@ public sealed class RespiratorySystemController : MonoBehaviour
                 continue;
             }
 
-            bool hasAirAgent = candidate.GetComponent<RespiratoryAirAgent>() != null;
+            RespiratoryAirAgent airAgent = candidate.GetComponent<RespiratoryAirAgent>();
+            if (airAgent != null && !string.IsNullOrWhiteSpace(airAgent.WellnessEventKey))
+                eventKeys.Add(airAgent.WellnessEventKey);
+
+            bool hasAirAgent = airAgent != null;
             bool matchesAirPrefab = HasPrefabName(candidate.name, airPrefab) ||
                                     HasPrefabName(candidate.name, contaminatedAirPrefab);
             if (hasAirAgent || matchesAirPrefab)
             {
                 Destroy(candidate.gameObject);
+            }
+        }
+
+        contaminationWindows.Clear();
+        WellnessManager wellnessManager = WellnessManager.Instance;
+        if (wellnessManager != null)
+        {
+            foreach (string eventKey in eventKeys)
+            {
+                if (wellnessManager.TryAwardEventResponse(eventKey, "RespiratoryResponse", 0f, 5f, true))
+                    wellnessManager.ResolveEventQTE(eventKey);
             }
         }
 

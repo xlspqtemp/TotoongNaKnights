@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
@@ -7,7 +8,7 @@ using UnityEngine.UI;
 /// <summary>Tracks virus infiltrations for one lung and dispatches a timed immune-cell pair.</summary>
 public sealed class LungInfectionResponse : MonoBehaviour
 {
-    private const float SecondsPerInfiltration = 60f;
+    private const float SecondsPerInfiltration = 10f;
     private const float FloatingHeight = 12f;
     private const float WorldCanvasScale = 0.02f;
     private const float NavMeshSampleRadius = 50f;
@@ -22,19 +23,21 @@ public sealed class LungInfectionResponse : MonoBehaviour
     private static readonly Vector2 ButtonLabelSize = new Vector2(570f, 105f);
     private static readonly Vector2 CenterAnchor = new Vector2(0.5f, 0.5f);
 
-    [SerializeField] private GameObject neutrophilPrefab;
+    [SerializeField] private GameObject tCellPrefab;
     [SerializeField] private GameObject macrophagePrefab;
 
     private Canvas floatingCanvas;
     private TextMeshProUGUI statusLabel;
     private TextMeshProUGUI sendButtonLabel;
     private Button sendImmuneCellsButton;
-    private GameObject spawnedNeutrophil;
+    private GameObject spawnedTCell;
     private GameObject spawnedMacrophage;
     private Coroutine responseRoutine;
+    private readonly HashSet<string> pendingWellnessEventKeys = new HashSet<string>();
     private int infiltrationCount;
     private float remainingResponseSeconds;
     private bool responseInProgress;
+    private bool hasCapturedCameraRotation;
 
     private void Awake()
     {
@@ -45,7 +48,7 @@ public sealed class LungInfectionResponse : MonoBehaviour
     {
         if (sendImmuneCellsButton != null)
         {
-            sendImmuneCellsButton.onClick.RemoveListener(SendImmuneCells);
+            sendImmuneCellsButton.onClick.RemoveListener(BeginRepair);
         }
 
         if (responseRoutine != null)
@@ -72,14 +75,24 @@ public sealed class LungInfectionResponse : MonoBehaviour
         if (mainCamera != null)
         {
             floatingCanvas.worldCamera = mainCamera;
-            floatingCanvas.transform.rotation = Quaternion.LookRotation(mainCamera.transform.position - floatingCanvas.transform.position);
+            if (floatingCanvas.gameObject.activeSelf && !hasCapturedCameraRotation)
+            {
+                floatingCanvas.transform.rotation = Quaternion.LookRotation(mainCamera.transform.position - floatingCanvas.transform.position, mainCamera.transform.up);
+                hasCapturedCameraRotation = true;
+            }
         }
     }
 
-    /// <summary>Registers one contaminated-air arrival at this lung and extends any active response by one minute.</summary>
-    public void RegisterInfiltration()
+    /// <summary>Registers one contaminated-air arrival at this lung and adds ten seconds to an active repair.</summary>
+    /// <param name="eventKey">The wellness event occurrence associated with the contaminated air, if any.</param>
+    public void RegisterInfiltration(string eventKey)
     {
         infiltrationCount++;
+        if (!string.IsNullOrWhiteSpace(eventKey))
+        {
+            pendingWellnessEventKeys.Add(eventKey);
+            WellnessManager.Instance?.MarkEventReachedTarget(eventKey);
+        }
         if (responseInProgress)
         {
             remainingResponseSeconds += SecondsPerInfiltration;
@@ -118,30 +131,30 @@ public sealed class LungInfectionResponse : MonoBehaviour
         statusLabel = CreateText("Infection Status", panelRect, StatusSize, StatusPosition, string.Empty, StatusFontSize);
         statusLabel.color = new Color(1f, 0.86f, 0.7f, 1f);
 
-        GameObject buttonObject = CreateUiChild("Send Immune Cells Button", panelRect, typeof(Image), typeof(Button));
+        GameObject buttonObject = CreateUiChild("Repair Button", panelRect, typeof(Image), typeof(Button));
         RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
         ConfigureCenteredRect(buttonRect, ButtonSize, ButtonPosition);
         Image buttonImage = buttonObject.GetComponent<Image>();
         buttonImage.color = new Color(0.13f, 0.48f, 0.33f, 1f);
         sendImmuneCellsButton = buttonObject.GetComponent<Button>();
         sendImmuneCellsButton.targetGraphic = buttonImage;
-        sendImmuneCellsButton.onClick.AddListener(SendImmuneCells);
-        sendButtonLabel = CreateText("Button Label", buttonRect, ButtonLabelSize, Vector2.zero, "Send immune cells", ButtonFontSize);
+        sendImmuneCellsButton.onClick.AddListener(BeginRepair);
+        sendButtonLabel = CreateText("Button Label", buttonRect, ButtonLabelSize, Vector2.zero, "Repair", ButtonFontSize);
         sendButtonLabel.raycastTarget = false;
 
         canvasObject.SetActive(false);
     }
 
-    private void SendImmuneCells()
+    private void BeginRepair()
     {
         if (infiltrationCount <= 0 || responseInProgress)
         {
             return;
         }
 
-        if (neutrophilPrefab == null || macrophagePrefab == null)
+        if (tCellPrefab == null || macrophagePrefab == null)
         {
-            Debug.LogError($"LungInfectionResponse on '{name}' requires neutrophil and macrophage prefabs.", this);
+            Debug.LogError($"LungInfectionResponse on '{name}' requires T cell and macrophage prefabs.", this);
             return;
         }
 
@@ -151,9 +164,9 @@ public sealed class LungInfectionResponse : MonoBehaviour
             return;
         }
 
-        spawnedNeutrophil = SpawnImmuneCell(neutrophilPrefab, hit.position);
+        spawnedTCell = SpawnImmuneCell(tCellPrefab, hit.position);
         spawnedMacrophage = SpawnImmuneCell(macrophagePrefab, hit.position);
-        if (spawnedNeutrophil == null || spawnedMacrophage == null)
+        if (spawnedTCell == null || spawnedMacrophage == null)
         {
             DestroySpawnedImmuneCells();
             return;
@@ -193,6 +206,16 @@ public sealed class LungInfectionResponse : MonoBehaviour
         responseInProgress = false;
         infiltrationCount = 0;
         remainingResponseSeconds = 0f;
+        WellnessManager wellnessManager = WellnessManager.Instance;
+        if (wellnessManager != null)
+        {
+            foreach (string eventKey in pendingWellnessEventKeys)
+            {
+                wellnessManager.TryAwardEventResponse(eventKey, "RespiratoryResponse", 3f, 5f);
+                wellnessManager.ResolveEventQTE(eventKey);
+            }
+        }
+        pendingWellnessEventKeys.Clear();
         DestroySpawnedImmuneCells();
         if (floatingCanvas != null)
         {
@@ -209,30 +232,30 @@ public sealed class LungInfectionResponse : MonoBehaviour
             return;
         }
 
-        string lungName = name.StartsWith("Left", System.StringComparison.OrdinalIgnoreCase) ? "Left lung" : "Right lung";
+        string lungName = name.IndexOf("Left", System.StringComparison.OrdinalIgnoreCase) >= 0 ? "Left lung" : "Right lung";
         if (responseInProgress)
         {
             int seconds = Mathf.CeilToInt(remainingResponseSeconds);
             int minutes = seconds / 60;
             int remainingSeconds = seconds % 60;
-            statusLabel.text = $"Virus has infiltrated the {lungName}.\nInfiltrations: {infiltrationCount}";
-            sendButtonLabel.text = $"Responding  {minutes:00}:{remainingSeconds:00}";
+            statusLabel.text = $"{lungName} is infected.\nContaminated air: {infiltrationCount}";
+            sendButtonLabel.text = $"Repairing  {minutes:00}:{remainingSeconds:00}";
             sendImmuneCellsButton.interactable = false;
         }
         else
         {
-            statusLabel.text = $"Virus has infiltrated the {lungName}.\nInfiltrations: {infiltrationCount}";
-            sendButtonLabel.text = "Send immune cells";
+            statusLabel.text = $"{lungName} is infected.\nContaminated air: {infiltrationCount}";
+            sendButtonLabel.text = "Repair";
             sendImmuneCellsButton.interactable = true;
         }
     }
 
     private void DestroySpawnedImmuneCells()
     {
-        if (spawnedNeutrophil != null)
+        if (spawnedTCell != null)
         {
-            Destroy(spawnedNeutrophil);
-            spawnedNeutrophil = null;
+            Destroy(spawnedTCell);
+            spawnedTCell = null;
         }
 
         if (spawnedMacrophage != null)

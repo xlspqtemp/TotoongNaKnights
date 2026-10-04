@@ -12,6 +12,7 @@ public sealed class BacteriaAgent : MonoBehaviour
     private readonly Dictionary<BacteriaCellResponder, float> contactDurations = new Dictionary<BacteriaCellResponder, float>();
     private NavMeshAgent navMeshAgent;
     private bool isCleared;
+    private string wellnessEventKey;
 
     /// <summary>Returns the number of currently registered bacteria.</summary>
     public static int ActiveCount => ActiveBacteria.Count;
@@ -38,10 +39,12 @@ public sealed class BacteriaAgent : MonoBehaviour
     /// <summary>Places the bacteria on its NavMesh and prevents autonomous movement.</summary>
     /// <param name="agent">The NavMeshAgent on this bacteria.</param>
     /// <param name="spawnPosition">The NavMesh position at which the bacteria is created.</param>
+    /// <param name="eventKey">The wellness event occurrence associated with the wound, if any.</param>
     /// <returns>True when the bacteria is correctly stationary on the NavMesh.</returns>
-    public bool InitializeStationary(NavMeshAgent agent, Vector3 spawnPosition)
+    public bool InitializeStationary(NavMeshAgent agent, Vector3 spawnPosition, string eventKey = null)
     {
         navMeshAgent = agent;
+        wellnessEventKey = eventKey;
         if (navMeshAgent == null || !navMeshAgent.enabled)
         {
             return false;
@@ -90,6 +93,8 @@ public sealed class BacteriaAgent : MonoBehaviour
         if (elapsedContactSeconds >= RequiredContactSeconds)
         {
             isCleared = true;
+            if (!string.IsNullOrWhiteSpace(wellnessEventKey))
+                WellnessManager.Instance?.TryAwardEventPoints(wellnessEventKey, "BacteriaCleared", 3f);
             Destroy(gameObject);
         }
     }
