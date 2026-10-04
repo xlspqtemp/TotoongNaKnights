@@ -3,16 +3,20 @@ using UnityEngine.Events;
 using UnityEngine.UI;
 
 /// <summary>
-/// Builds the static placeholder leaderboards panel over the existing main menu.
+/// Builds and displays the online wellness leaderboard over the main menu.
 /// </summary>
 public static class LeaderboardsScreen
 {
     private const string BuiltInFontName = "LegacyRuntime.ttf";
     private const int HeaderFontSize = 42;
-    private const int EntryNameFontSize = 30;
-    private const int MessageFontSize = 24;
-    private const int DetailsFontSize = 18;
+    private const int ColumnHeaderFontSize = 19;
+    private const int EntryFontSize = 18;
+    private const int StatusFontSize = 24;
     private const int ButtonFontSize = 20;
+    private const int EntryCount = 20;
+    private const float RowStartY = 260f;
+    private const float RowSpacing = 35f;
+    private const float RowHeight = 32f;
 
     private static readonly Color BackgroundColor = new Color(0.008f, 0.018f, 0.028f, 1f);
     private static readonly Color TextureTint = new Color(0.18f, 0.66f, 0.72f, 0.42f);
@@ -24,15 +28,20 @@ public static class LeaderboardsScreen
 
     private static GameObject overlayRoot;
     private static Sprite roundedSprite;
+    private static LeaderboardManager leaderboardManager;
 
     /// <summary>
-    /// Displays the placeholder leaderboard over the supplied menu canvas.
+    /// Displays the online leaderboard over the supplied menu canvas.
     /// </summary>
     public static void Show(Transform parent)
     {
         if (overlayRoot != null)
         {
             overlayRoot.transform.SetAsLastSibling();
+            if (leaderboardManager != null)
+            {
+                leaderboardManager.LoadScores();
+            }
             return;
         }
 
@@ -54,23 +63,56 @@ public static class LeaderboardsScreen
         CreateButton(header.transform, "CloseButton", "CLOSE", new Vector2(670f, 0f),
             new Vector2(168f, 66f), Close);
 
-        GameObject entry = CreateRoundedPanel(overlayRoot.transform, "PlaceholderEntry",
-            new Vector2(0f, 115f), new Vector2(1540f, 340f), AccentColor, RowColor);
-        CreateText(entry.transform, "PlayerName", "No name", EntryNameFontSize,
-            FontStyle.Bold, TextColor, new Vector2(-620f, 96f), new Vector2(260f, 52f));
-        CreateText(entry.transform, "PlaceholderMessage", "Keep playing the game soldier!",
-            MessageFontSize, FontStyle.Normal, MutedTextColor, new Vector2(0f, 28f),
-            new Vector2(1280f, 48f));
+        CreateColumnHeader(overlayRoot.transform, "RankHeader", "RANK", new Vector2(-660f, 302f), new Vector2(110f, 30f));
+        CreateColumnHeader(overlayRoot.transform, "PlayerHeader", "PLAYER", new Vector2(-410f, 302f), new Vector2(460f, 30f));
+        CreateColumnHeader(overlayRoot.transform, "WellnessHeader", "WELLNESS SCORE", new Vector2(70f, 302f), new Vector2(220f, 30f));
+        CreateColumnHeader(overlayRoot.transform, "DifficultyHeader", "DIFFICULTY", new Vector2(490f, 302f), new Vector2(640f, 30f));
 
-        GameObject progressTrack = CreateImage(entry.transform, "ProgressTrack",
-            new Color(0.015f, 0.032f, 0.042f, 1f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, -42f),
-            new Vector2(1160f, 26f), false);
-        CreateImage(progressTrack.transform, "ProgressFill", AccentColor,
-            new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-            new Vector2(2f, 0f), new Vector2(360f, 16f), false);
-        CreateText(entry.transform, "ProgressDetails", "0/14 days - 0", DetailsFontSize,
-            FontStyle.Normal, MutedTextColor, new Vector2(0f, -96f), new Vector2(1160f, 36f));
+        Text[] ranks = new Text[EntryCount];
+        Text[] playerNames = new Text[EntryCount];
+        Text[] scores = new Text[EntryCount];
+        Text[] difficulties = new Text[EntryCount];
+        Image[] backgrounds = new Image[EntryCount];
+        CreateRows(overlayRoot.transform, ranks, playerNames, scores, difficulties, backgrounds);
+
+        Text statusText = CreateText(overlayRoot.transform, "LeaderboardStatus", "Loading...", StatusFontSize,
+            FontStyle.Normal, MutedTextColor, new Vector2(0f, -45f), new Vector2(1100f, 48f));
+        Button retryButton = CreateButton(overlayRoot.transform, "RetryButton", "RETRY",
+            new Vector2(0f, -108f), new Vector2(190f, 58f), null);
+        retryButton.onClick.RemoveAllListeners();
+        retryButton.gameObject.SetActive(false);
+
+        leaderboardManager = overlayRoot.AddComponent<LeaderboardManager>();
+        leaderboardManager.Initialize(statusText, retryButton, ranks, playerNames, scores, difficulties, backgrounds);
+    }
+
+    private static void CreateRows(Transform parent, Text[] ranks, Text[] playerNames, Text[] scores,
+        Text[] difficulties, Image[] backgrounds)
+    {
+        for (int i = 0; i < EntryCount; i++)
+        {
+            float y = RowStartY - RowSpacing * i;
+            GameObject row = CreateImage(parent, "LeaderboardRow" + i, RowColor,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, y), new Vector2(1540f, RowHeight), false);
+            backgrounds[i] = row.GetComponent<Image>();
+
+            ranks[i] = CreateText(row.transform, "Rank", string.Empty, EntryFontSize,
+                FontStyle.Normal, TextColor, new Vector2(-660f, 0f), new Vector2(110f, RowHeight));
+            playerNames[i] = CreateText(row.transform, "PlayerName", string.Empty, EntryFontSize,
+                FontStyle.Normal, TextColor, new Vector2(-410f, 0f), new Vector2(460f, RowHeight));
+            scores[i] = CreateText(row.transform, "WellnessScore", string.Empty, EntryFontSize,
+                FontStyle.Bold, TextColor, new Vector2(70f, 0f), new Vector2(220f, RowHeight));
+            difficulties[i] = CreateText(row.transform, "Difficulty", string.Empty, EntryFontSize,
+                FontStyle.Normal, TextColor, new Vector2(490f, 0f), new Vector2(640f, RowHeight));
+        }
+    }
+
+    private static void CreateColumnHeader(Transform parent, string objectName, string label,
+        Vector2 position, Vector2 size)
+    {
+        CreateText(parent, objectName, label, ColumnHeaderFontSize, FontStyle.Bold,
+            AccentColor, position, size);
     }
 
     private static void CreateBackgroundTexture(Transform parent)
@@ -98,7 +140,7 @@ public static class LeaderboardsScreen
         return fill;
     }
 
-    private static void CreateButton(Transform parent, string objectName, string label,
+    private static Button CreateButton(Transform parent, string objectName, string label,
         Vector2 position, Vector2 size, UnityAction onClick)
     {
         GameObject buttonObject = CreateImage(parent, objectName, AccentColor,
@@ -117,9 +159,13 @@ public static class LeaderboardsScreen
             colorMultiplier = 1f,
             fadeDuration = 0.12f
         };
-        button.onClick.AddListener(onClick);
+        if (onClick != null)
+        {
+            button.onClick.AddListener(onClick);
+        }
         CreateText(buttonObject.transform, "Label", label, ButtonFontSize,
             FontStyle.Bold, BackgroundColor, Vector2.zero, Vector2.one, null, true);
+        return button;
     }
 
     private static GameObject CreateImage(Transform parent, string objectName, Color color,
@@ -140,7 +186,7 @@ public static class LeaderboardsScreen
         return imageObject;
     }
 
-    private static void CreateText(Transform parent, string objectName, string content,
+    private static Text CreateText(Transform parent, string objectName, string content,
         int fontSize, FontStyle fontStyle, Color color, Vector2 position, Vector2 size,
         Vector2? anchor = null, bool stretch = false)
     {
@@ -162,6 +208,7 @@ public static class LeaderboardsScreen
         text.horizontalOverflow = HorizontalWrapMode.Wrap;
         text.verticalOverflow = VerticalWrapMode.Overflow;
         text.raycastTarget = false;
+        return text;
     }
 
     private static void SetRect(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax,
@@ -184,5 +231,6 @@ public static class LeaderboardsScreen
 
         Object.Destroy(overlayRoot);
         overlayRoot = null;
+        leaderboardManager = null;
     }
 }

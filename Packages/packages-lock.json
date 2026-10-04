@@ -16,6 +16,13 @@
         "com.unity.timeline": "1.6.0"
       }
     },
+    "com.lootlocker.lootlockersdk": {
+      "version": "https://github.com/LootLocker/unity-sdk.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "dacfcbc6cdff2fe9bc696f6612da6f909c2ec48c"
+    },
     "com.unity.2d.sprite": {
       "version": "1.0.0",
       "depth": 0,

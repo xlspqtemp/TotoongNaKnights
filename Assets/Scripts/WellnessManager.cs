@@ -128,6 +128,7 @@ public class WellnessManager : MonoBehaviour
     private Canvas hudCanvas;
     private GameObject outcomePanel;
     private TextMeshProUGUI outcomeLabel;
+    private TextMeshProUGUI leaderboardStatusLabel;
     private Button restartButton;
     private Button mainMenuButton;
     private bool criticalWasEntered;
@@ -439,12 +440,27 @@ public class WellnessManager : MonoBehaviour
         string resultMessage = $"[WELLNESS] Final result: {result} ({Mathf.RoundToInt(currentWellness)}/{Mathf.RoundToInt(maxWellness)}).";
         Debug.Log(resultMessage);
 
+        if (leaderboardStatusLabel != null)
+            leaderboardStatusLabel.gameObject.SetActive(false);
+
         if (result == WellnessRunResult.PerfectWin || result == WellnessRunResult.Win)
         {
             LogToConsole(resultMessage, ConsoleLogUI.LogType.Success);
             OnGameWon?.Invoke(result);
             onGameWon?.Invoke(result);
             ShowOutcome(VictoryMessage, false, "Return to Main Menu");
+            if (leaderboardStatusLabel != null)
+            {
+                leaderboardStatusLabel.text = string.Empty;
+                leaderboardStatusLabel.gameObject.SetActive(false);
+            }
+
+            LeaderboardManager leaderboardManager = GetComponent<LeaderboardManager>();
+            if (leaderboardManager == null)
+            {
+                leaderboardManager = gameObject.AddComponent<LeaderboardManager>();
+            }
+            leaderboardManager.SubmitWinningScore(currentWellness, winThreshold, SetLeaderboardStatus);
         }
         else
         {
@@ -492,6 +508,21 @@ public class WellnessManager : MonoBehaviour
         outcomeLabel.textWrappingMode = TextWrappingModes.Normal;
         outcomeLabel.raycastTarget = false;
 
+        GameObject leaderboardStatusObject = new GameObject("LeaderboardStatus", typeof(RectTransform),
+            typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        leaderboardStatusObject.transform.SetParent(outcomePanel.transform, false);
+        leaderboardStatusLabel = leaderboardStatusObject.GetComponent<TextMeshProUGUI>();
+        leaderboardStatusLabel.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        leaderboardStatusLabel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        leaderboardStatusLabel.rectTransform.anchoredPosition = new Vector2(0f, -72f);
+        leaderboardStatusLabel.rectTransform.sizeDelta = new Vector2(900f, 40f);
+        leaderboardStatusLabel.font = TMP_Settings.defaultFontAsset;
+        leaderboardStatusLabel.fontSize = 20f;
+        leaderboardStatusLabel.alignment = TextAlignmentOptions.Center;
+        leaderboardStatusLabel.color = new Color(0.65f, 0.77f, 0.79f, 1f);
+        leaderboardStatusLabel.raycastTarget = false;
+        leaderboardStatusLabel.gameObject.SetActive(false);
+
         restartButton = CreateOutcomeButton("RestartButton", "Restart", new Vector2(-170f, -132f), RestartRun);
         mainMenuButton = CreateOutcomeButton("MainMenuButton", "Back to Main Menu", new Vector2(170f, -132f), ReturnToMainMenu);
         restartButton.gameObject.SetActive(false);
@@ -535,6 +566,15 @@ public class WellnessManager : MonoBehaviour
         buttonLabel.color = Color.white;
         buttonLabel.raycastTarget = false;
         return button;
+    }
+
+    private void SetLeaderboardStatus(string message)
+    {
+        if (leaderboardStatusLabel == null || string.IsNullOrWhiteSpace(message))
+            return;
+
+        leaderboardStatusLabel.text = message;
+        leaderboardStatusLabel.gameObject.SetActive(true);
     }
 
     private void ShowOutcome(string message, bool showRestartButton, string mainMenuLabel)
