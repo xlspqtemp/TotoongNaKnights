@@ -203,10 +203,12 @@ public sealed class DigestiveSystemController : MonoBehaviour
     {
         lastContaminatedFoodEventDay = eventData.day;
         lastContaminatedFoodEventHour = eventData.hour;
-        string eventId = eventData.eventName == ExpiredFoodEventName ? "AteExpiredFood" : "AccidentallyAteSpoiledFood";
-        string eventKey = eventData.eventName == JunkFoodEventName
-            ? null
-            : WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour);
+        string eventId = eventData.eventName == ExpiredFoodEventName
+            ? "AteExpiredFood"
+            : eventData.eventName == JunkFoodEventName
+                ? "JunkFoodBinge"
+                : "AccidentallyAteSpoiledFood";
+        string eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour);
 
         DigestiveBatchRequest scheduledMeal = FindScheduledMealBatch(eventData.day, eventData.hour);
         if (scheduledMeal != null)

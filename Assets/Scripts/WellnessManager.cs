@@ -120,6 +120,7 @@ public class WellnessManager : MonoBehaviour
     private const string GameOverMessage = "Your human has reached a critical state.\nGame over!";
     private const string VictoryMessage = "Human survived. You won!";
     private const string MainMenuSceneName = "MainMenu";
+    private const float RequiredWinWellness = 50f;
     private const int OutcomeButtonWidth = 300;
     private const int OutcomeButtonHeight = 76;
     private const float OutcomeButtonFontSize = 28f;
@@ -165,6 +166,7 @@ public class WellnessManager : MonoBehaviour
         }
 
         Instance = this;
+        winThreshold = RequiredWinWellness;
         EnsureAddedRoutineEventEntries();
         EnsureAddedRandomEventEntries();
         if (dayCounter == null)
@@ -221,7 +223,7 @@ public class WellnessManager : MonoBehaviour
         EnsureAddedRandomEventEntries();
         maxWellness = Mathf.Max(1f, maxWellness);
         criticalThreshold = Mathf.Clamp(criticalThreshold, 0f, maxWellness);
-        winThreshold = Mathf.Clamp(winThreshold, criticalThreshold, maxWellness);
+        winThreshold = RequiredWinWellness;
         currentWellness = Mathf.Clamp(currentWellness, 0f, maxWellness);
         bacteremiaDrainPerSecond = Mathf.Max(0f, bacteremiaDrainPerSecond);
         feverThresholdSeconds = Mathf.Max(0f, feverThresholdSeconds);
@@ -272,7 +274,11 @@ public class WellnessManager : MonoBehaviour
     /// <summary>Marks that contamination from an active random event reached its target organ.</summary>
     public void MarkEventReachedTarget(string eventKey)
     {
-        if (!string.IsNullOrWhiteSpace(eventKey) && wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress))
+        if (string.IsNullOrWhiteSpace(eventKey))
+            return;
+
+        LayerSelectionHUD.EndThreatGlow(eventKey);
+        if (wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress))
             progress.reachedTarget = true;
     }
 
@@ -307,7 +313,11 @@ public class WellnessManager : MonoBehaviour
     /// <summary>Resolves the QTE associated with an event after the player completes its response.</summary>
     public void ResolveEventQTE(string eventKey)
     {
-        if (!string.IsNullOrWhiteSpace(eventKey) && wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress))
+        if (string.IsNullOrWhiteSpace(eventKey))
+            return;
+
+        LayerSelectionHUD.EndThreatGlow(eventKey);
+        if (wellnessEventProgress.TryGetValue(eventKey, out WellnessEventProgress progress))
             GameplaySpeed.ResolveQTE(progress.qteId);
     }
 
@@ -379,7 +389,9 @@ public class WellnessManager : MonoBehaviour
 
     private void EvaluateFinalWellness()
     {
-        EndRun(WellnessRunResult.Win);
+        EndRun(currentWellness >= RequiredWinWellness
+            ? WellnessRunResult.Win
+            : WellnessRunResult.Loss);
     }
 
     private void ApplyWellnessDelta(string eventId, float requestedDelta, bool showChangeIndicator = true)
@@ -437,6 +449,12 @@ public class WellnessManager : MonoBehaviour
         if (dayCounter != null)
             dayCounter.SetActive(false);
 
+        string outcome = result == WellnessRunResult.PerfectWin || result == WellnessRunResult.Win
+            ? "WIN"
+            : "LOSS";
+        string sessionType = LeaderboardManager.GetActiveSessionType();
+        Debug.Log($"[WELLNESS] End of run: final wellness={currentWellness:0.##}, outcome={outcome}, session type={sessionType}.");
+
         string resultMessage = $"[WELLNESS] Final result: {result} ({Mathf.RoundToInt(currentWellness)}/{Mathf.RoundToInt(maxWellness)}).";
         Debug.Log(resultMessage);
 
@@ -460,7 +478,7 @@ public class WellnessManager : MonoBehaviour
             {
                 leaderboardManager = gameObject.AddComponent<LeaderboardManager>();
             }
-            leaderboardManager.SubmitWinningScore(currentWellness, winThreshold, SetLeaderboardStatus);
+            leaderboardManager.SubmitWinningScore(currentWellness, SetLeaderboardStatus);
         }
         else
         {

@@ -16,6 +16,8 @@ public class LeaderboardManager : MonoBehaviour
     private const string OfflineMessage = "Leaderboards need an internet connection.";
     private const string SaveFailureMessage = "Couldn't save your score. Check your connection.";
     private const string GuestWinMessage = "Log in with an account to save your score.";
+    private const string SavingScoreMessage = "Saving score...";
+    private const string SavedScoreMessage = "Score saved!";
     private const string DisplayNameSuffix = "***";
 
     [Serializable]
@@ -34,6 +36,7 @@ public class LeaderboardManager : MonoBehaviour
     private string currentPlayerUlid;
     private string currentPlayerPublicUid;
     private bool requestInProgress;
+    private bool scoreSubmissionAttempted;
 
     /// <summary>
     /// Binds the leaderboard UI and immediately starts loading scores.
@@ -80,6 +83,33 @@ public class LeaderboardManager : MonoBehaviour
         ShowStatus("Loading...", false);
         LootLockerSDKManager.GetScoreList(LeaderboardKey, LeaderboardEntryCount, LeaderboardStartOffset, response =>
         {
+            LootLockerLeaderboardMember[] entries = response != null
+                ? response.items ?? Array.Empty<LootLockerLeaderboardMember>()
+                : Array.Empty<LootLockerLeaderboardMember>();
+            if (response == null)
+            {
+                Debug.LogWarning("[LEADERBOARD] GetScoreList result: response was null; entries=0.");
+            }
+            else
+            {
+                string errorMessage = response.errorData != null ? response.errorData.message : "none";
+                Debug.Log($"[LEADERBOARD] GetScoreList result: success={response.success}, statusCode={response.statusCode}, entries={entries.Length}, errorData.message='{errorMessage}'.");
+                int logCount = Mathf.Min(entries.Length, 5);
+                for (int i = 0; i < logCount; i++)
+                {
+                    LootLockerLeaderboardMember entry = entries[i];
+                    if (entry == null)
+                    {
+                        Debug.Log($"[LEADERBOARD] GetScoreList entry[{i}]=null.");
+                        continue;
+                    }
+
+                    string playerName = entry.player != null ? entry.player.name ?? string.Empty : string.Empty;
+                    string metadata = entry.metadata ?? string.Empty;
+                    Debug.Log($"[LEADERBOARD] GetScoreList entry[{i}]: rank={entry.rank}, score={entry.score}, player='{playerName}', metadata='{metadata}'.");
+                }
+            }
+
             if (this == null)
             {
                 return;
@@ -93,7 +123,6 @@ public class LeaderboardManager : MonoBehaviour
                 return;
             }
 
-            LootLockerLeaderboardMember[] entries = response.items ?? Array.Empty<LootLockerLeaderboardMember>();
             if (entries.Length == 0)
             {
                 ShowStatus("No scores yet", false);
@@ -106,47 +135,83 @@ public class LeaderboardManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Submits a final run score only for authenticated non-guest wins at or above the win threshold.
+    /// Submits a final wellness score once for a winning White Label session.
     /// </summary>
-    public void SubmitWinningScore(float finalWellness, float winThreshold, Action<string> onStatus)
+    public void SubmitWinningScore(float finalWellness, Action<string> onStatus)
     {
+        if (scoreSubmissionAttempted)
+        {
+            Debug.LogWarning("[LEADERBOARD] Duplicate winning-score submission was blocked.");
+            return;
+        }
+
+        scoreSubmissionAttempted = true;
         if (!TryGetActivePlayer(out string playerUlid, out LootLockerPlayerData playerData))
         {
+            Debug.LogWarning("[LEADERBOARD] Score submission skipped: no active LootLocker session.");
             onStatus?.Invoke(SaveFailureMessage);
             return;
         }
 
-        if (playerData.CurrentPlatform.Platform == LL_AuthPlatforms.Guest)
+        LL_AuthPlatforms sessionPlatform = playerData.CurrentPlatform.Platform;
+        if (sessionPlatform == LL_AuthPlatforms.Guest)
         {
+            Debug.Log("[LEADERBOARD] Score submission skipped: active session is Guest.");
             onStatus?.Invoke(GuestWinMessage);
             return;
         }
 
-        if (finalWellness < winThreshold)
+        if (sessionPlatform != LL_AuthPlatforms.WhiteLabel)
         {
+            Debug.LogWarning($"[LEADERBOARD] Score submission skipped: session type {sessionPlatform} is not WhiteLabel.");
+            onStatus?.Invoke(GuestWinMessage);
             return;
         }
 
         if (Application.internetReachability == NetworkReachability.NotReachable)
         {
+            Debug.LogWarning("[LEADERBOARD] Score submission skipped: network is not reachable.");
             onStatus?.Invoke(SaveFailureMessage);
             return;
         }
 
         int score = Mathf.RoundToInt(finalWellness);
         string metadata = CreateDifficultyMetadata();
+        Debug.Log($"[LEADERBOARD] Before submit: key={LeaderboardKey}, score={score}, memberId='', metadata={metadata}.");
+        onStatus?.Invoke(SavingScoreMessage);
+
         LootLockerSDKManager.SubmitScore(string.Empty, score, LeaderboardKey, metadata, response =>
         {
+            bool success = response != null && response.success;
+            string errorMessage = response != null && response.errorData != null
+                ? response.errorData.message ?? string.Empty
+                : "none";
+            string errorCode = response != null && response.errorData != null
+                ? response.errorData.code ?? string.Empty
+                : "none";
+            string statusCode = response != null ? response.statusCode.ToString() : "null";
+            Debug.Log($"[LEADERBOARD] Submit callback: success={success}, errorData.message='{errorMessage}', statusCode={statusCode}, errorData.code='{errorCode}'.");
+
             if (this == null)
             {
                 return;
             }
 
-            if (response == null || !response.success)
-            {
-                onStatus?.Invoke(SaveFailureMessage);
-            }
+            onStatus?.Invoke(success ? SavedScoreMessage : SaveFailureMessage);
         }, playerUlid);
+    }
+
+    /// <summary>
+    /// Returns the active player's LootLocker authentication platform for run diagnostics.
+    /// </summary>
+    public static string GetActiveSessionType()
+    {
+        if (!TryGetActivePlayer(out _, out LootLockerPlayerData playerData))
+        {
+            return "NoActiveSession";
+        }
+
+        return playerData.CurrentPlatform.Platform.ToString();
     }
 
     /// <summary>

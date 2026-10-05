@@ -144,7 +144,10 @@ public sealed class RespiratorySystemController : MonoBehaviour
         for (int index = contaminationWindows.Count - 1; index >= 0; index--)
         {
             if (Time.time >= contaminationWindows[index].expiresAt)
+            {
+                LayerSelectionHUD.EndThreatGlow(contaminationWindows[index].eventKey);
                 contaminationWindows.RemoveAt(index);
+            }
         }
 
         return contaminationWindows.Count > 0

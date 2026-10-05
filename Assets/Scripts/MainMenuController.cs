@@ -141,15 +141,12 @@ public class MainMenuController : MonoBehaviour
 
         promptPanel = CreatePanel(overlay.transform, "PlayDemoPrompt", PromptWidth, PromptHeight);
         CreateText(promptPanel.transform, "PromptTitle", "Play demo?", PromptTitleFontSize, FontStyle.Bold,
-            TextColor, TextAnchor.MiddleCenter, new Vector2(0, 110), new Vector2(680, 90));
-        CreateText(promptPanel.transform, "PromptSubtitle", "Choose how you would like to continue.", SubtitleFontSize,
-            FontStyle.Normal, MutedTextColor, TextAnchor.MiddleCenter, Vector2.zero,
-            new Vector2(680, 52), new Vector2(0.5f, 0.5f));
+            TextColor, TextAnchor.MiddleCenter, new Vector2(0, 70), new Vector2(680, 90));
 
         CreateButton(promptPanel.transform, "YesButton", "Yes", ButtonWidth, ButtonHeight,
-            new Vector2(-142, -112), LoadDemoScene);
+            new Vector2(-142, -72), LoadDemoScene);
         CreateButton(promptPanel.transform, "ContinueAnywaysButton", "Continue Anyways", ButtonWidth, ButtonHeight,
-            new Vector2(142, -112), ShowDifficultySelection);
+            new Vector2(142, -72), ShowDifficultySelection);
 
         difficultyPanel = CreatePanel(overlay.transform, "DifficultySelection", OverlayWidth, OverlayHeight);
         CreateText(difficultyPanel.transform, "DifficultyTitle", "Difficulty Selection", DifficultyTitleFontSize,

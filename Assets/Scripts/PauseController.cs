@@ -15,7 +15,13 @@ public class PauseController : MonoBehaviour
     /// </summary>
     public void TogglePause()
     {
-        isPaused = !isPaused;
+        SetPaused(!isPaused);
+    }
+
+    /// <summary>Sets the pause state explicitly for overlays that use the existing pause system.</summary>
+    public void SetPaused(bool paused)
+    {
+        isPaused = paused;
         Time.timeScale = isPaused ? 0f : 1f;
 
         if (pausePanel != null)

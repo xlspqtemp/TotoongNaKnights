@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -22,6 +23,9 @@ internal static class LayerSelectionHUD
 
     private static Button[] layerButtons;
     private static Image[] layerButtonBackgrounds;
+    private static Outline[] layerButtonOutlines;
+    private static HashSet<string>[] activeThreatKeys;
+    private static readonly Dictionary<string, int> ActiveThreatLayers = new Dictionary<string, int>();
     private static int selectedLayer = 1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -33,6 +37,12 @@ internal static class LayerSelectionHUD
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        RandomEventSystem.OnRandomEventTriggered -= HandleRandomEventTriggered;
+        ActiveThreatLayers.Clear();
+        activeThreatKeys = null;
+        layerButtons = null;
+        layerButtonBackgrounds = null;
+        layerButtonOutlines = null;
         if (scene.name != GameSceneName)
             return;
 
@@ -62,6 +72,11 @@ internal static class LayerSelectionHUD
             responsiveLayout = canvas.gameObject.AddComponent<ResponsiveHudLayout>();
         responsiveLayout.Configure(snapshotPanel, controlsRoot, dayPanel, consolePanel);
         SetSelectedLayer(1);
+        RandomEventSystem.OnRandomEventTriggered -= HandleRandomEventTriggered;
+        RandomEventSystem.OnRandomEventTriggered += HandleRandomEventTriggered;
+        GameplayTutorial tutorial = canvas.GetComponent<GameplayTutorial>();
+        if (tutorial == null)
+            canvas.gameObject.AddComponent<GameplayTutorial>();
     }
 
     private static RectTransform CreateLayerControls(Transform parent, RectTransform canvasRect)
@@ -85,11 +100,19 @@ internal static class LayerSelectionHUD
         int[] layerNumbers = { 4, 3, 2, 1 };
         layerButtons = new Button[labels.Length];
         layerButtonBackgrounds = new Image[labels.Length];
+        layerButtonOutlines = new Outline[labels.Length];
+        activeThreatKeys = new HashSet<string>[labels.Length];
 
         for (int index = 0; index < labels.Length; index++)
         {
+            activeThreatKeys[index] = new HashSet<string>();
             RectTransform rowRect = CreateRectObject("LayerButtonRow_" + labels[index], rootRect);
             Button layerButton = CreateButton("Select" + labels[index] + "Button", rowRect, out Image layerBackground);
+            Outline layerOutline = layerButton.gameObject.AddComponent<Outline>();
+            layerOutline.effectColor = new Color(1f, 0.08f, 0.1f, 0.9f);
+            layerOutline.effectDistance = new Vector2(2f, -2f);
+            layerOutline.useGraphicAlpha = true;
+            layerOutline.enabled = false;
             CreateLabel("LayerButtonLabel", layerButton.transform as RectTransform, labels[index], 15f, TextAlignmentOptions.MidlineLeft);
             int layerNumber = layerNumbers[index];
             layerButton.onClick.AddListener(() => SelectLayer(layerNumber));
@@ -118,8 +141,10 @@ internal static class LayerSelectionHUD
 
             layerButtons[index] = layerButton;
             layerButtonBackgrounds[index] = layerBackground;
+            layerButtonOutlines[index] = layerOutline;
         }
 
+        rootObject.AddComponent<LayerEventGlowAnimator>();
         return rootRect;
     }
 
@@ -233,22 +258,123 @@ internal static class LayerSelectionHUD
         cameraController.SelectLayer(layerNumber);
     }
 
+    private static void HandleRandomEventTriggered(RandomEventData eventData)
+    {
+        if (eventData == null || activeThreatKeys == null)
+            return;
+
+        int layerIndex;
+        string eventId;
+        if (!TryGetTrackedLayerEvent(eventData, out layerIndex, out eventId))
+            return;
+
+        string eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour);
+        if (ActiveThreatLayers.ContainsKey(eventKey))
+            return;
+
+        ActiveThreatLayers.Add(eventKey, layerIndex);
+        activeThreatKeys[layerIndex].Add(eventKey);
+        RefreshLayerButtonVisuals(Time.unscaledTime);
+    }
+
+    private static bool TryGetTrackedLayerEvent(RandomEventData eventData, out int layerIndex, out string eventId)
+    {
+        layerIndex = -1;
+        eventId = string.Empty;
+        switch (eventData.eventType)
+        {
+            case RandomEventType.Respiratory:
+                layerIndex = 0;
+                switch (eventData.eventName)
+                {
+                    case "Inhaled dust/allergen": eventId = "InhaledDustOrAllergen"; return true;
+                    case "Caught a cold from a sick classmate/coworker": eventId = "ColdFromSickPerson"; return true;
+                    case "Came Into Contact With Someone Who Was Sick": eventId = "ContactWithSickPerson"; return true;
+                    case "Smoked cigarette": eventId = "SmokedCigarette"; return true;
+                    default: return false;
+                }
+            case RandomEventType.Digestive:
+                layerIndex = 1;
+                switch (eventData.eventName)
+                {
+                    case "Ate expired/spoiled food": eventId = "AteExpiredFood"; return true;
+                    case "Junk food binge": eventId = "JunkFoodBinge"; return true;
+                    case "Accidentally Drank Contaminated Water": eventId = "ContaminatedWater"; return true;
+                    case "Accidentally Ate Spoiled Food": eventId = "AccidentallyAteSpoiledFood"; return true;
+                    default: return false;
+                }
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>Ends the layer alert when an active event is resolved, reaches a target, or expires.</summary>
+    internal static void EndThreatGlow(string eventKey)
+    {
+        if (string.IsNullOrWhiteSpace(eventKey) || !ActiveThreatLayers.TryGetValue(eventKey, out int layerIndex))
+            return;
+
+        ActiveThreatLayers.Remove(eventKey);
+        if (activeThreatKeys != null && layerIndex >= 0 && layerIndex < activeThreatKeys.Length)
+            activeThreatKeys[layerIndex].Remove(eventKey);
+        RefreshLayerButtonVisuals(Time.unscaledTime);
+    }
+
+    internal static void UpdateThreatGlow(float unscaledTime)
+    {
+        RefreshLayerButtonVisuals(unscaledTime);
+    }
+
+    private static void RefreshLayerButtonVisuals(float unscaledTime)
+    {
+        if (layerButtonBackgrounds == null || layerButtonOutlines == null || activeThreatKeys == null)
+            return;
+
+        float wave = Mathf.SmoothStep(0f, 1f, (Mathf.Sin(unscaledTime * 4.5f) + 1f) * 0.5f);
+        for (int index = 0; index < layerButtonBackgrounds.Length; index++)
+        {
+            Image background = layerButtonBackgrounds[index];
+            Outline outline = layerButtonOutlines[index];
+            if (background == null || outline == null)
+                continue;
+
+            bool hasThreat = activeThreatKeys[index] != null && activeThreatKeys[index].Count > 0;
+            if (!hasThreat)
+            {
+                background.color = new[] { 4, 3, 2, 1 }[index] == selectedLayer
+                    ? SelectedButtonColor
+                    : NormalButtonColor;
+                outline.enabled = false;
+                continue;
+            }
+
+            Color restingColor = new[] { 4, 3, 2, 1 }[index] == selectedLayer
+                ? SelectedButtonColor
+                : NormalButtonColor;
+            Color warningTint = new Color(0.62f, 0.045f, 0.06f, 1f);
+            background.color = Color.Lerp(restingColor, warningTint, 0.22f + wave * 0.36f);
+            outline.enabled = true;
+            outline.effectColor = new Color(1f, 0.08f, 0.1f, 0.35f + wave * 0.62f);
+            outline.effectDistance = new Vector2(1.5f + wave * 2f, -1.5f - wave * 2f);
+        }
+    }
+
     internal static void SetSelectedLayer(int layerNumber)
     {
         if (layerNumber < 1 || layerNumber > 4)
             return;
 
         selectedLayer = layerNumber;
-        if (layerButtonBackgrounds == null)
-            return;
+        RefreshLayerButtonVisuals(Time.unscaledTime);
+    }
+}
 
-        for (int index = 0; index < layerButtonBackgrounds.Length; index++)
-        {
-            if (layerButtonBackgrounds[index] != null)
-                layerButtonBackgrounds[index].color = new[] { 4, 3, 2, 1 }[index] == selectedLayer
-                    ? SelectedButtonColor
-                    : NormalButtonColor;
-        }
+/// <summary>Animates independent layer warning glows using unscaled time.</summary>
+public sealed class LayerEventGlowAnimator : MonoBehaviour
+{
+    private void Update()
+    {
+        LayerSelectionHUD.UpdateThreatGlow(Time.unscaledTime);
     }
 }
 

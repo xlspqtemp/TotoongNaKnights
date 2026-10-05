@@ -337,6 +337,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         infectionGrowthTimer = 0f;
         nextContactReductionTime.Clear();
         wellnessEventKey = eventKey;
+        LayerSelectionHUD.EndThreatGlow(eventKey);
         statusLabel.text = $"{gameObject.name} has been wounded!";
         repairButton.interactable = true;
         repairButtonLabel.text = "Repair";

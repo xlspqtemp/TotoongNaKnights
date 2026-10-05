@@ -10,8 +10,9 @@ public static class DifficultyHUD
     private const string HudCanvasName = "HUDCanvas";
     private const string IndicatorObjectName = "DifficultyIndicator";
     private const float PanelHeight = 46f;
-    private const float MaximumPanelWidth = 340f;
-    private const float PauseGap = 10f;
+    private const float MaximumPanelWidth = 520f;
+    private const float PauseGap = 12f;
+    private const float TextRightPadding = 22f;
 
     private static readonly Color PanelColor = new Color(0.025f, 0.05f, 0.067f, 0.9f);
     private static readonly Color TextColor = new Color(0.92f, 0.96f, 0.96f, 1f);
@@ -68,13 +69,13 @@ public static class DifficultyHUD
         valueRect.anchorMin = Vector2.zero;
         valueRect.anchorMax = Vector2.one;
         valueRect.offsetMin = new Vector2(12f, 4f);
-        valueRect.offsetMax = new Vector2(-12f, -4f);
+        valueRect.offsetMax = new Vector2(-TextRightPadding, -4f);
 
         Text valueText = valueObject.GetComponent<Text>();
         valueText.font = Resources.GetBuiltinResource<Font>(BuiltInFontName);
         valueText.fontSize = 14;
         valueText.resizeTextForBestFit = true;
-        valueText.resizeTextMinSize = 9;
+        valueText.resizeTextMinSize = 11;
         valueText.resizeTextMaxSize = 14;
         valueText.fontStyle = FontStyle.Bold;
         valueText.color = TextColor;
@@ -99,7 +100,10 @@ public static class DifficultyHUD
                              "  |  Immune System " + DifficultySettings.DefenseLevel +
                              "  |  Lifestyle " + DifficultySettings.RandomEventsLevel;
             valueText.resizeTextForBestFit = true;
+            valueText.resizeTextMinSize = 11;
+            valueText.resizeTextMaxSize = 14;
             valueText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            valueText.verticalOverflow = VerticalWrapMode.Overflow;
         }
     }
 }
@@ -108,8 +112,8 @@ public static class DifficultyHUD
 internal sealed class DifficultyHudResponsiveLayout : MonoBehaviour
 {
     private const float PanelHeight = 46f;
-    private const float MaximumPanelWidth = 340f;
-    private const float PauseGap = 10f;
+    private const float MaximumPanelWidth = 520f;
+    private const float PauseGap = 12f;
 
     private RectTransform canvasRect;
     private RectTransform panelRect;
@@ -146,8 +150,6 @@ internal sealed class DifficultyHudResponsiveLayout : MonoBehaviour
 
         float margin = Mathf.Clamp(Mathf.Min(bounds.width, bounds.height) * 0.025f, 14f, 32f);
         float pauseWidth = pauseButtonRect != null ? pauseButtonRect.rect.width : 82f;
-        float availableWidth = Mathf.Max(180f, bounds.width - margin * 2f - pauseWidth - PauseGap);
-        float panelWidth = Mathf.Min(MaximumPanelWidth, availableWidth);
         float rightInset = margin;
         float topInset = margin;
 
@@ -156,6 +158,9 @@ internal sealed class DifficultyHudResponsiveLayout : MonoBehaviour
             rightInset = Mathf.Max(margin, -pauseButtonRect.anchoredPosition.x + pauseWidth + PauseGap);
             topInset = Mathf.Max(margin, -pauseButtonRect.anchoredPosition.y);
         }
+
+        float availableWidth = Mathf.Max(0f, bounds.width - rightInset - margin);
+        float panelWidth = Mathf.Min(MaximumPanelWidth, availableWidth);
 
         panelRect.anchorMin = new Vector2(1f, 1f);
         panelRect.anchorMax = new Vector2(1f, 1f);
