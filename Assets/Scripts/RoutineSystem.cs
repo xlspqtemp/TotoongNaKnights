@@ -79,7 +79,7 @@ public class RoutineSystem : MonoBehaviour
 
     private void Update()
     {
-        if (!enableDebugKeyboardShortcuts)
+        if (GameplayTutorial.IsTutorialActive || !enableDebugKeyboardShortcuts)
             return;
 
         if (Input.GetKeyDown(forceAdvanceHourKey))

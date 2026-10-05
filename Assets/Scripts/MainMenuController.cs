@@ -47,6 +47,7 @@ public class MainMenuController : MonoBehaviour
     private Slider enemySlider;
     private Slider defenseSlider;
     private Slider randomEventsSlider;
+    private bool startTutorialWithNextRun;
 
     private void Start()
     {
@@ -59,6 +60,8 @@ public class MainMenuController : MonoBehaviour
         {
             ManualScreen.AddMenuEntry(menuCanvas.transform, ShowManual);
         }
+
+        Screen.SetResolution(1920, 1080, true);
     }
 
     /// <summary>
@@ -78,7 +81,7 @@ public class MainMenuController : MonoBehaviour
     }
 
     /// <summary>
-    /// Opens the demo confirmation window when the Play button is selected.
+    /// Opens the tutorial choice popup when the Play button is selected.
     /// </summary>
     public void PlayGame()
     {
@@ -140,13 +143,13 @@ public class MainMenuController : MonoBehaviour
         overlayImage.raycastTarget = true;
 
         promptPanel = CreatePanel(overlay.transform, "PlayDemoPrompt", PromptWidth, PromptHeight);
-        CreateText(promptPanel.transform, "PromptTitle", "Play demo?", PromptTitleFontSize, FontStyle.Bold,
+        CreateText(promptPanel.transform, "PromptTitle", "Would you like a tutorial?", PromptTitleFontSize, FontStyle.Bold,
             TextColor, TextAnchor.MiddleCenter, new Vector2(0, 70), new Vector2(680, 90));
 
-        CreateButton(promptPanel.transform, "YesButton", "Yes", ButtonWidth, ButtonHeight,
-            new Vector2(-142, -72), LoadDemoScene);
-        CreateButton(promptPanel.transform, "ContinueAnywaysButton", "Continue Anyways", ButtonWidth, ButtonHeight,
-            new Vector2(142, -72), ShowDifficultySelection);
+        CreateButton(promptPanel.transform, "YesButton", "Start Tutorial", ButtonWidth, ButtonHeight,
+            new Vector2(-142, -72), BeginTutorialRun);
+        CreateButton(promptPanel.transform, "ContinueAnywaysButton", "Skip", ButtonWidth, ButtonHeight,
+            new Vector2(142, -72), SkipTutorial);
 
         difficultyPanel = CreatePanel(overlay.transform, "DifficultySelection", OverlayWidth, OverlayHeight);
         CreateText(difficultyPanel.transform, "DifficultyTitle", "Difficulty Selection", DifficultyTitleFontSize,
@@ -340,6 +343,18 @@ public class MainMenuController : MonoBehaviour
         SceneManager.LoadScene("Demo");
     }
 
+    private void BeginTutorialRun()
+    {
+        startTutorialWithNextRun = true;
+        ShowDifficultySelection();
+    }
+
+    private void SkipTutorial()
+    {
+        startTutorialWithNextRun = false;
+        ShowDifficultySelection();
+    }
+
     private void ShowDifficultySelection()
     {
         promptPanel.SetActive(false);
@@ -352,6 +367,7 @@ public class MainMenuController : MonoBehaviour
             Mathf.RoundToInt(enemySlider.value),
             Mathf.RoundToInt(defenseSlider.value),
             Mathf.RoundToInt(randomEventsSlider.value));
+        GameplayTutorial.PrepareForNextRun(startTutorialWithNextRun);
         SceneManager.LoadScene(GameSceneName);
     }
 }

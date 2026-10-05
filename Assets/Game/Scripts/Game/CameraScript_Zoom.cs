@@ -16,6 +16,11 @@ public class CameraScript_Zoom : MonoBehaviour
         _camera = GetComponentInChildren<Camera>();
     }
 
+    void Start()
+    {
+        Screen.SetResolution(1920, 1080, true);
+    }
+
     void Update()
     {
         _currentZoom = Mathf.Clamp(_currentZoom - Input.mouseScrollDelta.y * zoomSpeed * Time.deltaTime, minZoom, maxZoom);

@@ -73,7 +73,7 @@ public class RandomEventSystem : MonoBehaviour
 
     private void Update()
     {
-        if (!enableDebugKeyboardShortcuts)
+        if (GameplayTutorial.IsTutorialActive || !enableDebugKeyboardShortcuts)
             return;
 
         if (Input.GetKeyDown(forceEventKey))
@@ -91,9 +91,32 @@ public class RandomEventSystem : MonoBehaviour
     [ContextMenu("Random Event/Force Trigger")]
     public void ForceTriggerEvent()
     {
+        if (GameplayTutorial.IsTutorialActive)
+            return;
+
         int day = dayCounter != null ? dayCounter.CurrentDay : 1;
         int hour = dayCounter != null ? dayCounter.CurrentHour : 0;
         RollForEvent(day, hour, true);
+    }
+
+    /// <summary>Dispatches one whitelisted scripted event through the real event, QTE, and Wellness listeners during the tutorial.</summary>
+    public bool TriggerTutorialEvent(string eventId)
+    {
+        if (!GameplayTutorial.IsTutorialActive ||
+            (eventId != nameof(RandomEventId.InhaledDustOrAllergen) &&
+             eventId != nameof(RandomEventId.ContactWithSickPerson)))
+        {
+            return false;
+        }
+
+        RandomEventId parsedEventId;
+        if (!Enum.TryParse(eventId, out parsedEventId))
+            return false;
+
+        int day = dayCounter != null ? dayCounter.CurrentDay : 1;
+        int hour = dayCounter != null ? dayCounter.CurrentHour : 0;
+        DispatchEvent(CreateEventData(parsedEventId, RandomEventSeverity.Minor, day, hour));
+        return true;
     }
 
     public void SetDifficulty(RandomEventDifficulty difficulty)
@@ -120,6 +143,9 @@ public class RandomEventSystem : MonoBehaviour
 
     private void RollForEvent(int day, int hour, bool forceTrigger)
     {
+        if (GameplayTutorial.IsTutorialActive)
+            return;
+
         RoutineSystem routineSystem = RoutineSystem.Instance;
         if (routineSystem != null && routineSystem.IsSleepingAtHour(hour))
             return;
@@ -155,10 +181,18 @@ public class RandomEventSystem : MonoBehaviour
         }
 
         RandomEventData eventData = CreateEventData(eventId, severity, day, hour);
+        DispatchEvent(eventData);
+    }
+
+    private void DispatchEvent(RandomEventData eventData)
+    {
+        if (eventData == null)
+            return;
+
         if (eventData.triggersQTE)
             GameplaySpeed.BeginQTE(eventData.eventName);
 
-        string logMessage = $"{RANDOM_EVENT_PREFIX} Day {day}, Hour {hour:00}:00: " +
+        string logMessage = $"{RANDOM_EVENT_PREFIX} Day {eventData.day}, Hour {eventData.hour:00}:00: " +
                             $"{eventData.eventName} ({eventData.severity}) — {eventData.eventDescription}";
         Debug.Log(logMessage);
         LogRandomEventToConsole(logMessage, eventData, GetConsoleLogType(eventData));
