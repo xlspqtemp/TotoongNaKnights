@@ -19,6 +19,7 @@ public class CameraScript : MonoBehaviour
     [SerializeField] private CanvasGroup lymphaticOrdersCanvasGroup;
     [SerializeField] private CanvasGroup tacticalOrdersCanvasGroup;
     [SerializeField] private bool showTacticalOrdersOnCirculatoryLayer;
+    [SerializeField] private Vector3 defaultLayerFocusOffset = new Vector3(0f, 1.5f, 0f);
     [SerializeField] private CanvasGroup digestiveOrdersCanvasGroup;
     [SerializeField] private CanvasGroup respiratoryOrdersCanvasGroup;
 
@@ -132,7 +133,8 @@ public class CameraScript : MonoBehaviour
 
         if (destination != null)
         {
-            transform.position = destination.position;
+            Vector3 focusOffset = selectedLayer == 1 ? defaultLayerFocusOffset : Vector3.zero;
+            transform.position = destination.position + focusOffset;
         }
 
         LayerSelectionHUD.SetSelectedLayer(selectedLayer);

@@ -22,19 +22,20 @@ public class MainMenuController : MonoBehaviour
     private const int ValueFontSize = 18;
     private const int ButtonWidth = 250;
     private const int ButtonHeight = 64;
+    private const int DifficultyOptionWidth = 190;
+    private const int DifficultyOptionHeight = 112;
     private const int RowHeight = 112;
     private const int SliderWidth = 480;
     private const int SliderHeight = 30;
     private const int ControlButtonSize = 42;
     private const int RowLabelWidth = 330;
     private const int LevelValueWidth = 54;
-    private const int DifficultyRowTop = 116;
-    private const int DifficultyRowSpacing = 132;
     private const int StartButtonY = -290;
 
     private static readonly Color OverlayColor = new Color(0.012f, 0.022f, 0.032f, 0.82f);
     private static readonly Color PanelColor = new Color(0.035f, 0.072f, 0.09f, 0.98f);
     private static readonly Color RowColor = new Color(0.055f, 0.105f, 0.125f, 1f);
+    private static readonly Color SelectedDifficultyColor = new Color(0.075f, 0.37f, 0.39f, 1f);
     private static readonly Color AccentColor = new Color(0.18f, 0.83f, 0.78f, 1f);
     private static readonly Color ButtonColor = new Color(0.075f, 0.37f, 0.39f, 1f);
     private static readonly Color TextColor = new Color(0.92f, 0.97f, 0.97f, 1f);
@@ -44,9 +45,10 @@ public class MainMenuController : MonoBehaviour
     private GameObject overlay;
     private GameObject promptPanel;
     private GameObject difficultyPanel;
-    private Slider enemySlider;
-    private Slider defenseSlider;
-    private Slider randomEventsSlider;
+    private Button[] difficultyOptionButtons;
+    private Image[] difficultyOptionBackgrounds;
+    private Outline[] difficultyOptionOutlines;
+    private int selectedDifficultyIndex = 1;
 
     private void Start()
     {
@@ -151,16 +153,10 @@ public class MainMenuController : MonoBehaviour
         difficultyPanel = CreatePanel(overlay.transform, "DifficultySelection", OverlayWidth, OverlayHeight);
         CreateText(difficultyPanel.transform, "DifficultyTitle", "Difficulty Selection", DifficultyTitleFontSize,
             FontStyle.Bold, TextColor, TextAnchor.MiddleCenter, new Vector2(0, 292), new Vector2(820, 64));
-        CreateText(difficultyPanel.transform, "DifficultySubtitle", "Set each level from 1 to 5.", SubtitleFontSize,
-            FontStyle.Normal, MutedTextColor, TextAnchor.MiddleCenter, new Vector2(0, 232),
-            new Vector2(800, 42));
+        CreateText(difficultyPanel.transform, "DifficultySubtitle", "Choose a difficulty preset.", SubtitleFontSize,
+            FontStyle.Normal, MutedTextColor, TextAnchor.MiddleCenter, new Vector2(0, 232), new Vector2(800, 42));
 
-        enemySlider = CreateDifficultyRow(difficultyPanel.transform, "Enemy", "Infection Severity", DifficultyRowTop,
-            DifficultySettings.EnemyLevel);
-        defenseSlider = CreateDifficultyRow(difficultyPanel.transform, "Defense", "Immune System", DifficultyRowTop - DifficultyRowSpacing,
-            DifficultySettings.DefenseLevel);
-        randomEventsSlider = CreateDifficultyRow(difficultyPanel.transform, "Random Events", "Lifestyle",
-            DifficultyRowTop - DifficultyRowSpacing * 2, DifficultySettings.RandomEventsLevel);
+        CreateDifficultySelector(difficultyPanel.transform);
 
         CreateButton(difficultyPanel.transform, "StartGameButton", "Start Game", ButtonWidth, ButtonHeight,
             new Vector2(0, StartButtonY), StartGame);
@@ -179,6 +175,51 @@ public class MainMenuController : MonoBehaviour
         panelImage.raycastTarget = true;
         return panel;
     }
+    private void CreateDifficultySelector(Transform parent)
+    {
+        string[] optionLabels = { "Easy", "Normal", "Medium", "Hard" };
+        difficultyOptionButtons = new Button[optionLabels.Length];
+        difficultyOptionBackgrounds = new Image[optionLabels.Length];
+        difficultyOptionOutlines = new Outline[optionLabels.Length];
+        const int horizontalSpacing = 18;
+        int totalWidth = optionLabels.Length * DifficultyOptionWidth + (optionLabels.Length - 1) * horizontalSpacing;
+        int leftEdge = -totalWidth / 2 + DifficultyOptionWidth / 2;
+
+        for (int index = 0; index < optionLabels.Length; index++)
+        {
+            int optionIndex = index;
+            Vector2 position = new Vector2(leftEdge + index * (DifficultyOptionWidth + horizontalSpacing), 54f);
+            Button button = CreateButton(parent, "DifficultyOption" + optionLabels[index] + "Button",
+                optionLabels[index], DifficultyOptionWidth, DifficultyOptionHeight, position,
+                () => SetSelectedDifficulty(optionIndex));
+            Outline outline = button.gameObject.AddComponent<Outline>();
+            outline.effectColor = AccentColor;
+            outline.effectDistance = new Vector2(3f, -3f);
+            outline.useGraphicAlpha = true;
+
+            difficultyOptionButtons[index] = button;
+            difficultyOptionBackgrounds[index] = button.GetComponent<Image>();
+            difficultyOptionOutlines[index] = outline;
+        }
+
+        SetSelectedDifficulty(selectedDifficultyIndex);
+    }
+
+    private void SetSelectedDifficulty(int optionIndex)
+    {
+        if (difficultyOptionButtons == null || optionIndex < 0 || optionIndex >= difficultyOptionButtons.Length)
+            return;
+
+        selectedDifficultyIndex = optionIndex;
+        for (int index = 0; index < difficultyOptionButtons.Length; index++)
+        {
+            bool isSelected = index == selectedDifficultyIndex;
+            difficultyOptionBackgrounds[index].color = isSelected ? SelectedDifficultyColor : ButtonColor;
+            difficultyOptionOutlines[index].enabled = isSelected;
+            difficultyOptionButtons[index].interactable = true;
+        }
+    }
+
 
     private Slider CreateDifficultyRow(Transform parent, string settingName, string displayLabel, int anchoredY, int initialValue)
     {
@@ -348,10 +389,6 @@ public class MainMenuController : MonoBehaviour
 
     private void StartGame()
     {
-        DifficultySettings.SaveLevels(
-            Mathf.RoundToInt(enemySlider.value),
-            Mathf.RoundToInt(defenseSlider.value),
-            Mathf.RoundToInt(randomEventsSlider.value));
         SceneManager.LoadScene(GameSceneName);
     }
 }

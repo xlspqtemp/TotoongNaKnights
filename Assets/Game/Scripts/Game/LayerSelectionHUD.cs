@@ -15,6 +15,8 @@ internal static class LayerSelectionHUD
     private const string SelectorObjectName = "LayerSelectionButton";
     private const string ControlsObjectName = "SystemLayerButtons";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
+    private const float LayerToggleHeight = 36f;
+    private const float LayerToggleGap = 8f;
 
     private static readonly Color NormalButtonColor = new Color(0.035f, 0.065f, 0.085f, 0.96f);
     private static readonly Color SelectedButtonColor = new Color(0.055f, 0.24f, 0.28f, 1f);
@@ -24,6 +26,7 @@ internal static class LayerSelectionHUD
     private static Button[] layerButtons;
     private static Image[] layerButtonBackgrounds;
     private static Outline[] layerButtonOutlines;
+    private static RectTransform layerRowsRoot;
     private static HashSet<string>[] activeThreatKeys;
     private static readonly Dictionary<string, int> ActiveThreatLayers = new Dictionary<string, int>();
     private static int selectedLayer = 1;
@@ -43,6 +46,7 @@ internal static class LayerSelectionHUD
         layerButtons = null;
         layerButtonBackgrounds = null;
         layerButtonOutlines = null;
+        layerRowsRoot = null;
         if (scene.name != GameSceneName)
             return;
 
@@ -65,12 +69,13 @@ internal static class LayerSelectionHUD
         RectTransform snapshotPanel = canvas.transform.Find("HumanSnapshotPanel") as RectTransform;
         RectTransform dayPanel = canvas.transform.Find("DayCounterPanel") as RectTransform;
         RectTransform consolePanel = canvas.transform.Find("ConsoleLogPanel") as RectTransform;
-        RectTransform controlsRoot = CreateLayerControls(canvas.transform, canvas.transform as RectTransform);
+        RectTransform controlsRoot = CreateLayerControls(canvas.transform, canvas.transform as RectTransform,
+            out RectTransform toggleRect);
 
         ResponsiveHudLayout responsiveLayout = canvas.GetComponent<ResponsiveHudLayout>();
         if (responsiveLayout == null)
             responsiveLayout = canvas.gameObject.AddComponent<ResponsiveHudLayout>();
-        responsiveLayout.Configure(snapshotPanel, controlsRoot, dayPanel, consolePanel);
+        responsiveLayout.Configure(snapshotPanel, controlsRoot, dayPanel, consolePanel, layerRowsRoot, toggleRect);
         SetSelectedLayer(1);
         RandomEventSystem.OnRandomEventTriggered -= HandleRandomEventTriggered;
         RandomEventSystem.OnRandomEventTriggered += HandleRandomEventTriggered;
@@ -79,7 +84,7 @@ internal static class LayerSelectionHUD
             canvas.gameObject.AddComponent<GameplayTutorial>();
     }
 
-    private static RectTransform CreateLayerControls(Transform parent, RectTransform canvasRect)
+    private static RectTransform CreateLayerControls(Transform parent, RectTransform canvasRect, out RectTransform toggleRect)
     {
         GameObject rootObject = new GameObject(ControlsObjectName, typeof(RectTransform));
         rootObject.transform.SetParent(parent, false);
@@ -88,6 +93,34 @@ internal static class LayerSelectionHUD
         rootRect.anchorMax = new Vector2(0f, 1f);
         rootRect.pivot = new Vector2(0f, 1f);
         rootRect.localScale = Vector3.one;
+
+        GameObject toggleObject = new GameObject(SelectorObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        toggleObject.transform.SetParent(rootRect, false);
+        toggleRect = toggleObject.GetComponent<RectTransform>();
+        toggleRect.anchorMin = new Vector2(0f, 1f);
+        toggleRect.anchorMax = new Vector2(0f, 1f);
+        toggleRect.pivot = new Vector2(0f, 1f);
+        toggleRect.anchoredPosition = Vector2.zero;
+        toggleRect.sizeDelta = new Vector2(300f, LayerToggleHeight);
+        Image toggleBackground = toggleObject.GetComponent<Image>();
+        toggleBackground.color = SelectedButtonColor;
+        toggleBackground.raycastTarget = true;
+        Button toggleButton = toggleObject.GetComponent<Button>();
+        toggleButton.targetGraphic = toggleBackground;
+        toggleButton.transition = Selectable.Transition.ColorTint;
+        toggleButton.colors = CreateButtonColors(SelectedButtonColor);
+        CreateLabel("LayerToggleLabel", toggleRect, "Layers  −", 14f, TextAlignmentOptions.MidlineLeft);
+        TextMeshProUGUI toggleLabel = toggleRect.Find("LayerToggleLabel").GetComponent<TextMeshProUGUI>();
+
+        layerRowsRoot = CreateRectObject("LayerSelectionRows", rootRect);
+        layerRowsRoot.anchoredPosition = new Vector2(0f, -(LayerToggleHeight + LayerToggleGap));
+        layerRowsRoot.sizeDelta = new Vector2(300f, 1f);
+        CanvasGroup rowsCanvasGroup = layerRowsRoot.gameObject.AddComponent<CanvasGroup>();
+        rowsCanvasGroup.alpha = 1f;
+        rowsCanvasGroup.interactable = true;
+        rowsCanvasGroup.blocksRaycasts = true;
+        LayerSelectionDropdownController dropdown = toggleObject.AddComponent<LayerSelectionDropdownController>();
+        dropdown.Initialize(layerRowsRoot, rowsCanvasGroup, toggleLabel, toggleButton);
 
         string[] labels = { "Respiratory", "Digestive", "Circulatory", "Lymphatic" };
         string[] descriptions =
@@ -106,7 +139,7 @@ internal static class LayerSelectionHUD
         for (int index = 0; index < labels.Length; index++)
         {
             activeThreatKeys[index] = new HashSet<string>();
-            RectTransform rowRect = CreateRectObject("LayerButtonRow_" + labels[index], rootRect);
+            RectTransform rowRect = CreateRectObject("LayerButtonRow_" + labels[index], layerRowsRoot);
             Button layerButton = CreateButton("Select" + labels[index] + "Button", rowRect, out Image layerBackground);
             Outline layerOutline = layerButton.gameObject.AddComponent<Outline>();
             layerOutline.effectColor = new Color(1f, 0.08f, 0.1f, 0.9f);
@@ -386,22 +419,29 @@ internal sealed class ResponsiveHudLayout : MonoBehaviour
     private const float SnapshotBaseWidth = 320f;
     private const float SnapshotPreviewWidth = 240f;
     private const float SnapshotBaseHeight = 534f;
+    private const float LayerToggleHeight = 36f;
+    private const float LayerToggleGap = 8f;
 
     private RectTransform canvasRect;
     private RectTransform snapshotRect;
     private RectTransform controlsRect;
+    private RectTransform layerRowsRect;
+    private RectTransform layerToggleRect;
     private RectTransform dayPanelRect;
     private RectTransform consoleRect;
     private float previousWidth = -1f;
     private float previousHeight = -1f;
 
-    internal void Configure(RectTransform snapshot, RectTransform controls, RectTransform dayPanel, RectTransform console)
+    internal void Configure(RectTransform snapshot, RectTransform controls, RectTransform dayPanel, RectTransform console,
+        RectTransform layerRows, RectTransform layerToggle)
     {
         canvasRect = transform as RectTransform;
         snapshotRect = snapshot;
         controlsRect = controls;
         dayPanelRect = dayPanel;
         consoleRect = console;
+        layerRowsRect = layerRows;
+        layerToggleRect = layerToggle;
         ApplyLayout();
     }
 
@@ -461,7 +501,8 @@ internal sealed class ResponsiveHudLayout : MonoBehaviour
         if (!controlsBelow)
         {
             float availableSideHeight = Mathf.Max(1f, consoleTopFromCanvasTop - controlsTop - margin);
-            float rowHeight = Mathf.Min(56f, (availableSideHeight - controlsGapY * 3f) / 4f);
+            float availableRowsHeight = availableSideHeight - LayerToggleHeight - LayerToggleGap - controlsGapY * 3f;
+            float rowHeight = Mathf.Min(56f, availableRowsHeight / 4f);
             if (rowHeight < 34f)
             {
                 controlsBelow = true;
@@ -470,13 +511,15 @@ internal sealed class ResponsiveHudLayout : MonoBehaviour
             else
             {
                 controlsRowHeight = rowHeight;
+                float sideLayoutHeight = LayerToggleHeight + LayerToggleGap + 4f * controlsRowHeight + 3f * controlsGapY;
                 float snapshotAvailableWidth = availableWidth - controlsWidth - controlsGap;
                 snapshotScale = Mathf.Min(1f, snapshotAvailableWidth / SnapshotBaseWidth, verticalSpace / SnapshotBaseHeight);
+                // Layout helper is declared after this method.
                 PlaceSnapshot(snapshotTop, margin, snapshotScale);
                 controlsRect.anchoredPosition = new Vector2(margin + (SnapshotBaseWidth + SnapshotPreviewWidth) * 0.5f * snapshotScale, -controlsTop);
-                controlsRect.sizeDelta = new Vector2(controlsWidth, 1f);
                 controlsRect.localScale = Vector3.one;
-                ArrangeLayerRows(controlsRect, controlsWidth, controlsRowHeight, controlsGapY, false);
+                ConfigureLayerControlRects(controlsWidth, sideLayoutHeight);
+                ArrangeLayerRows(layerRowsRect, controlsWidth, controlsRowHeight, controlsGapY, false);
                 return;
             }
         }
@@ -484,15 +527,31 @@ internal sealed class ResponsiveHudLayout : MonoBehaviour
         controlsRowHeight = twoColumnGrid ? 52f : 40f;
         controlsGapY = twoColumnGrid ? 8f : 5f;
         float rowCount = twoColumnGrid ? 2f : 4f;
-        float controlsHeight = rowCount * controlsRowHeight + (rowCount - 1f) * controlsGapY;
+        float controlsHeight = LayerToggleHeight + LayerToggleGap + rowCount * controlsRowHeight + (rowCount - 1f) * controlsGapY;
         float snapshotAvailableHeight = Mathf.Max(1f, verticalSpace - controlsHeight - controlsGap);
         snapshotScale = Mathf.Min(1f, availableWidth / SnapshotBaseWidth, snapshotAvailableHeight / SnapshotBaseHeight);
         PlaceSnapshot(snapshotTop, margin, snapshotScale);
         controlsRect.anchoredPosition = new Vector2(margin, -snapshotTop - SnapshotBaseHeight * snapshotScale - controlsGap);
-        controlsRect.sizeDelta = new Vector2(controlsWidth, 1f);
         controlsRect.localScale = Vector3.one;
-        ArrangeLayerRows(controlsRect, controlsWidth, controlsRowHeight, controlsGapY, twoColumnGrid);
+        ConfigureLayerControlRects(controlsWidth, controlsHeight);
+        ArrangeLayerRows(layerRowsRect, controlsWidth, controlsRowHeight, controlsGapY, twoColumnGrid);
     }
+    private void ConfigureLayerControlRects(float width, float totalHeight)
+    {
+        if (controlsRect != null)
+            controlsRect.sizeDelta = new Vector2(width, totalHeight);
+        if (layerToggleRect != null)
+            layerToggleRect.sizeDelta = new Vector2(width, LayerToggleHeight);
+        if (layerRowsRect != null)
+        {
+            layerRowsRect.anchorMin = new Vector2(0f, 1f);
+            layerRowsRect.anchorMax = new Vector2(0f, 1f);
+            layerRowsRect.pivot = new Vector2(0f, 1f);
+            layerRowsRect.anchoredPosition = new Vector2(0f, -(LayerToggleHeight + LayerToggleGap));
+            layerRowsRect.sizeDelta = new Vector2(width, 1f);
+        }
+    }
+
 
     private void PlaceSnapshot(float topOffset, float leftOffset, float scale)
     {
@@ -535,6 +594,80 @@ internal sealed class ResponsiveHudLayout : MonoBehaviour
         }
     }
 }
+
+/// <summary>Expands or collapses the body-system buttons beneath the persistent Layers toggle.</summary>
+public sealed class LayerSelectionDropdownController : MonoBehaviour
+{
+    private const float TransitionDuration = 0.22f;
+    private const float CollapsedSlideDistance = 54f;
+
+    private RectTransform rowsRect;
+    private CanvasGroup rowsCanvasGroup;
+    private TextMeshProUGUI toggleLabel;
+    private Button toggleButton;
+    private Vector2 transitionStartPosition;
+    private Vector2 expandedPosition;
+    private Vector2 transitionTargetPosition;
+    private float transitionStartAlpha;
+    private float transitionTargetAlpha;
+    private float transitionElapsed;
+    private bool isExpanded = true;
+    private bool isTransitioning;
+
+    internal void Initialize(RectTransform layerRows, CanvasGroup rowsGroup, TextMeshProUGUI label, Button button)
+    {
+        rowsRect = layerRows;
+        rowsCanvasGroup = rowsGroup;
+        toggleLabel = label;
+        toggleButton = button;
+        expandedPosition = rowsRect != null ? rowsRect.anchoredPosition : Vector2.zero;
+        if (toggleButton != null)
+            toggleButton.onClick.AddListener(Toggle);
+        UpdateToggleLabel();
+    }
+
+    private void Toggle()
+    {
+        if (rowsRect == null || rowsCanvasGroup == null)
+            return;
+
+        isExpanded = !isExpanded;
+        transitionStartPosition = rowsRect.anchoredPosition;
+        transitionStartAlpha = rowsCanvasGroup.alpha;
+        transitionTargetPosition = isExpanded ? expandedPosition : expandedPosition + Vector2.up * CollapsedSlideDistance;
+        transitionTargetAlpha = isExpanded ? 1f : 0f;
+        transitionElapsed = 0f;
+        isTransitioning = true;
+        rowsCanvasGroup.interactable = false;
+        rowsCanvasGroup.blocksRaycasts = false;
+        UpdateToggleLabel();
+    }
+
+    private void Update()
+    {
+        if (!isTransitioning || rowsRect == null || rowsCanvasGroup == null)
+            return;
+
+        transitionElapsed += Time.unscaledDeltaTime;
+        float progress = TransitionDuration > 0f ? Mathf.Clamp01(transitionElapsed / TransitionDuration) : 1f;
+        float easedProgress = Mathf.SmoothStep(0f, 1f, progress);
+        rowsRect.anchoredPosition = Vector2.Lerp(transitionStartPosition, transitionTargetPosition, easedProgress);
+        rowsCanvasGroup.alpha = Mathf.Lerp(transitionStartAlpha, transitionTargetAlpha, easedProgress);
+        if (progress < 1f)
+            return;
+
+        isTransitioning = false;
+        rowsCanvasGroup.interactable = isExpanded;
+        rowsCanvasGroup.blocksRaycasts = isExpanded;
+    }
+
+    private void UpdateToggleLabel()
+    {
+        if (toggleLabel != null)
+            toggleLabel.text = isExpanded ? "Layers  −" : "Layers  +";
+    }
+}
+
 
 /// <summary>Shows a layer description while the corresponding information indicator is hovered.</summary>
 internal sealed class LayerInfoTooltip : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
