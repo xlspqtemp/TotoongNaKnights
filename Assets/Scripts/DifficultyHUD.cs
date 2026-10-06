@@ -9,6 +9,7 @@ public static class DifficultyHUD
     private const string GameSceneName = "Game";
     private const string HudCanvasName = "HUDCanvas";
     private const string IndicatorObjectName = "DifficultyIndicator";
+    private static readonly bool ShowDifficultyIndicator = false;
     private const float PanelHeight = 46f;
     private const float MaximumPanelWidth = 520f;
     private const float PauseGap = 12f;
@@ -35,6 +36,13 @@ public static class DifficultyHUD
             return;
 
         Transform existingIndicator = hudCanvas.transform.Find(IndicatorObjectName);
+        if (!ShowDifficultyIndicator)
+        {
+            if (existingIndicator != null)
+                existingIndicator.gameObject.SetActive(false);
+            return;
+        }
+
         RectTransform indicatorRect = existingIndicator as RectTransform;
         if (indicatorRect == null)
             indicatorRect = CreateIndicator(hudCanvas.transform);

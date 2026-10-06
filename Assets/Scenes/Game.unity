@@ -5031,6 +5031,7 @@ GameObject:
   m_Component:
   - component: {fileID: 159395625}
   - component: {fileID: 159395626}
+  - component: {fileID: 159395627}
   m_Layer: 0
   m_Name: RandomEventSystem
   m_TagString: Untagged
@@ -5216,6 +5217,135 @@ MonoBehaviour:
   forceEventKey: 290
   cycleDifficultyKey: 291
   logHourlyRolls: 0
+--- !u!114 &159395627
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 159395624}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d75a7a8fc0f72844b9fd669863538c83, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InfectionSpawner
+  dayCounter: {fileID: 53820468}
+  spawnOnDayAdvance: 1
+  eventsPerDay: 4
+  infectionEntries:
+  - displayName: Staph
+    pathogenType: 0
+    severityStage: 0
+    entryCause: scraped knee
+    correctResponder: 0
+    preferredBodyParts: 0000000001000000
+    daysUntreated: 0
+  - displayName: E. coli/Salmonella
+    pathogenType: 0
+    severityStage: 1
+    entryCause: spoiled food
+    correctResponder: 0
+    preferredBodyParts: 02000000
+    daysUntreated: 0
+  - displayName: Strep
+    pathogenType: 0
+    severityStage: 0
+    entryCause: sore throat
+    correctResponder: 0
+    preferredBodyParts: 02000000
+    daysUntreated: 0
+  - displayName: Common cold
+    pathogenType: 1
+    severityStage: 0
+    entryCause: crowded commute
+    correctResponder: 1
+    preferredBodyParts: 02000000
+    daysUntreated: 0
+  - displayName: Flu
+    pathogenType: 1
+    severityStage: 1
+    entryCause: crowded commute
+    correctResponder: 1
+    preferredBodyParts: 02000000
+    daysUntreated: 0
+  - displayName: Stomach flu
+    pathogenType: 1
+    severityStage: 0
+    entryCause: unwashed hands
+    correctResponder: 1
+    preferredBodyParts: 01000000
+    daysUntreated: 0
+  bodyPartButtons:
+  - bodyPartGroup: 0
+    button: {fileID: 911858978}
+    worldAnchor: {fileID: 458399335}
+  - bodyPartGroup: 0
+    button: {fileID: 1979159989}
+    worldAnchor: {fileID: 2073190144}
+  - bodyPartGroup: 1
+    button: {fileID: 138503835}
+    worldAnchor: {fileID: 255493466}
+  - bodyPartGroup: 1
+    button: {fileID: 894626771}
+    worldAnchor: {fileID: 1602479650}
+  - bodyPartGroup: 2
+    button: {fileID: 1961894821}
+    worldAnchor: {fileID: 106749845}
+  maxActiveInfections: 5
+  showBodyPartButtons: 0
+  bodyPartButtonsCanvasGroup: {fileID: 745068365}
+  enableLegacyAvatarClickDispatch: 0
+  hudCanvas: {fileID: 447793135}
+  wbcHeadshotTexture: {fileID: 2800000, guid: d8829c4c013a20149b4f0d4bd9702095, type: 3}
+  wbcHeadshotResourcePath: UI/WBC headshot
+  headshotButtonSize: {x: 78, y: 78}
+  squadHudBottomRightOffset: {x: -28, y: 28}
+  infectionRowBottomRightOffset: {x: -24, y: 122}
+  infectionRowSize: {x: 320, y: 96}
+  squadHudPanelColor: {r: 0.025, g: 0.045, b: 0.065, a: 0.9}
+  squadCountColor: {r: 1, g: 1, b: 1, a: 1}
+  markerPopDuration: 0.18
+  markerFadeDuration: 0.22
+  preferredBodyPartWeight: 4
+  otherBodyPartWeight: 1
+  markerSprite: {fileID: 21300000, guid: 2d2029e87694f574dabc38ca99e99911, type: 3}
+  markerSpriteResourcePath: HUDWhiteSwatch
+  bacterialColor: {r: 0.95, g: 0.2, b: 0.18, a: 1}
+  viralColor: {r: 0.2, g: 0.55, b: 1, a: 1}
+  selectionOutlineColor: {r: 1, g: 1, b: 1, a: 1}
+  selectionOutlineThickness: 3
+  mildMarkerSize: {x: 18, y: 18}
+  moderateMarkerSize: {x: 24, y: 24}
+  severeMarkerSize: {x: 30, y: 30}
+  markerOffset: {x: 88, y: 36}
+  maximumMarkerRowWidth: 220
+  markerSpacing: 8
+  enableWbcDispatch: 1
+  maxActiveWbcs: 5
+  perWbcCooldownSeconds: 20
+  dispatchArrivalDelaySeconds: 2
+  wbcAvatarTexture: {fileID: 2800000, guid: caa350fd04df1fc4987d9815ef14a61e, type: 3}
+  wbcAvatarResourcePath: Manual/WBC
+  dispatchAvatarSize: {x: 38, y: 38}
+  dispatchAvatarOffset: {x: 0, y: -44}
+  dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
+  circulatorySystemController: {fileID: 2007297928}
+  cameraScript: {fileID: 2766709378708606964}
+  squadSpawnAnchor: {fileID: 703376539}
+  squadMemberCount: 5
+  switchToCirculatoryOnSquadSpawn: 1
+  idleSquadHighlightColor: {r: 0, g: 1, b: 1, a: 1}
+  headshotCooldownSeconds: 5
+  squadLifetimeSeconds: 20
+  dispatchNavMeshSampleRadius: 25
+  infectionAnchorMatchRadius: 2
+  destinationHoverColor: {r: 0.15, g: 1, b: 0.9, a: 0.85}
+  destinationHoverRadius: 1
+  destinationHoverLineWidth: 0.06
+  promptBannerSize: {x: 360, y: 86}
+  promptBannerTopOffset: {x: -32, y: -82}
+  promptBannerColor: {r: 0.025, g: 0.045, b: 0.065, a: 0.92}
+  promptAutoFadeSeconds: 8
 --- !u!1 &160062307
 GameObject:
   m_ObjectHideFlags: 0
@@ -11897,6 +12027,7 @@ MonoBehaviour:
     delta: -5
   - eventId: SmokedCigarette
     delta: -5
+  applyRandomEventWellnessEffects: 0
   hazardEventDeltas:
   - eventId: SpoiledFood_QTESuccess
     delta: -2
@@ -27649,7 +27780,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 755701208}
   m_HandleRect: {fileID: 755701207}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -49834,6 +49965,17 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1898174451}
   m_SourcePrefab: {fileID: 100100000, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+--- !u!114 &2766709378708606964 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+  m_PrefabInstance: {fileID: 2766709378708606963}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1898174446}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e37d8aab2dfb9d6498d5282cf7b32abe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Camera
 --- !u!1001 &3004891328046425654
 PrefabInstance:
   m_ObjectHideFlags: 0

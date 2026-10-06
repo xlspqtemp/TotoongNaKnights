@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -8,6 +9,7 @@ public sealed class CirculatorySystemController : MonoBehaviour
     private const int DefaultPairsToSpawn = 5;
     private const float DefaultSpawnIntervalSeconds = 1f;
     private const float DefaultNavMeshSampleRadius = 10f;
+    private const float NeutrophilSpawnSpacing = 1.25f;
  
     private const string DestinationTargetName = "Destination - Target";
     private const string LungPointName = "Point - Lung";
@@ -117,8 +119,69 @@ public sealed class CirculatorySystemController : MonoBehaviour
         return spawnedNeutrophil && spawnedMacrophage;
     }
 
+    /// <summary>Spawns a group of neutrophils at the requested circulatory anchor using the configured WBC prefab and NavMesh setup.</summary>
+    public GameObject[] SpawnNeutrophilsAt(Transform spawnPoint, int count)
+    {
+        if (count <= 0 || neutrophilPrefab == null)
+        {
+            return new GameObject[0];
+        }
+
+        ResolveWaypoints();
+        if (heart == null || destinationPointContainer == null || !HasAnyTarget(destinationPoints) || !HasAnyTarget(lungPoints))
+        {
+            Debug.LogWarning("CirculatorySystemController cannot spawn a WBC squad because heart or route waypoint references are missing.", this);
+            return new GameObject[0];
+        }
+
+        Transform resolvedSpawnPoint = spawnPoint != null ? spawnPoint : heart;
+        int columns = Mathf.CeilToInt(Mathf.Sqrt(count));
+        float spacing = Mathf.Max(1.1f, NeutrophilSpawnSpacing);
+        List<GameObject> spawnedUnits = new List<GameObject>(count);
+        for (int cellIndex = 0; cellIndex < count; cellIndex++)
+        {
+            Transform destinationPoint = SelectRandomDestinationPoint();
+            if (destinationPoint == null)
+                continue;
+
+            int row = cellIndex / columns;
+            int column = cellIndex % columns;
+            float offsetX = (column - (columns - 1) * 0.5f) * spacing;
+            float offsetZ = (row - (Mathf.CeilToInt((float)count / columns) - 1) * 0.5f) * spacing;
+            Vector3 requestedPosition = resolvedSpawnPoint.position + resolvedSpawnPoint.right * offsetX + resolvedSpawnPoint.forward * offsetZ;
+            if (!SpawnCellPairMember(neutrophilPrefab, destinationPoint, requestedPosition, out GameObject spawnedCell))
+                continue;
+
+            NavMeshAgent agent = spawnedCell.GetComponent<NavMeshAgent>();
+            CirculatoryCellRoute route = spawnedCell.GetComponent<CirculatoryCellRoute>();
+            if (agent == null || route == null)
+            {
+                spawnedCell.SetActive(false);
+                continue;
+            }
+
+            agent.ResetPath();
+            agent.isStopped = true;
+            route.enabled = false;
+            spawnedUnits.Add(spawnedCell);
+        }
+
+        return spawnedUnits.ToArray();
+    }
+
     private bool SpawnCellPairMember(GameObject cellPrefab, Transform destinationPoint, Vector3 requestedPosition)
     {
+        return SpawnCellPairMember(cellPrefab, destinationPoint, requestedPosition, out _);
+    }
+
+    private bool SpawnCellPairMember(GameObject cellPrefab, Transform destinationPoint, Vector3 requestedPosition, out GameObject spawnedCell)
+    {
+        spawnedCell = null;
+        if (cellPrefab == null || destinationPoint == null)
+        {
+            return false;
+        }
+
         NavMeshAgent prefabAgent = cellPrefab.GetComponent<NavMeshAgent>();
         if (prefabAgent == null)
         {
@@ -138,6 +201,7 @@ public sealed class CirculatorySystemController : MonoBehaviour
         }
 
         GameObject cell = Instantiate(cellPrefab, spawnHit.position, Quaternion.identity);
+        spawnedCell = cell;
         NavMeshAgent agent = cell.GetComponent<NavMeshAgent>();
         if (agent == null || !agent.enabled || !agent.Warp(spawnHit.position))
         {

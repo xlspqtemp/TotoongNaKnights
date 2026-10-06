@@ -93,6 +93,10 @@ public class WellnessManager : MonoBehaviour
         new WellnessEventDelta("SmokedCigarette", -5f)
     };
 
+    [Header("Random Event Compatibility")]
+    [Tooltip("Re-enable the legacy direct wellness penalty from recognized random events. Disabled for dispatch-style infections.")]
+    [SerializeField] private bool applyRandomEventWellnessEffects;
+
     [Header("Hazard and QTE Result Deltas")]
     [SerializeField] private List<WellnessEventDelta> hazardEventDeltas = new List<WellnessEventDelta>
     {
@@ -338,7 +342,7 @@ public class WellnessManager : MonoBehaviour
 
     private void HandleRandomEventTriggered(RandomEventData eventData)
     {
-        if (eventData == null || runHasEnded)
+        if (!applyRandomEventWellnessEffects || eventData == null || runHasEnded)
             return;
 
         string eventId;

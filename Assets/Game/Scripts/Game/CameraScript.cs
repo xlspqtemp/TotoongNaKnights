@@ -1,10 +1,13 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 public class CameraScript : MonoBehaviour
 {
     private const int LayerCount = 4;
+    private const int MousePanButton = 2;
+    private const float DefaultPanSpeed = 5f;
 
-    public float panSpeed = 5f;
+    public float panSpeed = DefaultPanSpeed;
 
     /* 08/19, (4)Transform variables allotted for all four(4) systems */
     public Transform floor1;
@@ -15,6 +18,7 @@ public class CameraScript : MonoBehaviour
     [Header("System Controls")]
     [SerializeField] private CanvasGroup lymphaticOrdersCanvasGroup;
     [SerializeField] private CanvasGroup tacticalOrdersCanvasGroup;
+    [SerializeField] private bool showTacticalOrdersOnCirculatoryLayer;
     [SerializeField] private CanvasGroup digestiveOrdersCanvasGroup;
     [SerializeField] private CanvasGroup respiratoryOrdersCanvasGroup;
 
@@ -25,7 +29,15 @@ public class CameraScript : MonoBehaviour
 
     private bool wasPanInputActive;
     private bool wasZoomInputActive;
+    private bool mousePanStartedOverWorld;
+    private Vector3 previousMousePosition;
+    private Camera sceneCamera;
     private int selectedLayer = 1;
+
+    private void Awake()
+    {
+        sceneCamera = GetComponentInChildren<Camera>();
+    }
 
     private void Start()
     {
@@ -34,19 +46,40 @@ public class CameraScript : MonoBehaviour
 
     private void Update()
     {
-        float vertical = Input.GetAxis("Horizontal");
-        float horizontal = Input.GetAxis("Vertical");
+        if (Input.GetMouseButtonDown(MousePanButton))
+        {
+            mousePanStartedOverWorld = EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject();
+            previousMousePosition = Input.mousePosition;
+        }
 
-        Vector3 isoHorizontal = new Vector3(-1, 0, 1);
-        Vector3 isoVertical = new Vector3(1, 0, 1);
-        Vector3 movement = (isoHorizontal * horizontal) + (isoVertical * vertical);
+        bool panInputActive = Input.GetMouseButton(MousePanButton) && mousePanStartedOverWorld;
+        bool cameraMoved = false;
+        if (panInputActive)
+        {
+            Vector3 currentMousePosition = Input.mousePosition;
+            Vector3 mouseDelta = currentMousePosition - previousMousePosition;
+            previousMousePosition = currentMousePosition;
 
-        const float cameraMoveSpeed = 100f;
-        transform.position += movement * cameraMoveSpeed * Time.deltaTime;
+            if (mouseDelta.sqrMagnitude > 0.01f && Screen.height > 0)
+            {
+                float worldUnitsPerPixel = sceneCamera != null && sceneCamera.orthographic
+                    ? (sceneCamera.orthographicSize * 2f) / Screen.height
+                    : 0.01f;
+                float panSpeedScale = Mathf.Max(0f, panSpeed) / DefaultPanSpeed;
+                Vector3 cameraRightOnGround = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
+                Vector3 cameraUpOnGround = Vector3.ProjectOnPlane(transform.up, Vector3.up).normalized;
+                Vector3 movement = (-cameraRightOnGround * mouseDelta.x - cameraUpOnGround * mouseDelta.y) * worldUnitsPerPixel * panSpeedScale;
+                transform.position += movement;
+                cameraMoved = true;
+            }
+        }
+        else if (!Input.GetMouseButton(MousePanButton))
+        {
+            mousePanStartedOverWorld = false;
+        }
 
-        // Body-system layers are selected through the HUD controls.
-
-        UpdateMovementAudio(Mathf.Abs(horizontal) > 0.01f || Mathf.Abs(vertical) > 0.01f);
+        // World panning uses middle-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
+        UpdateMovementAudio(cameraMoved);
     }
 
     /// <summary>
@@ -85,7 +118,7 @@ public class CameraScript : MonoBehaviour
                 break;
             case 2:
                 destination = floor2;
-                SetTacticalOrdersVisible(true);
+                SetTacticalOrdersVisible(showTacticalOrdersOnCirculatoryLayer);
                 break;
             case 3:
                 destination = floor3;
