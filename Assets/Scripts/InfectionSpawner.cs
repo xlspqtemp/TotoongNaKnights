@@ -92,6 +92,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     [Header("WBC Dispatch")]
     [SerializeField] private bool enableWbcDispatch = true;
+    [SerializeField] private bool useLegacySelectFirst;
     [SerializeField, Min(1)] private int maxActiveWbcs = DefaultMaximumActiveWbcs;
     [SerializeField, Min(0.1f)] private float perWbcCooldownSeconds = 20f;
     [SerializeField, Min(0f)] private float dispatchArrivalDelaySeconds = 2f;
@@ -181,12 +182,16 @@ public sealed class InfectionSpawner : MonoBehaviour
     private float promptFadeStartAlpha;
     private int nextInfectionSpawnOrder;
     private bool awaitingSquadDestination;
+    private bool awaitingInfectionTargetSelection;
     private bool promptFadingOut;
     private Camera gameplayCamera;
     private LineRenderer destinationHoverRing;
     private Material destinationHoverMaterial;
 
-    private sealed class InfectionMarker
+    public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
+    public bool IsAwaitingInfectionTargetSelection => awaitingInfectionTargetSelection;
+
+    public sealed class InfectionMarker
     {
         public InfectionData infection;
         public InfectionBodyPartButtonReference bodyPartMapping;
@@ -535,10 +540,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (promptBannerObject == null || promptBannerCanvasGroup == null || !promptBannerObject.activeSelf)
             return;
 
-        float unscaledDeltaTime = Time.unscaledDeltaTime;
-        if (awaitingSquadDestination && !promptFadingOut && promptAutoFadeSeconds > 0f)
+        if (awaitingInfectionTargetSelection && !awaitingSquadDestination)
+            awaitingInfectionTargetSelection = false;
+
+        float gameplayDeltaTime = GameplaySpeed.DeltaTime;
+        if (awaitingSquadDestination && !awaitingInfectionTargetSelection && !promptFadingOut && promptAutoFadeSeconds > 0f)
         {
-            promptAutoFadeRemaining = Mathf.Max(0f, promptAutoFadeRemaining - unscaledDeltaTime);
+            promptAutoFadeRemaining = Mathf.Max(0f, promptAutoFadeRemaining - gameplayDeltaTime);
             if (promptAutoFadeRemaining <= 0f)
             {
                 promptFadeStartAlpha = promptBannerCanvasGroup.alpha;
@@ -547,7 +555,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             }
         }
 
-        promptFadeElapsed = Mathf.Min(SquadPromptFadeDuration, promptFadeElapsed + unscaledDeltaTime);
+        promptFadeElapsed = Mathf.Min(SquadPromptFadeDuration, promptFadeElapsed + gameplayDeltaTime);
         float fadeProgress = SquadPromptFadeDuration > 0f ? promptFadeElapsed / SquadPromptFadeDuration : 1f;
         promptBannerCanvasGroup.alpha = Mathf.Lerp(promptFadeStartAlpha, promptFadingOut ? 0f : 1f, fadeProgress);
         if (promptFadingOut && fadeProgress >= 1f)
@@ -608,6 +616,47 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void HandleMapClick()
     {
+        if (awaitingInfectionTargetSelection && Input.GetMouseButtonDown(0))
+        {
+            bool clickedActiveInfectionDiamond = false;
+            if (EventSystem.current != null)
+            {
+                PointerEventData pointerData = new PointerEventData(EventSystem.current)
+                {
+                    position = Input.mousePosition
+                };
+                List<RaycastResult> raycastResults = new List<RaycastResult>();
+                EventSystem.current.RaycastAll(pointerData, raycastResults);
+                foreach (RaycastResult result in raycastResults)
+                {
+                    if (result.gameObject == null)
+                        continue;
+
+                    foreach (InfectionMarker marker in activeInfectionMarkers)
+                    {
+                        if (marker != null && !marker.isRemoving && marker.markerButton != null &&
+                            (result.gameObject == marker.markerButton.gameObject ||
+                             result.gameObject.transform.IsChildOf(marker.markerButton.transform)))
+                        {
+                            clickedActiveInfectionDiamond = true;
+                            break;
+                        }
+                    }
+
+                    if (clickedActiveInfectionDiamond)
+                        break;
+                }
+            }
+
+            if (clickedActiveInfectionDiamond)
+                return;
+
+            awaitingInfectionTargetSelection = false;
+            awaitingSquadDestination = false;
+            FadeOutSquadPrompt();
+            return;
+        }
+
         if (!enableWbcDispatch || idleSquad == null || !Input.GetMouseButtonDown(0) || PointerIsOverClickableUi())
             return;
 
@@ -884,8 +933,32 @@ public sealed class InfectionSpawner : MonoBehaviour
                 cameraScript.SelectLayer(2);
         }
 
-        awaitingSquadDestination = true;
-        ShowSquadPrompt();
+        if (useLegacySelectFirst && selectedMarker != null && !selectedMarker.isRemoving && activeInfectionMarkers.Contains(selectedMarker))
+        {
+            awaitingSquadDestination = false;
+            awaitingInfectionTargetSelection = false;
+            Vector3 infectionWorldPosition = GetInfectionWorldPosition(selectedMarker);
+            DispatchIdleSquadTo(infectionWorldPosition, selectedMarker, selectedMarker.bodyPartName);
+        }
+        else
+        {
+            if (!useLegacySelectFirst && selectedMarker != null)
+            {
+                selectedMarker.selectionOutline.enabled = false;
+                if (selectedMarker.dispatchButton != null)
+                    selectedMarker.dispatchButton.gameObject.SetActive(false);
+                selectedMarker = null;
+            }
+
+            awaitingSquadDestination = true;
+            awaitingInfectionTargetSelection = !useLegacySelectFirst;
+            if (promptBannerLabel != null)
+                promptBannerLabel.text = awaitingInfectionTargetSelection
+                    ? "Select an infection to deploy."
+                    : "Select a destination on the map or an infection to send your WBC squad.";
+            ShowSquadPrompt();
+        }
+
         RefreshWbcSquadHud();
     }
 
@@ -1031,6 +1104,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 {
                     squad.arrivalMessageLogged = true;
                     LogWbcSquadMessage($"WBC squad arrived at {squad.infectionTarget.infection.displayName}.", ConsoleLogUI.LogType.Success);
+                    BeginInfectionResolution(squad.infectionTarget);
                 }
                 if (squad.attackOnArrival)
                     squad.combatStarted = true;
@@ -2212,7 +2286,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void SelectMarker(InfectionMarker marker)
     {
-        if (marker == null || marker.isRemoving)
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             return;
 
         if (selectedMarker != null && selectedMarker != marker)
@@ -2232,6 +2306,20 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (!enableWbcDispatch)
             return;
+
+        if (awaitingInfectionTargetSelection)
+        {
+            if (idleSquad == null)
+                return;
+
+            Vector3 targetPosition = GetInfectionWorldPosition(marker);
+            if (DispatchIdleSquadTo(targetPosition, marker, marker.bodyPartName))
+                awaitingInfectionTargetSelection = false;
+            return;
+        }
+
+        if (!useLegacySelectFirst)
+            return;
         if (idleSquad == null)
         {
             LogWbcSquadMessage("Spawn WBCs first.", ConsoleLogUI.LogType.Warning);
@@ -2240,6 +2328,16 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         Vector3 infectionWorldPosition = GetInfectionWorldPosition(marker);
         DispatchIdleSquadTo(infectionWorldPosition, marker, marker.bodyPartName);
+    }
+
+    public void RequestDispatchToInfection(InfectionMarker marker)
+    {
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            return;
+        if (!awaitingInfectionTargetSelection || idleSquad == null)
+            return;
+
+        SelectMarker(marker);
     }
 
     private void LogSelectedInfection(InfectionMarker marker)

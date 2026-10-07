@@ -5321,6 +5321,7 @@ MonoBehaviour:
   maximumMarkerRowWidth: 220
   markerSpacing: 8
   enableWbcDispatch: 1
+  useLegacySelectFirst: 0
   maxActiveWbcs: 5
   perWbcCooldownSeconds: 20
   dispatchArrivalDelaySeconds: 2
@@ -5329,10 +5330,19 @@ MonoBehaviour:
   dispatchAvatarSize: {x: 38, y: 38}
   dispatchAvatarOffset: {x: 0, y: -44}
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
+  useFixedDurationClash: 0
   bacterialClashDurationSeconds: 4
   mildBacterialWellnessGain: 2
   moderateBacterialWellnessGain: 4
   severeBacterialWellnessGain: 6
+  wellnessGainOnResolve: 5
+  mildDailyInfectionWellnessCost: 1
+  moderateDailyInfectionWellnessCost: 2
+  severeDailyInfectionWellnessCost: 4
+  additionalUnresolvedDailyWellnessCost: 2
+  wellnessLossOnSquadWipe: 3
+  debugWellnessLossKey: 108
+  debugWellnessLossAmount: 10
   containedSeverityDropSteps: 1
   containedSelfResolveDays: 2
   containedDailyWellnessCost: 1
@@ -5351,6 +5361,10 @@ MonoBehaviour:
   squadLifetimeSeconds: 20
   dispatchNavMeshSampleRadius: 25
   dispatchArrivalRadius: 0.5
+  combatDetectionRange: 8
+  combatMeleeRange: 1.5
+  wbcCombatMoveSpeed: 3.5
+  verboseCombatLogging: 0
   infectionAnchorMatchRadius: 2
   destinationHoverColor: {r: 0.15, g: 1, b: 0.9, a: 0.85}
   destinationHoverRadius: 1
