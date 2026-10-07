@@ -98,6 +98,21 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private Vector2 dispatchAvatarOffset = DefaultDispatchAvatarOffset;
     [SerializeField] private Color dispatchUnavailableColor = DefaultDispatchUnavailableColor;
 
+    [Header("Infection Resolution")]
+    [SerializeField, Min(0f)] private float bacterialClashDurationSeconds = 4f;
+    [SerializeField] private float mildBacterialWellnessGain = 2f;
+    [SerializeField] private float moderateBacterialWellnessGain = 4f;
+    [SerializeField] private float severeBacterialWellnessGain = 6f;
+    [SerializeField, Min(1)] private int containedSeverityDropSteps = 1;
+    [SerializeField, Min(1)] private int containedSelfResolveDays = 2;
+    [SerializeField, Min(0f)] private float containedDailyWellnessCost = 1f;
+    [SerializeField] private Color containedMarkerColor = new Color(0.45f, 0.5f, 0.55f, 1f);
+
+    [Header("Infection Threat Visuals")]
+    [SerializeField, Min(0)] private int threatVisualSpawnCount = 5;
+    [SerializeField, Min(0f)] private float threatVisualClusterRadius = 0.5f;
+    [SerializeField] private GameObject bacteriaPrefab;
+
     [Header("WBC Squad Dispatch")]
     [SerializeField] private CirculatorySystemController circulatorySystemController;
     [SerializeField] private CameraScript cameraScript;
@@ -106,8 +121,10 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private bool switchToCirculatoryOnSquadSpawn = true;
     [SerializeField] private Color idleSquadHighlightColor = new Color(0f, 1f, 1f, 1f);
     [SerializeField, Min(0f)] private float headshotCooldownSeconds = 5f;
+    [SerializeField] private bool keepAliveUntilResolved = true;
     [SerializeField, Min(0.1f)] private float squadLifetimeSeconds = 20f;
     [SerializeField, Min(0.1f)] private float dispatchNavMeshSampleRadius = 25f;
+    [SerializeField, Min(0.1f)] private float dispatchArrivalRadius = 0.5f;
     [SerializeField, Min(0f)] private float infectionAnchorMatchRadius = 2f;
     [SerializeField] private Color destinationHoverColor = new Color(0.15f, 1f, 0.9f, 0.85f);
     [SerializeField, Min(0.1f)] private float destinationHoverRadius = 1f;
@@ -167,6 +184,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         public float animationElapsed;
         public int spawnOrder;
         public bool isRemoving;
+        public bool isContained;
+        public bool resolutionPending;
+        public int containedResolveDay;
+        public Vector3 worldPosition;
+        public int vesselSpawnPointIndex;
+        public readonly List<GameObject> threatVisuals = new List<GameObject>();
+        public bool threatVisualsDespawned;
     }
 
     private sealed class WbcDispatchSlot
@@ -179,6 +203,10 @@ public sealed class InfectionSpawner : MonoBehaviour
         public GameObject[] units;
         public float lifetimeRemaining;
         public bool attackOnArrival;
+        public InfectionMarker infectionTarget;
+        public bool resolutionTriggered;
+        public bool arrivalMessageLogged;
+        public bool pathFailureLogged;
         public readonly HashSet<GameObject> arrivedUnits = new HashSet<GameObject>();
     }
 
@@ -236,6 +264,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private void Update()
     {
         UpdateInfectionMarkerAnimations();
+        UpdateInfectionThreatVisuals();
         UpdateWbcCooldowns();
         UpdateIdleAndDispatchedSquads();
         HandleSquadPromptCancellation();
@@ -264,6 +293,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         infectionAnchorMatchRadius = Mathf.Max(0f, infectionAnchorMatchRadius);
 
         dispatchNavMeshSampleRadius = Mathf.Max(0.1f, dispatchNavMeshSampleRadius);
+        dispatchArrivalRadius = Mathf.Max(0.1f, dispatchArrivalRadius);
         ClampMarkerSize(ref mildMarkerSize);
         ClampMarkerSize(ref moderateMarkerSize);
         ClampMarkerSize(ref severeMarkerSize);
@@ -271,6 +301,15 @@ public sealed class InfectionSpawner : MonoBehaviour
         dispatchAvatarSize.y = Mathf.Max(1f, dispatchAvatarSize.y);
         perWbcCooldownSeconds = Mathf.Max(0.1f, perWbcCooldownSeconds);
         dispatchArrivalDelaySeconds = Mathf.Max(0f, dispatchArrivalDelaySeconds);
+        bacterialClashDurationSeconds = Mathf.Max(0f, bacterialClashDurationSeconds);
+        mildBacterialWellnessGain = Mathf.Max(0f, mildBacterialWellnessGain);
+        moderateBacterialWellnessGain = Mathf.Max(0f, moderateBacterialWellnessGain);
+        severeBacterialWellnessGain = Mathf.Max(0f, severeBacterialWellnessGain);
+        containedSeverityDropSteps = Mathf.Max(1, containedSeverityDropSteps);
+        containedSelfResolveDays = Mathf.Max(1, containedSelfResolveDays);
+        containedDailyWellnessCost = Mathf.Max(0f, containedDailyWellnessCost);
+        threatVisualSpawnCount = Mathf.Max(0, threatVisualSpawnCount);
+        threatVisualClusterRadius = Mathf.Max(0f, threatVisualClusterRadius);
         maximumMarkerRowWidth = Mathf.Max(severeMarkerSize.x, maximumMarkerRowWidth);
         promptAutoFadeSeconds = Mathf.Max(0f, promptAutoFadeSeconds);
         if (!Application.isPlaying)
@@ -739,6 +778,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!enableWbcDispatch || idleSquad != null || headshotCooldownRemaining > 0f)
             return;
 
+        int activeWbcCount = CountActiveWbcs() + CountActiveSquadUnits();
+        if (activeWbcCount + squadMemberCount > maxActiveWbcs)
+        {
+            LogWbcSquadMessage($"WBC dispatch unavailable: {activeWbcCount}/{maxActiveWbcs} active.", ConsoleLogUI.LogType.Warning);
+            return;
+        }
+
         if (circulatorySystemController == null)
             circulatorySystemController = FindFirstObjectByType<CirculatorySystemController>();
         if (circulatorySystemController == null)
@@ -812,7 +858,10 @@ public sealed class InfectionSpawner : MonoBehaviour
                 areaMask = agent.areaMask
             };
             if (!NavMesh.SamplePosition(destination, out NavMeshHit hit, dispatchNavMeshSampleRadius, filter))
+            {
+                LogWbcDispatchPathFailure(infectionTarget, moveLocation);
                 return false;
+            }
 
             squadAgents.Add(agent);
             sampledDestinations.Add(hit.position);
@@ -830,6 +879,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                     squadAgents[rollbackIndex].ResetPath();
                     squadAgents[rollbackIndex].isStopped = true;
                 }
+                LogWbcDispatchPathFailure(infectionTarget, moveLocation);
                 return false;
             }
             destinationCount++;
@@ -846,7 +896,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         {
             units = idleSquad,
             lifetimeRemaining = squadLifetimeSeconds,
-            attackOnArrival = infectionTarget != null
+            attackOnArrival = infectionTarget != null,
+            infectionTarget = infectionTarget
         });
         idleSquad = null;
         awaitingSquadDestination = false;
@@ -861,6 +912,15 @@ public sealed class InfectionSpawner : MonoBehaviour
         RefreshWbcSquadHud();
         return true;
     }
+    private void LogWbcDispatchPathFailure(InfectionMarker infectionTarget, string moveLocation)
+    {
+        string destinationName = infectionTarget != null && infectionTarget.infection != null
+            ? infectionTarget.infection.displayName
+            : moveLocation;
+        LogWbcSquadMessage($"WBC squad could not path to {destinationName}.", ConsoleLogUI.LogType.Warning);
+    }
+
+
 
     private void HandleSquadPromptCancellation()
     {
@@ -883,25 +943,144 @@ public sealed class InfectionSpawner : MonoBehaviour
         for (int squadIndex = dispatchedWbcSquads.Count - 1; squadIndex >= 0; squadIndex--)
         {
             DispatchedWbcSquad squad = dispatchedWbcSquads[squadIndex];
-            squad.lifetimeRemaining -= gameplayDeltaTime;
+            if (!keepAliveUntilResolved)
+                squad.lifetimeRemaining -= gameplayDeltaTime;
             foreach (GameObject unit in squad.units)
             {
                 if (unit == null || !unit.activeInHierarchy || squad.arrivedUnits.Contains(unit))
                     continue;
 
                 NavMeshAgent agent = unit.GetComponent<NavMeshAgent>();
-                if (agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending || !agent.hasPath)
+                if (agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending)
                     continue;
-                if (agent.pathStatus != NavMeshPathStatus.PathComplete || agent.remainingDistance > Mathf.Max(agent.stoppingDistance, 0.2f))
+                if (!agent.hasPath || agent.pathStatus != NavMeshPathStatus.PathComplete)
+                {
+                    if (!squad.pathFailureLogged)
+                    {
+                        squad.pathFailureLogged = true;
+                        LogWbcDispatchPathFailure(squad.infectionTarget, squad.infectionTarget != null ? squad.infectionTarget.bodyPartName : "map");
+                    }
+                    continue;
+                }
+                if (agent.remainingDistance > Mathf.Max(agent.stoppingDistance, dispatchArrivalRadius))
                     continue;
 
                 agent.isStopped = true;
                 PlaySquadArrivalAnimation(unit, squad.attackOnArrival);
                 squad.arrivedUnits.Add(unit);
+                if (!squad.arrivalMessageLogged && squad.infectionTarget != null && squad.infectionTarget.infection != null)
+                {
+                    squad.arrivalMessageLogged = true;
+                    LogWbcSquadMessage($"WBC squad arrived at {squad.infectionTarget.infection.displayName}.", ConsoleLogUI.LogType.Success);
+                }
+                if (squad.attackOnArrival && !squad.resolutionTriggered)
+                {
+                    squad.resolutionTriggered = true;
+                    BeginInfectionResolution(squad.infectionTarget);
+                }
             }
 
-            if (squad.lifetimeRemaining <= 0f)
+            if (keepAliveUntilResolved && squad.infectionTarget != null && squad.infectionTarget.isRemoving)
+            {
                 DespawnWbcSquad(squadIndex);
+                continue;
+            }
+
+            if (!keepAliveUntilResolved && squad.lifetimeRemaining <= 0f)
+                DespawnWbcSquad(squadIndex);
+        }
+    }
+
+    private void BeginInfectionResolution(InfectionMarker marker)
+    {
+        if (marker == null || marker.isRemoving || marker.isContained || marker.resolutionPending || marker.infection == null)
+            return;
+        if (marker.infection.correctResponder != InfectionCorrectResponder.WBC)
+            return;
+
+        if (marker.infection.pathogenType == InfectionPathogenType.Bacterial)
+        {
+            marker.resolutionPending = true;
+            StartCoroutine(ResolveBacterialInfection(marker));
+            return;
+        }
+
+        if (marker.infection.pathogenType != InfectionPathogenType.Viral)
+            return;
+
+        marker.infection = CloneInfectionData(marker.infection);
+        int reducedSeverity = Mathf.Max((int)InfectionSeverityStage.Mild,
+            (int)marker.infection.severityStage - containedSeverityDropSteps);
+        marker.infection.severityStage = (InfectionSeverityStage)reducedSeverity;
+        marker.isContained = true;
+        marker.containedResolveDay = (dayCounter != null ? dayCounter.CurrentDay : 0) + containedSelfResolveDays;
+        marker.markerImage.color = containedMarkerColor;
+        marker.markerSize = GetMarkerSize(marker.infection.severityStage);
+        marker.markerRect.sizeDelta = marker.markerSize;
+        RepositionInfectionDiamonds();
+        LogWbcSquadMessage($"WBC contained {marker.infection.displayName}, but the virus is hiding inside cells. Adaptive response is building.", ConsoleLogUI.LogType.Warning);
+    }
+
+    private IEnumerator ResolveBacterialInfection(InfectionMarker marker)
+    {
+        yield return GameplaySpeed.WaitForGameplaySeconds(bacterialClashDurationSeconds);
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            yield break;
+
+        float wellnessGain = GetBacterialWellnessGain(marker.infection.severityStage);
+        if (WellnessManager.Instance != null)
+            WellnessManager.Instance.ApplyInfectionResolutionDelta($"WBC cleared {marker.infection.displayName}", wellnessGain);
+
+        LogWbcSquadMessage($"Phagocytosis: WBC engulfed {marker.infection.displayName}. Infection cleared.", ConsoleLogUI.LogType.Success);
+        BeginRemovingInfectionMarker(marker);
+    }
+
+    private float GetBacterialWellnessGain(InfectionSeverityStage severityStage)
+    {
+        switch (severityStage)
+        {
+            case InfectionSeverityStage.Moderate:
+                return moderateBacterialWellnessGain;
+            case InfectionSeverityStage.Severe:
+                return severeBacterialWellnessGain;
+            default:
+                return mildBacterialWellnessGain;
+        }
+    }
+
+    private static InfectionData CloneInfectionData(InfectionData source)
+    {
+        return new InfectionData
+        {
+            displayName = source.displayName,
+            pathogenType = source.pathogenType,
+            severityStage = source.severityStage,
+            entryCause = source.entryCause,
+            correctResponder = source.correctResponder,
+            preferredBodyParts = source.preferredBodyParts != null
+                ? new List<InfectionBodyPartGroup>(source.preferredBodyParts)
+                : new List<InfectionBodyPartGroup>(),
+            daysUntreated = source.daysUntreated
+        };
+    }
+
+    private void UpdateContainedInfections(int currentDay)
+    {
+        for (int index = activeInfectionMarkers.Count - 1; index >= 0; index--)
+        {
+            InfectionMarker marker = activeInfectionMarkers[index];
+            if (marker == null || !marker.isContained || marker.isRemoving)
+                continue;
+
+            if (WellnessManager.Instance != null)
+                WellnessManager.Instance.ApplyInfectionResolutionDelta($"Contained infection {marker.infection.displayName}", -containedDailyWellnessCost);
+
+            if (currentDay < marker.containedResolveDay)
+                continue;
+
+            string infectionName = marker.infection.displayName;
+            BeginRemovingInfectionMarker(marker);
+            LogWbcSquadMessage($"Adaptive response cleared {infectionName}.", ConsoleLogUI.LogType.Success);
         }
     }
 
@@ -1107,26 +1286,35 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (marker.infection.displayName != displayName || marker.bodyPartGroup != bodyPartGroup || marker.isRemoving)
                 continue;
 
-            marker.isRemoving = true;
-            marker.animationElapsed = 0f;
-            marker.markerButton.interactable = false;
-            marker.markerImage.raycastTarget = false;
-            marker.selectionOutline.enabled = false;
-            activeInfectionMarkers.RemoveAt(index);
-            fadingInfectionMarkers.Add(marker);
-            if (selectedMarker == marker)
-                selectedMarker = null;
-            RepositionInfectionDiamonds();
+            BeginRemovingInfectionMarker(marker);
             return true;
         }
 
         return false;
     }
 
+    private void BeginRemovingInfectionMarker(InfectionMarker marker)
+    {
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            return;
+
+        marker.isRemoving = true;
+        marker.animationElapsed = 0f;
+        marker.markerButton.interactable = false;
+        marker.markerImage.raycastTarget = false;
+        marker.selectionOutline.enabled = false;
+        activeInfectionMarkers.Remove(marker);
+        fadingInfectionMarkers.Add(marker);
+        if (selectedMarker == marker)
+            selectedMarker = null;
+        RepositionInfectionDiamonds();
+    }
+
 
 
     private void HandleDayAdvanced(int currentDay)
     {
+        UpdateContainedInfections(currentDay);
         if (!spawnOnDayAdvance)
             return;
 
@@ -1232,6 +1420,35 @@ public sealed class InfectionSpawner : MonoBehaviour
         return validMappings.Count == 0 ? null : validMappings[UnityEngine.Random.Range(0, validMappings.Count)];
     }
 
+    private Vector3 ResolveInitialInfectionWorldPosition(InfectionBodyPartButtonReference bodyPartButton, out int spawnPointIndex)
+    {
+        spawnPointIndex = -1;
+        VesselSpawnPointCache vesselSpawnPointCache = FindFirstObjectByType<VesselSpawnPointCache>();
+        if (vesselSpawnPointCache == null || vesselSpawnPointCache.WorldSpawnPoints.Count == 0)
+            return GetBodyPartAnchorPosition(bodyPartButton);
+
+        IReadOnlyList<Vector3> spawnPoints = vesselSpawnPointCache.WorldSpawnPoints;
+        spawnPointIndex = UnityEngine.Random.Range(0, spawnPoints.Count);
+        return spawnPoints[spawnPointIndex];
+    }
+
+    private Vector3 GetInfectionWorldPosition(InfectionMarker marker)
+    {
+        if (marker == null)
+            return GetSquadReferencePosition();
+
+        VesselSpawnPointCache vesselSpawnPointCache = FindFirstObjectByType<VesselSpawnPointCache>();
+        if (vesselSpawnPointCache != null && marker.vesselSpawnPointIndex >= 0)
+        {
+            IReadOnlyList<Vector3> spawnPoints = vesselSpawnPointCache.WorldSpawnPoints;
+            if (marker.vesselSpawnPointIndex < spawnPoints.Count)
+                marker.worldPosition = spawnPoints[marker.vesselSpawnPointIndex];
+        }
+
+        return marker.worldPosition;
+    }
+
+
     private void SpawnMarker(InfectionData infection, InfectionBodyPartButtonReference bodyPartButton)
     {
         if (hudCanvas == null || infectionRowRect == null)
@@ -1243,6 +1460,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         GameObject markerObject = new GameObject($"Infection Diamond - {infection.displayName}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(Outline), typeof(CanvasGroup));
         markerObject.transform.SetParent(infectionRowRect, false);
         markerObject.transform.SetAsLastSibling();
+        Vector3 infectionWorldPosition = ResolveInitialInfectionWorldPosition(bodyPartButton, out int vesselSpawnPointIndex);
 
         InfectionMarker marker = new InfectionMarker
         {
@@ -1250,6 +1468,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             bodyPartMapping = bodyPartButton,
             bodyPartName = GetBodyPartDisplayName(bodyPartButton.button),
             bodyPartGroup = bodyPartButton.bodyPartGroup,
+            worldPosition = infectionWorldPosition,
+            vesselSpawnPointIndex = vesselSpawnPointIndex,
             markerButton = markerObject.GetComponent<Button>(),
             markerImage = markerObject.GetComponent<Image>(),
             selectionOutline = markerObject.GetComponent<Outline>(),
@@ -1282,6 +1502,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         marker.markerButton.onClick.AddListener(() => SelectMarker(marker));
 
         activeInfectionMarkers.Add(marker);
+        SpawnInfectionThreatVisuals(marker);
         if (bodyPartButton.button != null)
         {
             if (!markersByBodyPartButton.TryGetValue(bodyPartButton.button, out List<InfectionMarker> markers))
@@ -1297,6 +1518,71 @@ public sealed class InfectionSpawner : MonoBehaviour
         RepositionInfectionDiamonds();
         infectionRowRect.gameObject.SetActive(true);
     }
+    private void SpawnInfectionThreatVisuals(InfectionMarker marker)
+    {
+        if (marker == null || threatVisualSpawnCount <= 0)
+            return;
+
+        if (bacteriaPrefab == null)
+        {
+            Debug.LogWarning($"[InfectionSpawner] Bacteria prefab is missing; skipping threat visuals for {marker.infection.displayName}.", this);
+            return;
+        }
+
+        for (int index = 0; index < threatVisualSpawnCount; index++)
+        {
+            Vector3 offset = UnityEngine.Random.insideUnitSphere * threatVisualClusterRadius;
+            GameObject visual = Instantiate(bacteriaPrefab, marker.worldPosition + offset, Quaternion.identity);
+
+            BacteriaAgent bacteriaAgent = visual.GetComponentInChildren<BacteriaAgent>(true);
+            if (bacteriaAgent != null)
+                bacteriaAgent.enabled = false;
+
+            NavMeshAgent navMeshAgent = visual.GetComponentInChildren<NavMeshAgent>(true);
+            if (navMeshAgent != null)
+                navMeshAgent.enabled = false;
+
+            Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
+            foreach (Collider visualCollider in colliders)
+            {
+                if (visualCollider != null)
+                    visualCollider.enabled = false;
+            }
+
+            marker.threatVisuals.Add(visual);
+        }
+    }
+
+    private void UpdateInfectionThreatVisuals()
+    {
+        foreach (InfectionMarker marker in activeInfectionMarkers)
+        {
+            if (marker != null && marker.isContained)
+                DespawnInfectionThreatVisuals(marker);
+        }
+
+        foreach (InfectionMarker marker in fadingInfectionMarkers)
+        {
+            if (marker != null && marker.isRemoving)
+                DespawnInfectionThreatVisuals(marker);
+        }
+    }
+
+    private void DespawnInfectionThreatVisuals(InfectionMarker marker)
+    {
+        if (marker == null || marker.threatVisualsDespawned)
+            return;
+
+        marker.threatVisualsDespawned = true;
+        foreach (GameObject visual in marker.threatVisuals)
+        {
+            if (visual != null)
+                Destroy(visual);
+        }
+        marker.threatVisuals.Clear();
+    }
+
+
 
     private void CreateDispatchAvatar(InfectionMarker marker)
     {
@@ -1469,9 +1755,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        Vector3 anchorPoint = GetBodyPartAnchorPosition(marker.bodyPartMapping);
-        if (!DispatchIdleSquadTo(anchorPoint, marker, marker.bodyPartName))
-            LogWbcSquadMessage("WBC squad could not reach the infection anchor.", ConsoleLogUI.LogType.Warning);
+        Vector3 infectionWorldPosition = GetInfectionWorldPosition(marker);
+        DispatchIdleSquadTo(infectionWorldPosition, marker, marker.bodyPartName);
     }
 
     private void LogSelectedInfection(InfectionMarker marker)
@@ -1490,7 +1775,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         EnsureDispatchSlots();
         int availableSlotIndex = FindAvailableDispatchSlot();
-        if (availableSlotIndex < 0)
+        if (CountActiveWbcs() + CountActiveSquadUnits() >= maxActiveWbcs || availableSlotIndex < 0)
         {
             string capacityMessage = $"WBC dispatch unavailable: {CountActiveWbcs()}/{maxActiveWbcs} active.";
             Debug.Log(capacityMessage);
@@ -1560,6 +1845,33 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         return activeCount;
+    }
+
+    private int CountActiveSquadUnits()
+    {
+        HashSet<GameObject> activeUnits = new HashSet<GameObject>();
+        if (idleSquad != null)
+        {
+            foreach (GameObject unit in idleSquad)
+            {
+                if (unit != null && unit.activeInHierarchy)
+                    activeUnits.Add(unit);
+            }
+        }
+
+        foreach (DispatchedWbcSquad squad in dispatchedWbcSquads)
+        {
+            if (squad == null || squad.units == null)
+                continue;
+
+            foreach (GameObject unit in squad.units)
+            {
+                if (unit != null && unit.activeInHierarchy)
+                    activeUnits.Add(unit);
+            }
+        }
+
+        return activeUnits.Count;
     }
 
     private void RefreshDispatchAvatar()

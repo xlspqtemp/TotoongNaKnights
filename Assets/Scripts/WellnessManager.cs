@@ -398,6 +398,15 @@ public class WellnessManager : MonoBehaviour
             : WellnessRunResult.Loss);
     }
 
+    /// <summary>Applies a wellness delta from infection resolution using the existing clamp and run-ending flow.</summary>
+    public void ApplyInfectionResolutionDelta(string source, float requestedDelta)
+    {
+        float previousWellness = currentWellness;
+        ApplyWellnessDelta($"Infection resolution: {source}", requestedDelta);
+        if (previousWellness > 0f && currentWellness <= 0f)
+            Debug.Log("GAME OVER");
+    }
+
     private void ApplyWellnessDelta(string eventId, float requestedDelta, bool showChangeIndicator = true)
     {
         if (runHasEnded)

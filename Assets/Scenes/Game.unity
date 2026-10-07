@@ -5329,6 +5329,17 @@ MonoBehaviour:
   dispatchAvatarSize: {x: 38, y: 38}
   dispatchAvatarOffset: {x: 0, y: -44}
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
+  bacterialClashDurationSeconds: 4
+  mildBacterialWellnessGain: 2
+  moderateBacterialWellnessGain: 4
+  severeBacterialWellnessGain: 6
+  containedSeverityDropSteps: 1
+  containedSelfResolveDays: 2
+  containedDailyWellnessCost: 1
+  containedMarkerColor: {r: 0.45, g: 0.5, b: 0.55, a: 1}
+  threatVisualSpawnCount: 5
+  threatVisualClusterRadius: 0.5
+  bacteriaPrefab: {fileID: 5576326472506396336, guid: be95875bb68857f45a5e12e50d9c4c1e, type: 3}
   circulatorySystemController: {fileID: 2007297928}
   cameraScript: {fileID: 2766709378708606964}
   squadSpawnAnchor: {fileID: 703376539}
@@ -5336,8 +5347,10 @@ MonoBehaviour:
   switchToCirculatoryOnSquadSpawn: 1
   idleSquadHighlightColor: {r: 0, g: 1, b: 1, a: 1}
   headshotCooldownSeconds: 5
+  keepAliveUntilResolved: 1
   squadLifetimeSeconds: 20
   dispatchNavMeshSampleRadius: 25
+  dispatchArrivalRadius: 0.5
   infectionAnchorMatchRadius: 2
   destinationHoverColor: {r: 0.15, g: 1, b: 0.9, a: 0.85}
   destinationHoverRadius: 1
