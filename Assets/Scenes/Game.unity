@@ -11761,6 +11761,7 @@ GameObject:
   - component: {fileID: 495280305}
   - component: {fileID: 495280307}
   - component: {fileID: 495280306}
+  - component: {fileID: 495280308}
   m_Layer: 0
   m_Name: Layer - Circulatory System
   m_TagString: Untagged
@@ -11841,6 +11842,29 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 495280304}
   m_Mesh: {fileID: -153830957423991239, guid: 872a5a8707551e2428df54f4d61e1aa9, type: 3}
+--- !u!114 &495280308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 495280304}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c85726c0f0190b948bbdf8cf6ed6a4da, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VesselSpawnPointCache
+  vesselMeshFilter: {fileID: 495280307}
+  leftFootAnchor: {fileID: 458399335}
+  rightFootAnchor: {fileID: 2073190144}
+  leftHandAnchor: {fileID: 255493466}
+  rightHandAnchor: {fileID: 1602479650}
+  headAnchor: {fileID: 106749845}
+  candidateSampleCount: 1000
+  keptPointCount: 40
+  minimumPointDistance: 1.5
+  surfaceInset: 0.02
+  showGizmos: 1
 --- !u!1 &496158865
 GameObject:
   m_ObjectHideFlags: 0
