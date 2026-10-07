@@ -11,6 +11,8 @@ public sealed class UnitSelectionController : MonoBehaviour
     private static readonly Color AccentColor = new Color(0.1f, 0.75f, 0.88f, 1f);
     private const float PanelWidth = 210f;
     private const float PanelHeight = 64f;
+    private const float InfoLineHeight = 20f;
+    private const float HealthUnitScreenSelectRadius = 36f;
     private const float ScreenPadding = 24f;
 
     [SerializeField] private Camera targetCamera;
@@ -20,6 +22,7 @@ public sealed class UnitSelectionController : MonoBehaviour
     private RectTransform infoPanelRect;
     private GameObject infoPanelObject;
     private SelectableUnit selectedUnit;
+    private Health selectedHealth;
 
     private void Start()
     {
@@ -31,13 +34,15 @@ public sealed class UnitSelectionController : MonoBehaviour
             hudCanvas = FindFirstObjectByType<Canvas>();
 
         CreateInfoPanel();
-        SetSelectedUnit(null);
+        SetSelectedUnit(null, null);
     }
 
     private void Update()
     {
-        if (selectedUnit == null && infoPanelObject != null && infoPanelObject.activeSelf)
-            SetSelectedUnit(null);
+        if (selectedHealth != null && (selectedHealth.IsDead || !selectedHealth.gameObject.activeInHierarchy))
+            SetSelectedUnit(null, null);
+        else if (selectedUnit == null && selectedHealth == null && infoPanelObject != null && infoPanelObject.activeSelf)
+            SetSelectedUnit(null, null);
 
         if (!Input.GetMouseButtonDown(0))
             return;
@@ -59,22 +64,55 @@ public sealed class UnitSelectionController : MonoBehaviour
         foreach (RaycastHit hit in hits)
         {
             SelectableUnit unit = hit.collider.GetComponentInParent<SelectableUnit>();
-            if (unit == null)
+            Health health = hit.collider.GetComponentInParent<Health>();
+            if (unit == null && health == null)
                 continue;
 
-            Debug.Log($"Unit selection physics hit: collider='{hit.collider.gameObject.name}', selected unit='{unit.name}'.", this);
-            SetSelectedUnit(unit);
+            Debug.Log($"Unit selection physics hit: collider='{hit.collider.gameObject.name}', selected unit='{(unit != null ? unit.name : health.name)}'.", this);
+            SetSelectedUnit(unit, health);
+            return;
+        }
+
+        Health screenSelectedHealth = FindHealthUnitAtScreenPosition(Input.mousePosition);
+        if (screenSelectedHealth != null)
+        {
+            SetSelectedUnit(screenSelectedHealth.GetComponentInParent<SelectableUnit>(), screenSelectedHealth);
             return;
         }
 
         string firstPhysicsHit = hits.Length > 0 ? hits[0].collider.gameObject.name : "none";
         Debug.Log($"Unit selection found no unit; first physics hit='{firstPhysicsHit}'.", this);
-        SetSelectedUnit(null);
+        SetSelectedUnit(null, null);
+    }
+
+    private Health FindHealthUnitAtScreenPosition(Vector2 screenPosition)
+    {
+        Health nearestHealth = null;
+        float nearestDistanceSquared = HealthUnitScreenSelectRadius * HealthUnitScreenSelectRadius;
+        Health[] healthComponents = FindObjectsByType<Health>(FindObjectsSortMode.None);
+        foreach (Health health in healthComponents)
+        {
+            if (health == null || health.IsDead || !health.gameObject.activeInHierarchy)
+                continue;
+
+            Vector3 projectedPosition = targetCamera.WorldToScreenPoint(health.transform.position);
+            if (projectedPosition.z <= 0f)
+                continue;
+
+            float distanceSquared = ((Vector2)projectedPosition - screenPosition).sqrMagnitude;
+            if (distanceSquared >= nearestDistanceSquared)
+                continue;
+
+            nearestDistanceSquared = distanceSquared;
+            nearestHealth = health;
+        }
+
+        return nearestHealth;
     }
 
     private void LateUpdate()
     {
-        if (selectedUnit == null)
+        if (selectedUnit == null && selectedHealth == null)
         {
             if (infoPanelObject != null && infoPanelObject.activeSelf)
                 infoPanelObject.SetActive(false);
@@ -98,7 +136,7 @@ public sealed class UnitSelectionController : MonoBehaviour
         infoPanelRect = infoPanelObject.GetComponent<RectTransform>();
         infoPanelRect.anchorMin = new Vector2(0.5f, 0.5f);
         infoPanelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        infoPanelRect.pivot = new Vector2(0.5f, 0.5f);
+        infoPanelRect.pivot = new Vector2(0.5f, 1f);
         infoPanelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
 
         Image panelImage = infoPanelObject.GetComponent<Image>();
@@ -124,7 +162,7 @@ public sealed class UnitSelectionController : MonoBehaviour
         infoLabel.fontStyle = FontStyles.Bold;
         infoLabel.alignment = TextAlignmentOptions.MidlineLeft;
         infoLabel.color = AccentColor;
-        infoLabel.textWrappingMode = TextWrappingModes.NoWrap;
+        infoLabel.textWrappingMode = TextWrappingModes.Normal;
         infoLabel.raycastTarget = false;
         infoPanelObject.SetActive(false);
     }
@@ -171,7 +209,8 @@ public sealed class UnitSelectionController : MonoBehaviour
             return;
         }
 
-        Vector3 screenPosition = targetCamera.WorldToScreenPoint(selectedUnit.transform.position);
+        Transform selectedTransform = selectedHealth != null ? selectedHealth.transform : selectedUnit.transform;
+        Vector3 screenPosition = targetCamera.WorldToScreenPoint(selectedTransform.position);
         bool isInFrontOfCamera = screenPosition.z > 0f;
         bool isOnScreen = screenPosition.x >= 0f && screenPosition.x <= Screen.width
             && screenPosition.y >= 0f && screenPosition.y <= Screen.height;
@@ -191,32 +230,73 @@ public sealed class UnitSelectionController : MonoBehaviour
             return;
         }
 
-        localPosition.y += PanelHeight * 0.5f + ScreenPadding;
+        string panelText = BuildInfoText(out string unitType, out float attack, out float panelHeight);
+        infoPanelRect.sizeDelta = new Vector2(PanelWidth, panelHeight);
+        localPosition.y += PanelHeight + ScreenPadding;
         Rect canvasBounds = canvasRect.rect;
         float halfPanelWidth = PanelWidth * 0.5f;
-        float halfPanelHeight = PanelHeight * 0.5f;
         localPosition.x = Mathf.Clamp(localPosition.x, canvasBounds.xMin + halfPanelWidth + ScreenPadding, canvasBounds.xMax - halfPanelWidth - ScreenPadding);
-        localPosition.y = Mathf.Clamp(localPosition.y, canvasBounds.yMin + halfPanelHeight + ScreenPadding, canvasBounds.yMax - halfPanelHeight - ScreenPadding);
+        localPosition.y = Mathf.Clamp(localPosition.y, canvasBounds.yMin + panelHeight + ScreenPadding, canvasBounds.yMax - ScreenPadding);
 
         infoPanelRect.anchoredPosition = localPosition;
         if (!infoPanelObject.activeSelf)
             infoPanelObject.SetActive(true);
-        infoLabel.text = $"{selectedUnit.DisplayName}\nHP: {selectedUnit.CurrentHitPoints}";
+        infoLabel.text = panelText;
     }
 
-    private void SetSelectedUnit(SelectableUnit unit)
+    private string BuildInfoText(out string unitType, out float attack, out float panelHeight)
+    {
+        DifficultyStats stats = DifficultySettings.CurrentStats;
+        bool hasHealth = selectedHealth != null;
+        bool isPathogen = hasHealth && selectedHealth.IsPathogen;
+        string displayName = selectedUnit != null
+            ? selectedUnit.DisplayName
+            : (isPathogen ? $"{selectedHealth.PathogenType} pathogen" : selectedHealth.name);
+        unitType = isPathogen ? selectedHealth.PathogenType.ToString() : displayName;
+
+        float currentHp = hasHealth ? selectedHealth.CurrentHp : (selectedUnit != null ? selectedUnit.CurrentHitPoints : 0f);
+        float maxHp = hasHealth ? selectedHealth.MaxHp : currentHp;
+        List<string> lines = new List<string> { displayName };
+        if (isPathogen)
+            lines.Add($"Type: {selectedHealth.PathogenType}");
+        lines.Add($"HP: {currentHp:0.##} / {maxHp:0.##}");
+
+        bool isWbc = !isPathogen && string.Equals(displayName, "WBC", System.StringComparison.OrdinalIgnoreCase);
+        if (isPathogen)
+            attack = selectedHealth.PathogenType == InfectionPathogenType.Viral ? stats.virusAttack : stats.bacteriaAttack;
+        else
+            attack = isWbc ? stats.wbcAttack : 0f;
+        lines.Add($"Attack: {attack:0.##}");
+
+        if (isWbc)
+        {
+            float damageVsBacteria = stats.wbcAttack * stats.wbcDamageMultiplierVsBacteria;
+            float damageVsVirus = stats.wbcAttack * stats.wbcDamageMultiplierVsVirus;
+            lines.Add($"Dmg vs bacteria: {damageVsBacteria:0.##}, vs virus: {damageVsVirus:0.##}");
+        }
+
+        panelHeight = Mathf.Max(PanelHeight, (lines.Count + (isWbc ? 1 : 0)) * InfoLineHeight + 16f);
+        return string.Join("\n", lines);
+    }
+
+    private void SetSelectedUnit(SelectableUnit unit, Health health)
     {
         selectedUnit = unit;
+        selectedHealth = health != null ? health : (unit != null ? unit.GetComponent<Health>() : null);
         if (infoLabel == null || infoPanelObject == null)
             return;
 
-        if (selectedUnit == null)
+        if (selectedUnit == null && selectedHealth == null)
         {
             infoPanelObject.SetActive(false);
             return;
         }
 
-        infoLabel.text = $"{selectedUnit.DisplayName}\nHP: {selectedUnit.CurrentHitPoints}";
+        string panelText = BuildInfoText(out string unitType, out float attack, out _);
+        float currentHp = selectedHealth != null ? selectedHealth.CurrentHp : selectedUnit.CurrentHitPoints;
+        float maxHp = selectedHealth != null ? selectedHealth.MaxHp : currentHp;
+        Debug.Log($"Unit selected: type={unitType}, HP={currentHp:0.##}/{maxHp:0.##}, Attack={attack:0.##}.", this);
+        infoLabel.text = panelText;
         UpdateInfoPanelPosition();
     }
 }

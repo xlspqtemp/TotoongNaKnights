@@ -48,10 +48,13 @@ public class MainMenuController : MonoBehaviour
     private Button[] difficultyOptionButtons;
     private Image[] difficultyOptionBackgrounds;
     private Outline[] difficultyOptionOutlines;
+    [SerializeField] private DifficultyStats[] difficultyStats = DifficultySettings.CreateDefaultStats();
     private int selectedDifficultyIndex = 1;
 
     private void Start()
     {
+        DifficultySettings.ConfigureStats(difficultyStats);
+        selectedDifficultyIndex = DifficultySettings.SelectedDifficultyIndex;
         if (menuCanvas == null)
         {
             menuCanvas = FindFirstObjectByType<Canvas>();
@@ -211,6 +214,8 @@ public class MainMenuController : MonoBehaviour
             return;
 
         selectedDifficultyIndex = optionIndex;
+        DifficultySettings.ConfigureStats(difficultyStats);
+        DifficultySettings.SaveSelectedDifficulty(selectedDifficultyIndex);
         for (int index = 0; index < difficultyOptionButtons.Length; index++)
         {
             bool isSelected = index == selectedDifficultyIndex;
@@ -389,6 +394,8 @@ public class MainMenuController : MonoBehaviour
 
     private void StartGame()
     {
+        DifficultySettings.ConfigureStats(difficultyStats);
+        DifficultySettings.SaveSelectedDifficulty(selectedDifficultyIndex);
         SceneManager.LoadScene(GameSceneName);
     }
 }

@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 4665580912914315183}
   - component: {fileID: 2495892388120003379}
   - component: {fileID: 914929239451632061}
+  - component: {fileID: 8486798415795598404}
   m_Layer: 0
   m_Name: Neutrophil_1
   m_TagString: Cell
@@ -97,6 +98,24 @@ MonoBehaviour:
   damage: 1
   health: 30
   animator: {fileID: 0}
+--- !u!114 &8486798415795598404
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8808105530521002257}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba397fc8164b89e4fb3e5c812a44e3bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  currentHp: 100
+  maxHp: 100
+  showWorldHealthBar: 1
+  deathShrinkDuration: 0.3
+  healthBarLocalOffset: {x: 0, y: 1.2, z: 0}
+  healthBarSize: {x: 0.8, y: 0.08}
 --- !u!1001 &2728213568452771041
 PrefabInstance:
   m_ObjectHideFlags: 0

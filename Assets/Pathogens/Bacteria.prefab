@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 5955780947188706049}
   - component: {fileID: -7096931786881528841}
   - component: {fileID: 2007603894475072797}
+  - component: {fileID: 3437601670827521050}
   m_Layer: 0
   m_Name: Bacteria
   m_TagString: Untagged
@@ -148,3 +149,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95c13915aff3d14478ef19ebf48de5da, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BacteriaAgent
+--- !u!114 &3437601670827521050
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5576326472506396336}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba397fc8164b89e4fb3e5c812a44e3bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Health
+  currentHp: 100
+  maxHp: 100
+  showWorldHealthBar: 1
+  deathShrinkDuration: 0.3
+  healthBarLocalOffset: {x: 0, y: 1.2, z: 0}
+  healthBarSize: {x: 0.8, y: 0.08}
