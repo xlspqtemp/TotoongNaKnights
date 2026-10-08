@@ -48,3 +48,4 @@ MonoBehaviour:
   panelFont: {fileID: 11400000, guid: a163301ec43bd564c9d4f83efd5bb026, type: 2}
   whiteSwatchSprite: {fileID: 21300000, guid: 2d2029e87694f574dabc38ca99e99911, type: 3}
   failedColor: {r: 0.95, g: 0.2, b: 0.18, a: 0.98}
+  startCollapsed: 0

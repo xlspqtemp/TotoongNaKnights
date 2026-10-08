@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -20,10 +21,13 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private const string RowPrefabResourcePath = "PendingInfectionRow";
     private const string FontResourcePath = "BankGothicMediumSDF";
     private const string WhiteSwatchResourcePath = "HUDWhiteSwatch";
+    private const string CollapsedPreferenceKey = "pendingPanelCollapsed";
     private const float PanelWidth = 340f;
     private const float PanelHeight = 270f;
     private const float PanelRightInset = 18f;
     private const float PanelTopOffset = 92f;
+    private const float PanelSlideDuration = 0.25f;
+    private const float PanelHiddenOffset = PanelWidth + PanelRightInset;
     private const float HeaderHeight = 40f;
     private const float RowHeight = 38f;
     private const float RowSpacing = 6f;
@@ -43,6 +47,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     [SerializeField] private TMP_FontAsset panelFont;
     [SerializeField] private Sprite whiteSwatchSprite;
     [SerializeField] private Color failedColor = new Color(0.95f, 0.2f, 0.18f, 0.98f);
+    [SerializeField] private bool startCollapsed = false;
 
     private sealed class RowView
     {
@@ -63,10 +68,15 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     }
 
     private readonly List<RowView> rows = new List<RowView>();
+    private RectTransform panelContainerRect;
     private RectTransform panelRect;
     private RectTransform contentRect;
     private Canvas rootCanvas;
+    private Button collapseButton;
+    private TextMeshProUGUI collapseButtonLabel;
     private InfectionSpawner infectionSpawner;
+    private Coroutine panelSlideCoroutine;
+    private bool isCollapsed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsurePanelExists()
@@ -82,6 +92,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private void Awake()
     {
         DontDestroyOnLoad(gameObject);
+        isCollapsed = PlayerPrefs.GetInt(CollapsedPreferenceKey, startCollapsed ? 1 : 0) != 0;
         ResolveResources();
         TryBuildPanel();
     }
@@ -98,6 +109,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     {
         SceneManager.sceneLoaded -= HandleSceneLoaded;
         infectionSpawner = null;
+        panelSlideCoroutine = null;
         ClearAll();
     }
 
@@ -105,9 +117,15 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     {
         ClearAll();
         infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
+        if (panelSlideCoroutine != null)
+            StopCoroutine(panelSlideCoroutine);
+        panelSlideCoroutine = null;
+        panelContainerRect = null;
         panelRect = null;
         contentRect = null;
         rootCanvas = null;
+        collapseButton = null;
+        collapseButtonLabel = null;
         ResolveResources();
         TryBuildPanel();
         SyncRows();
@@ -317,18 +335,30 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             return false;
 
         GameObject panelObject = CreateUiObject("Pending Infections Panel", rootCanvas.transform);
-        panelRect = panelObject.GetComponent<RectTransform>();
+        panelContainerRect = panelObject.GetComponent<RectTransform>();
+        panelContainerRect.anchorMin = Vector2.one;
+        panelContainerRect.anchorMax = Vector2.one;
+        panelContainerRect.pivot = Vector2.one;
+        panelContainerRect.anchoredPosition = new Vector2(-PanelRightInset, -PanelTopOffset);
+        panelContainerRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
+
+        Image containerImage = panelObject.GetComponent<Image>();
+        containerImage.color = Color.clear;
+        containerImage.raycastTarget = false;
+
+        GameObject panelBodyObject = CreateUiObject("Pending Infections Panel Body", panelContainerRect);
+        panelRect = panelBodyObject.GetComponent<RectTransform>();
         panelRect.anchorMin = Vector2.one;
         panelRect.anchorMax = Vector2.one;
         panelRect.pivot = Vector2.one;
-        panelRect.anchoredPosition = new Vector2(-PanelRightInset, -PanelTopOffset);
+        panelRect.anchoredPosition = Vector2.zero;
         panelRect.sizeDelta = new Vector2(PanelWidth, PanelHeight);
 
-        Image panelImage = panelObject.GetComponent<Image>();
+        Image panelImage = panelBodyObject.GetComponent<Image>();
         panelImage.sprite = whiteSwatchSprite;
         panelImage.color = PanelColor;
         panelImage.raycastTarget = false;
-        Outline panelOutline = panelObject.AddComponent<Outline>();
+        Outline panelOutline = panelBodyObject.AddComponent<Outline>();
         panelOutline.effectColor = AccentColor;
         panelOutline.effectDistance = new Vector2(1.5f, -1.5f);
         panelOutline.useGraphicAlpha = true;
@@ -339,7 +369,33 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         header.rectTransform.anchorMax = new Vector2(1f, 1f);
         header.rectTransform.pivot = new Vector2(0.5f, 1f);
         header.rectTransform.anchoredPosition = new Vector2(0f, -8f);
-        header.rectTransform.sizeDelta = new Vector2(-24f, HeaderHeight - 8f);
+        header.rectTransform.sizeDelta = new Vector2(-60f, HeaderHeight - 8f);
+
+        GameObject toggleObject = CreateUiObject("Pending Infections Toggle", panelContainerRect);
+        RectTransform toggleRect = toggleObject.GetComponent<RectTransform>();
+        toggleRect.anchorMin = Vector2.one;
+        toggleRect.anchorMax = Vector2.one;
+        toggleRect.pivot = Vector2.one;
+        toggleRect.anchoredPosition = new Vector2(-10f, -8f);
+        toggleRect.sizeDelta = new Vector2(30f, 28f);
+        Image toggleImage = toggleObject.GetComponent<Image>();
+        toggleImage.sprite = whiteSwatchSprite;
+        toggleImage.color = new Color(0.035f, 0.09f, 0.13f, 0.98f);
+        toggleImage.raycastTarget = true;
+        Outline toggleOutline = toggleObject.AddComponent<Outline>();
+        toggleOutline.effectColor = AccentColor;
+        toggleOutline.effectDistance = new Vector2(1f, -1f);
+        toggleOutline.useGraphicAlpha = true;
+        collapseButton = toggleObject.AddComponent<Button>();
+        collapseButton.targetGraphic = toggleImage;
+        collapseButton.transition = Selectable.Transition.None;
+        collapseButton.onClick.AddListener(TogglePanelCollapsed);
+        collapseButtonLabel = CreateText("Pending Infections Toggle Glyph", toggleObject.transform, "▼", 15f,
+            FontStyles.Bold, AccentColor, TextAlignmentOptions.Center);
+        collapseButtonLabel.rectTransform.anchorMin = Vector2.zero;
+        collapseButtonLabel.rectTransform.anchorMax = Vector2.one;
+        collapseButtonLabel.rectTransform.offsetMin = Vector2.zero;
+        collapseButtonLabel.rectTransform.offsetMax = Vector2.zero;
 
         GameObject accentObject = CreateUiObject("Header Accent", panelRect);
         RectTransform accentRect = accentObject.GetComponent<RectTransform>();
@@ -361,8 +417,54 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         contentRect.pivot = new Vector2(0.5f, 1f);
         contentRect.offsetMin = new Vector2(10f, 10f);
         contentRect.offsetMax = new Vector2(-10f, -HeaderHeight - 10f);
+        ApplyPanelCollapsedState();
 
         return true;
+    }
+
+    private void TogglePanelCollapsed()
+    {
+        isCollapsed = !isCollapsed;
+        if (collapseButtonLabel != null)
+            collapseButtonLabel.text = isCollapsed ? "▶" : "▼";
+        if (panelSlideCoroutine != null)
+            StopCoroutine(panelSlideCoroutine);
+        panelSlideCoroutine = StartCoroutine(AnimatePanelSlide(isCollapsed ? PanelHiddenOffset : 0f));
+        PlayerPrefs.SetInt(CollapsedPreferenceKey, isCollapsed ? 1 : 0);
+        PlayerPrefs.Save();
+        SyncRows();
+    }
+
+    private void ApplyPanelCollapsedState()
+    {
+        if (panelRect != null)
+            panelRect.anchoredPosition = new Vector2(isCollapsed ? PanelHiddenOffset : 0f, 0f);
+        if (collapseButtonLabel != null)
+            collapseButtonLabel.text = isCollapsed ? "▶" : "▼";
+    }
+
+    private IEnumerator AnimatePanelSlide(float targetX)
+    {
+        if (panelRect == null)
+            yield break;
+
+        float startX = panelRect.anchoredPosition.x;
+        float elapsed = 0f;
+        while (elapsed < PanelSlideDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(elapsed / PanelSlideDuration);
+            float easedProgress = 1f - Mathf.Pow(1f - progress, 2f);
+            Vector2 position = panelRect.anchoredPosition;
+            position.x = Mathf.Lerp(startX, targetX, easedProgress);
+            panelRect.anchoredPosition = position;
+            yield return null;
+        }
+
+        Vector2 finalPosition = panelRect.anchoredPosition;
+        finalPosition.x = targetX;
+        panelRect.anchoredPosition = finalPosition;
+        panelSlideCoroutine = null;
     }
 
     private void CreateRowVisuals(RowView row)
