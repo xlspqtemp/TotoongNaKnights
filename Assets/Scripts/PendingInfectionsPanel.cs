@@ -19,6 +19,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private const string PanelPrefabResourcePath = "PendingInfectionsPanel";
     private const string RowPrefabResourcePath = "PendingInfectionRow";
+    private const string GameplaySceneName = "Game";
     private const string FontResourcePath = "BankGothicMediumSDF";
     private const string WhiteSwatchResourcePath = "HUDWhiteSwatch";
     private const string CollapsedPreferenceKey = "pendingPanelCollapsed";
@@ -81,7 +82,8 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsurePanelExists()
     {
-        if (Object.FindFirstObjectByType<PendingInfectionsPanel>() != null)
+        if (SceneManager.GetActiveScene().name != GameplaySceneName ||
+            Object.FindFirstObjectByType<PendingInfectionsPanel>() != null)
             return;
 
         GameObject panelPrefab = Resources.Load<GameObject>(PanelPrefabResourcePath);
@@ -91,15 +93,21 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private void Awake()
     {
-        DontDestroyOnLoad(gameObject);
         isCollapsed = PlayerPrefs.GetInt(CollapsedPreferenceKey, startCollapsed ? 1 : 0) != 0;
         ResolveResources();
-        TryBuildPanel();
+        if (SceneManager.GetActiveScene().name == GameplaySceneName)
+            TryBuildPanel();
     }
 
     private void OnEnable()
     {
         SceneManager.sceneLoaded += HandleSceneLoaded;
+        if (SceneManager.GetActiveScene().name != GameplaySceneName)
+        {
+            infectionSpawner = null;
+            return;
+        }
+
         infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
         ResolveResources();
         TryBuildPanel();
@@ -116,23 +124,39 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         ClearAll();
-        infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
         if (panelSlideCoroutine != null)
             StopCoroutine(panelSlideCoroutine);
         panelSlideCoroutine = null;
-        panelContainerRect = null;
-        panelRect = null;
-        contentRect = null;
-        rootCanvas = null;
-        collapseButton = null;
-        collapseButtonLabel = null;
+
+        if (scene.name != GameplaySceneName)
+        {
+            infectionSpawner = null;
+            if (panelContainerRect != null)
+                panelContainerRect.gameObject.SetActive(false);
+            return;
+        }
+
+        infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
         ResolveResources();
-        TryBuildPanel();
+        if (panelContainerRect == null)
+            TryBuildPanel();
+        else
+            panelContainerRect.gameObject.SetActive(true);
         SyncRows();
     }
 
     private void Update()
     {
+        if (SceneManager.GetActiveScene().name != GameplaySceneName)
+        {
+            if (panelContainerRect != null)
+                panelContainerRect.gameObject.SetActive(false);
+            return;
+        }
+
+        if (panelContainerRect != null && !panelContainerRect.gameObject.activeSelf)
+            panelContainerRect.gameObject.SetActive(true);
+
         ResolveResources();
         if (infectionSpawner == null)
             infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
@@ -317,6 +341,8 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private bool TryBuildPanel()
     {
+        if (SceneManager.GetActiveScene().name != GameplaySceneName)
+            return false;
         if (panelRect != null)
             return true;
 

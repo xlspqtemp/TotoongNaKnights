@@ -6948,6 +6948,62 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 243317061}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &243755319
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 243755320}
+  - component: {fileID: 243755321}
+  m_Layer: 0
+  m_Name: InfectionNotificationManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &243755320
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 243755319}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &243755321
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 243755319}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2918f7e454160b84e85dc5d0a34f146e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InfectionNotificationManager
+  infectionSpawner: {fileID: 159395627}
+  cameraScript: {fileID: 2766709378708606964}
+  gameplayCamera: {fileID: 1854060992}
+  notificationPrefab: {fileID: 6365439209916026991, guid: 6f9bd81d737644f4fa5a00bd12c82dd0, type: 3}
+  bacteriaSprite: {fileID: 2800000, guid: 651f7db2c5358b44695933d18a52f87d, type: 3}
+  virusSprite: {fileID: 2800000, guid: 5788b5658dcfe85469372f3d8afda0c9, type: 3}
+  scaleMultiplier: 1
+  bobAmplitude: 0.18
+  bobSpeed: 1.6
+  fadeDuration: 0.3
+  iconScale: 0.65
+  foregroundOffset: 1.5
 --- !u!1 &244042435
 GameObject:
   m_ObjectHideFlags: 0
@@ -50161,3 +50217,4 @@ SceneRoots:
   - {fileID: 2089373681}
   - {fileID: 647943731}
   - {fileID: 877941962}
+  - {fileID: 243755320}

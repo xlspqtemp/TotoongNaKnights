@@ -60,7 +60,6 @@ public sealed class InfectionNotificationManager : MonoBehaviour
 
     private void Awake()
     {
-        DontDestroyOnLoad(gameObject);
         ResolveReferences();
     }
 
