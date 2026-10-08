@@ -79,10 +79,22 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private Coroutine panelSlideCoroutine;
     private bool isCollapsed;
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void RegisterSceneLoadedHandler()
+    {
+        SceneManager.sceneLoaded -= EnsurePanelForScene;
+        SceneManager.sceneLoaded += EnsurePanelForScene;
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsurePanelExists()
     {
-        if (SceneManager.GetActiveScene().name != GameplaySceneName ||
+        EnsurePanelForScene(SceneManager.GetActiveScene(), LoadSceneMode.Single);
+    }
+
+    private static void EnsurePanelForScene(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name != GameplaySceneName ||
             Object.FindFirstObjectByType<PendingInfectionsPanel>() != null)
             return;
 
