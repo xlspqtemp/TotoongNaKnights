@@ -193,6 +193,22 @@ public sealed class InfectionSpawner : MonoBehaviour
     private Material destinationHoverMaterial;
 
     public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
+
+    public bool IsSquadDispatchedTo(InfectionMarker marker)
+    {
+        if (marker == null)
+            return false;
+
+        for (int squadIndex = 0; squadIndex < dispatchedWbcSquads.Count; squadIndex++)
+        {
+            DispatchedWbcSquad squad = dispatchedWbcSquads[squadIndex];
+            if (squad != null && squad.infectionTarget == marker)
+                return true;
+        }
+
+        return false;
+    }
+
     public bool IsAwaitingInfectionTargetSelection => awaitingInfectionTargetSelection;
 
     public sealed class InfectionMarker
