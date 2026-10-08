@@ -7,15 +7,18 @@ using UnityEngine.EventSystems;
 public sealed class InfectionNotificationManager : MonoBehaviour
 {
     private const string NotificationPrefabResourcePath = "InfectionNotification";
-    private const string NotificationSpriteResourcePath = "HUDWhiteSwatch";
+    private const string BacteriaSpriteResourcePath = "UI/bacteria_notification-removebg-preview";
+    private const string VirusSpriteResourcePath = "UI/Virus_notification-removebg-preview";
     private const int MaximumNotifications = 5;
-    private static readonly Color BacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
-    private static readonly Color ViralColor = new Color(0.2f, 0.55f, 1f, 1f);
+    private const float GeneratedSpritePixelsPerUnit = 1024f;
 
     [SerializeField] private InfectionSpawner infectionSpawner;
     [SerializeField] private CameraScript cameraScript;
     [SerializeField] private Camera gameplayCamera;
     [SerializeField] private GameObject notificationPrefab;
+    [SerializeField] private Texture2D bacteriaSprite;
+    [SerializeField] private Texture2D virusSprite;
+    [SerializeField, Min(0.01f)] private float scaleMultiplier = 1f;
     [SerializeField, Min(0f)] private float bobAmplitude = 0.18f;
     [SerializeField, Min(0f)] private float bobSpeed = 1.6f;
     [SerializeField, Min(0f)] private float fadeDuration = 0.3f;
@@ -28,7 +31,6 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         public GameObject gameObject;
         public SpriteRenderer spriteRenderer;
         public BoxCollider boxCollider;
-        public Color color;
         public float alpha;
         public float bobTime;
         public bool fadingOut;
@@ -39,7 +41,10 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         new Dictionary<InfectionSpawner.InfectionMarker, NotificationState>();
     private readonly List<InfectionSpawner.InfectionMarker> removalBuffer =
         new List<InfectionSpawner.InfectionMarker>();
-    private Sprite notificationSprite;
+    private Sprite bacteriaNotificationIcon;
+    private Sprite virusNotificationIcon;
+    private Texture2D cachedBacteriaTexture;
+    private Texture2D cachedVirusTexture;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureManagerExists()
@@ -127,8 +132,38 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             gameplayCamera = Camera.main;
         if (notificationPrefab == null)
             notificationPrefab = Resources.Load<GameObject>(NotificationPrefabResourcePath);
-        if (notificationSprite == null)
-            notificationSprite = Resources.Load<Sprite>(NotificationSpriteResourcePath);
+        if (bacteriaSprite == null)
+            bacteriaSprite = Resources.Load<Texture2D>(BacteriaSpriteResourcePath);
+        if (virusSprite == null)
+            virusSprite = Resources.Load<Texture2D>(VirusSpriteResourcePath);
+
+        if (cachedBacteriaTexture != bacteriaSprite)
+        {
+            if (bacteriaNotificationIcon != null)
+                Destroy(bacteriaNotificationIcon);
+            cachedBacteriaTexture = bacteriaSprite;
+            bacteriaNotificationIcon = CreateNotificationSprite(bacteriaSprite, "Bacterial Infection Notification");
+        }
+
+        if (cachedVirusTexture != virusSprite)
+        {
+            if (virusNotificationIcon != null)
+                Destroy(virusNotificationIcon);
+            cachedVirusTexture = virusSprite;
+            virusNotificationIcon = CreateNotificationSprite(virusSprite, "Viral Infection Notification");
+        }
+    }
+
+    private static Sprite CreateNotificationSprite(Texture2D sourceTexture, string spriteName)
+    {
+        if (sourceTexture == null)
+            return null;
+
+        Sprite sprite = Sprite.Create(sourceTexture,
+            new Rect(0f, 0f, sourceTexture.width, sourceTexture.height),
+            new Vector2(0.5f, 0.5f), GeneratedSpritePixelsPerUnit);
+        sprite.name = spriteName;
+        return sprite;
     }
 
     private bool IsCirculatoryLayerActive()
@@ -167,8 +202,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         SpriteRenderer spriteRenderer = notificationObject.GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
             spriteRenderer = notificationObject.AddComponent<SpriteRenderer>();
-        if (spriteRenderer.sprite == null)
-            spriteRenderer.sprite = notificationSprite;
+        AssignNotificationSprite(spriteRenderer, marker);
 
         BoxCollider boxCollider = notificationObject.GetComponent<BoxCollider>();
         if (boxCollider == null)
@@ -183,9 +217,19 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             gameObject = notificationObject,
             spriteRenderer = spriteRenderer,
             boxCollider = boxCollider,
-            color = marker.infection.pathogenType == InfectionPathogenType.Viral ? ViralColor : BacterialColor,
             alpha = 0f
         };
+    }
+
+    private void AssignNotificationSprite(SpriteRenderer spriteRenderer, InfectionSpawner.InfectionMarker marker)
+    {
+        if (spriteRenderer == null || marker == null || marker.infection == null)
+            return;
+
+        spriteRenderer.sprite = marker.infection.pathogenType == InfectionPathogenType.Viral
+            ? virusNotificationIcon
+            : bacteriaNotificationIcon;
+        spriteRenderer.color = Color.white;
     }
 
     private void UpdateNotification(NotificationState state, bool circulatoryActive, float gameplayDeltaTime)
@@ -201,7 +245,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         bool pickerActive = infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection;
         state.spriteRenderer.enabled = circulatoryActive;
         state.boxCollider.enabled = circulatoryActive && pickerActive && !state.fadingOut;
-        Color displayColor = state.color;
+        Color displayColor = Color.white;
         displayColor.a = state.alpha;
         state.spriteRenderer.color = displayColor;
 
@@ -214,7 +258,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         if (cameraTransform != null)
         {
             Vector3 towardCamera = (cameraTransform.position - anchor).normalized;
-            float scale = GetReadableScale(cameraTransform, anchor);
+            float scale = GetReadableScale(cameraTransform, anchor) * scaleMultiplier;
             Vector3 sideOffset = cameraTransform.right * (scale * 0.45f);
             Vector3 bobOffset = cameraTransform.up * (Mathf.Sin(state.bobTime) * bobAmplitude);
             state.gameObject.transform.position = anchor + towardCamera * foregroundOffset + sideOffset + bobOffset;

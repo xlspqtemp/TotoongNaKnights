@@ -25,6 +25,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const int DefaultEventsPerDay = 4;
     private const int DefaultMaximumActiveWbcs = 5;
     private const int DefaultMaximumActiveInfections = 5;
+    private const float SquadSpawnOffsetRadius = 1.75f;
+    private const float SquadStandingOffsetRadius = 2.8f;
+    private const float SquadOffsetAngleStep = 2.39996323f;
     private const float SquadPromptFadeDuration = 0.4f;
     private const float InfectionPopupFadeDuration = 0.3f;
     private const float InfectionPopupReferenceDistance = 5f;
@@ -181,6 +184,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private float promptFadeElapsed;
     private float promptFadeStartAlpha;
     private int nextInfectionSpawnOrder;
+    private int idleSquadDeploymentIndex;
     private bool awaitingSquadDestination;
     private bool awaitingInfectionTargetSelection;
     private bool promptFadingOut;
@@ -230,6 +234,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private sealed class DispatchedWbcSquad
     {
         public GameObject[] units;
+        public int deploymentIndex;
         public float lifetimeRemaining;
         public bool attackOnArrival;
         public InfectionMarker infectionTarget;
@@ -449,7 +454,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         headshotCooldownLabel.raycastTarget = false;
         headshotCooldownLabel.enabled = false;
 
-        squadCountLabel = CreateSquadHudText("WBC Squad Counter", squadHudObject.transform, $"WBC 0/{squadMemberCount}", 14f, FontStyles.Bold, squadCountColor);
+        squadCountLabel = CreateSquadHudText("WBC Squad Counter", squadHudObject.transform,
+            $"Squads {CountActiveSquads()}/{Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads)}", 14f, FontStyles.Bold, squadCountColor);
         squadCountLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
         squadCountLabel.rectTransform.anchorMax = new Vector2(1f, 0f);
         squadCountLabel.rectTransform.pivot = new Vector2(0.5f, 0f);
@@ -880,10 +886,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!enableWbcDispatch || idleSquad != null || headshotCooldownRemaining > 0f)
             return;
 
-        int activeWbcCount = CountActiveWbcs() + CountActiveSquadUnits();
-        if (activeWbcCount + squadMemberCount > maxActiveWbcs)
+        int maxActiveSquads = Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads);
+        int activeSquadCount = CountActiveSquads();
+        if (activeSquadCount >= maxActiveSquads)
         {
-            LogWbcSquadMessage($"WBC dispatch unavailable: {activeWbcCount}/{maxActiveWbcs} active.", ConsoleLogUI.LogType.Warning);
+            LogWbcSquadMessage($"All squads deployed ({activeSquadCount}/{maxActiveSquads}).", ConsoleLogUI.LogType.Warning);
             return;
         }
 
@@ -895,8 +902,35 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        Transform spawnAnchor = squadSpawnAnchor != null ? squadSpawnAnchor : null;
+        int deploymentIndex = GetNextAvailableSquadDeploymentIndex();
+        Transform spawnOffsetBase = squadSpawnAnchor;
+        if (spawnOffsetBase == null)
+        {
+            foreach (Transform child in circulatorySystemController.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name == "Heart")
+                {
+                    spawnOffsetBase = child;
+                    break;
+                }
+            }
+        }
+
+        GameObject spawnOffsetAnchorObject = null;
+        Transform spawnAnchor = null;
+        if (spawnOffsetBase != null)
+        {
+            float spawnAngle = deploymentIndex * SquadOffsetAngleStep;
+            float spawnRadius = SquadSpawnOffsetRadius * (1f + Mathf.Sqrt(deploymentIndex));
+            Vector3 spawnOffset = new Vector3(Mathf.Cos(spawnAngle) * spawnRadius, 0f, Mathf.Sin(spawnAngle) * spawnRadius);
+            spawnOffsetAnchorObject = new GameObject("Temporary WBC Squad Spawn Offset");
+            spawnOffsetAnchorObject.transform.SetPositionAndRotation(spawnOffsetBase.position + spawnOffset, spawnOffsetBase.rotation);
+            spawnAnchor = spawnOffsetAnchorObject.transform;
+        }
+
         GameObject[] spawnedUnits = circulatorySystemController.SpawnNeutrophilsAt(spawnAnchor, squadMemberCount);
+        if (spawnOffsetAnchorObject != null)
+            Destroy(spawnOffsetAnchorObject);
         if (spawnedUnits == null || spawnedUnits.Length == 0)
         {
             LogWbcSquadMessage("WBC squad could not be spawned. Check the circulatory WBC prefab and NavMesh.", ConsoleLogUI.LogType.Warning);
@@ -904,6 +938,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         idleSquad = spawnedUnits;
+        idleSquadDeploymentIndex = deploymentIndex;
         float wbcMaxHp = DifficultySettings.CurrentStats.wbcHp;
         foreach (GameObject unit in idleSquad)
         {
@@ -973,6 +1008,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (idleSquad == null || idleSquad.Length == 0)
             return false;
 
+        if (infectionTarget != null)
+        {
+            float standingAngle = idleSquadDeploymentIndex * SquadOffsetAngleStep + Mathf.PI;
+            float standingRadius = SquadStandingOffsetRadius * (1f + Mathf.Sqrt(idleSquadDeploymentIndex));
+            destination += new Vector3(Mathf.Cos(standingAngle) * standingRadius, 0f, Mathf.Sin(standingAngle) * standingRadius);
+        }
+
         List<NavMeshAgent> squadAgents = new List<NavMeshAgent>(idleSquad.Length);
         List<Vector3> sampledDestinations = new List<Vector3>(idleSquad.Length);
         foreach (GameObject unit in idleSquad)
@@ -1027,6 +1069,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         dispatchedWbcSquads.Add(new DispatchedWbcSquad
         {
             units = idleSquad,
+            deploymentIndex = idleSquadDeploymentIndex,
             lifetimeRemaining = squadLifetimeSeconds,
             attackOnArrival = infectionTarget != null,
             infectionTarget = infectionTarget
@@ -1075,6 +1118,29 @@ public sealed class InfectionSpawner : MonoBehaviour
         for (int squadIndex = dispatchedWbcSquads.Count - 1; squadIndex >= 0; squadIndex--)
         {
             DispatchedWbcSquad squad = dispatchedWbcSquads[squadIndex];
+            if (!squad.combatStarted)
+            {
+                bool hasLivingUnit = false;
+                foreach (GameObject unit in squad.units)
+                {
+                    if (unit == null || !unit.activeInHierarchy)
+                        continue;
+
+                    Health health = unit.GetComponent<Health>();
+                    if (health != null && !health.IsDead)
+                    {
+                        hasLivingUnit = true;
+                        break;
+                    }
+                }
+
+                if (!hasLivingUnit)
+                {
+                    DespawnWbcSquad(squadIndex);
+                    continue;
+                }
+            }
+
             if (!keepAliveUntilResolved)
                 squad.lifetimeRemaining -= gameplayDeltaTime;
             foreach (GameObject unit in squad.units)
@@ -1131,7 +1197,14 @@ public sealed class InfectionSpawner : MonoBehaviour
         {
             DispatchedWbcSquad squad = dispatchedWbcSquads[squadIndex];
             InfectionMarker marker = squad.infectionTarget;
-            if (!squad.combatStarted || marker == null || marker.isRemoving || marker.isContained || marker.threatVisuals.Count == 0)
+            if (!squad.combatStarted || marker == null || marker.isRemoving)
+                continue;
+            if (marker.isContained)
+            {
+                FadeOutAndDespawnWbcSquad(squadIndex);
+                continue;
+            }
+            if (marker.threatVisuals.Count == 0)
                 continue;
 
             List<GameObject> livingWbcs = new List<GameObject>();
@@ -1176,6 +1249,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 }
                 LogWbcSquadMessage($"WBC squad was overwhelmed by {marker.infection.displayName}.", ConsoleLogUI.LogType.Warning);
                 dispatchedWbcSquads.RemoveAt(squadIndex);
+                LogSquadSlotFreed();
                 continue;
             }
 
@@ -1282,6 +1356,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 unit.SetActive(false);
         }
         dispatchedWbcSquads.RemoveAt(squadIndex);
+        LogSquadSlotFreed();
     }
 
 
@@ -1470,12 +1545,13 @@ public sealed class InfectionSpawner : MonoBehaviour
             unit.SetActive(false);
         }
         dispatchedWbcSquads.RemoveAt(squadIndex);
+        LogSquadSlotFreed();
     }
 
     private void RefreshWbcSquadHud()
     {
         if (squadCountLabel != null)
-            squadCountLabel.text = $"WBC {(idleSquad != null ? idleSquad.Length : 0)}/{squadMemberCount}";
+            squadCountLabel.text = $"Squads {CountActiveSquads()}/{Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads)}";
 
         if (headshotButton != null)
             headshotButton.interactable = enableWbcDispatch && idleSquad == null && headshotCooldownRemaining <= 0f;
@@ -2427,6 +2503,42 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         return activeCount;
     }
+    private int CountActiveSquads()
+    {
+        return dispatchedWbcSquads.Count + (idleSquad != null ? 1 : 0);
+    }
+
+    private int GetNextAvailableSquadDeploymentIndex()
+    {
+        int maxActiveSquads = Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads);
+        bool[] occupiedSlots = new bool[maxActiveSquads];
+        if (idleSquad != null && idleSquadDeploymentIndex >= 0 && idleSquadDeploymentIndex < occupiedSlots.Length)
+            occupiedSlots[idleSquadDeploymentIndex] = true;
+
+        foreach (DispatchedWbcSquad squad in dispatchedWbcSquads)
+        {
+            if (squad != null && squad.deploymentIndex >= 0 && squad.deploymentIndex < occupiedSlots.Length)
+                occupiedSlots[squad.deploymentIndex] = true;
+        }
+
+        for (int index = 0; index < occupiedSlots.Length; index++)
+        {
+            if (!occupiedSlots[index])
+                return index;
+        }
+
+        return 0;
+    }
+
+    private void LogSquadSlotFreed()
+    {
+        int activeSquadCount = CountActiveSquads();
+        int maxActiveSquads = Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads);
+        LogWbcSquadMessage($"Squad slot freed ({activeSquadCount}/{maxActiveSquads}).", ConsoleLogUI.LogType.Success);
+        RefreshWbcSquadHud();
+    }
+
+
 
     private int CountActiveSquadUnits()
     {

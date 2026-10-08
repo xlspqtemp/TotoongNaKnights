@@ -5,6 +5,7 @@ using UnityEngine;
 public sealed class DifficultyStats
 {
     public string difficultyName;
+    public int maxActiveSquads = 2;
     public int eventsPerDay;
     public float wbcHp;
     public float wbcAttack;
@@ -84,10 +85,10 @@ public static class DifficultySettings
     {
         return new[]
         {
-            new DifficultyStats("Easy", 2, 150f, 15f, 80f, 100f, 3f, 3f, 1f, 1f, 0.5f),
-            new DifficultyStats("Normal", 3, 100f, 10f, 90f, 100f, 5f, 4f, 1f, 1f, 0.5f),
-            new DifficultyStats("Medium", 5, 100f, 10f, 120f, 150f, 6f, 5f, 1f, 1f, 0.5f),
-            new DifficultyStats("Hard", 5, 100f, 10f, 130f, 170f, 7f, 6f, 1f, 1f, 0.5f)
+            new DifficultyStats("Easy", 2, 150f, 15f, 80f, 100f, 3f, 3f, 1f, 1f, 0.5f) { maxActiveSquads = 3 },
+            new DifficultyStats("Normal", 3, 100f, 10f, 90f, 100f, 5f, 4f, 1f, 1f, 0.5f) { maxActiveSquads = 2 },
+            new DifficultyStats("Medium", 5, 100f, 10f, 120f, 150f, 6f, 5f, 1f, 1f, 0.5f) { maxActiveSquads = 2 },
+            new DifficultyStats("Hard", 5, 100f, 10f, 130f, 170f, 7f, 6f, 1f, 1f, 0.5f) { maxActiveSquads = 2 }
         };
     }
 
