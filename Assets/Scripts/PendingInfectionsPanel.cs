@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>Displays a fixed Pending Infections panel using independently managed placeholder rows.</summary>
+/// <summary>Displays live infections in a fixed HUD panel.</summary>
 [DefaultExecutionOrder(-100)]
 public sealed class PendingInfectionsPanel : MonoBehaviour
 {
@@ -25,6 +26,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private const float HeaderHeight = 40f;
     private const float RowHeight = 38f;
     private const float RowSpacing = 6f;
+    private const int MaximumRows = 5;
     private const float RowSlideSpeed = 480f;
     private const float ResolvedFlashDuration = 0.5f;
     private const float ResolvedFadeDuration = 0.8f;
@@ -42,6 +44,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private sealed class RowView
     {
+        public InfectionSpawner.InfectionMarker marker;
         public string displayName;
         public bool isBacterial;
         public RowStatus status;
@@ -61,10 +64,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private RectTransform panelRect;
     private RectTransform contentRect;
     private Canvas rootCanvas;
-    private float testElapsed;
-    private bool testRowsPopulated;
-    private bool testOngoingApplied;
-    private bool testResolvedApplied;
+    private InfectionSpawner infectionSpawner;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsurePanelExists()
@@ -79,31 +79,67 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private void Awake()
     {
+        DontDestroyOnLoad(gameObject);
         ResolveResources();
         TryBuildPanel();
     }
 
-    private void Start()
+    private void OnEnable()
     {
-        if (TryBuildPanel())
-            UpdateTestSequence(0f);
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
+        ResolveResources();
+        TryBuildPanel();
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        infectionSpawner = null;
+        ClearAll();
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        ClearAll();
+        infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
+        panelRect = null;
+        contentRect = null;
+        rootCanvas = null;
+        ResolveResources();
+        TryBuildPanel();
+        SyncRows();
     }
 
     private void Update()
     {
         ResolveResources();
+        if (infectionSpawner == null)
+            infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
         if (panelRect == null && !TryBuildPanel())
             return;
 
-        float gameplayDeltaTime = GameplaySpeed.DeltaTime;
-        UpdateTestSequence(gameplayDeltaTime);
-        UpdateRows(gameplayDeltaTime);
+        SyncRows();
+        UpdateRows(GameplaySpeed.DeltaTime);
     }
 
-    /// <summary>Adds a new infection row to the bottom of the panel.</summary>
+    /// <summary>Adds a standalone row; live infection rows are synchronized from InfectionSpawner.</summary>
     public void AddRow(string displayName, bool isBacterial)
     {
-        if (string.IsNullOrWhiteSpace(displayName))
+        CreateRow(null, displayName, isBacterial);
+    }
+
+    private void AddLiveRow(InfectionSpawner.InfectionMarker marker)
+    {
+        if (marker == null || marker.infection == null)
+            return;
+
+        CreateRow(marker, marker.infection.displayName, marker.infection.pathogenType == InfectionPathogenType.Bacterial);
+    }
+
+    private void CreateRow(InfectionSpawner.InfectionMarker marker, string displayName, bool isBacterial)
+    {
+        if (string.IsNullOrWhiteSpace(displayName) || rows.Count >= MaximumRows)
             return;
         if (panelRect == null && !TryBuildPanel())
             return;
@@ -122,6 +158,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
         RowView row = new RowView
         {
+            marker = marker,
             displayName = displayName,
             isBacterial = isBacterial,
             status = RowStatus.Pending,
@@ -134,25 +171,96 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         ReflowRows();
     }
 
-    /// <summary>Changes the status of each active row with the specified pathogen name.</summary>
+    private void SyncRows()
+    {
+        if (infectionSpawner == null)
+            return;
+
+        IReadOnlyList<InfectionSpawner.InfectionMarker> activeInfections = infectionSpawner.ActiveInfections;
+        HashSet<InfectionSpawner.InfectionMarker> displayedMarkers = new HashSet<InfectionSpawner.InfectionMarker>();
+        int activeCount = 0;
+        for (int index = 0; index < activeInfections.Count && activeCount < MaximumRows; index++)
+        {
+            InfectionSpawner.InfectionMarker marker = activeInfections[index];
+            if (marker == null || marker.isRemoving || marker.infection == null)
+                continue;
+
+            activeCount++;
+            displayedMarkers.Add(marker);
+            RowView row = FindRow(marker);
+            if (row == null)
+            {
+                if (rows.Count >= MaximumRows)
+                    continue;
+
+                AddLiveRow(marker);
+                row = FindRow(marker);
+            }
+
+            if (row == null || row.status == RowStatus.Resolved)
+                continue;
+
+            SetRowStatus(row, infectionSpawner.IsSquadDispatchedTo(marker) ? RowStatus.Ongoing : RowStatus.Pending);
+        }
+
+        foreach (RowView row in rows)
+        {
+            if (row.status == RowStatus.Resolved)
+                continue;
+
+            if (row.marker == null || row.marker.isRemoving || !displayedMarkers.Contains(row.marker))
+                ResolveRow(row);
+        }
+    }
+
+    private RowView FindRow(InfectionSpawner.InfectionMarker marker)
+    {
+        foreach (RowView row in rows)
+        {
+            if (row.marker == marker)
+                return row;
+        }
+
+        return null;
+    }
+
+    private void SetRowStatus(RowView row, RowStatus status)
+    {
+        if (row == null || row.status == RowStatus.Resolved || row.status == status)
+            return;
+
+        row.status = status;
+        ApplyRowStatusVisuals(row);
+    }
+
+    private void ResolveRow(RowView row)
+    {
+        if (row == null || row.status == RowStatus.Resolved)
+            return;
+
+        row.status = RowStatus.Resolved;
+        row.resolvedElapsed = 0f;
+        ApplyRowStatusVisuals(row);
+    }
+
+    /// <summary>Changes the status of rows with the specified display name.</summary>
     public void SetRowStatus(string displayName, RowStatus status)
     {
         foreach (RowView row in rows)
         {
-            if (row.displayName != displayName || row.status == RowStatus.Resolved)
-                continue;
-
-            row.status = status;
-            if (status == RowStatus.Resolved)
-                row.resolvedElapsed = 0f;
-            ApplyRowStatusVisuals(row);
+            if (row.displayName == displayName)
+                SetRowStatus(row, status);
         }
     }
 
     /// <summary>Starts the resolved flash and fade before removing matching rows.</summary>
     public void ResolveRow(string displayName)
     {
-        SetRowStatus(displayName, RowStatus.Resolved);
+        foreach (RowView row in rows)
+        {
+            if (row.displayName == displayName)
+                ResolveRow(row);
+        }
     }
 
     /// <summary>Immediately clears all runtime rows from the panel.</summary>
@@ -344,33 +452,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         }
     }
 
-    private void UpdateTestSequence(float gameplayDeltaTime)
-    {
-        if (!testRowsPopulated)
-        {
-            ClearAll();
-            AddRow("Staph", true);
-            AddRow("E. coli/Salmonella", true);
-            AddRow("Common cold", false);
-            testRowsPopulated = true;
-        }
 
-        if (gameplayDeltaTime <= 0f)
-            return;
-
-        testElapsed += gameplayDeltaTime;
-        if (!testOngoingApplied && testElapsed >= 5f)
-        {
-            testOngoingApplied = true;
-            SetRowStatus("Staph", RowStatus.Ongoing);
-        }
-
-        if (!testResolvedApplied && testElapsed >= 10f)
-        {
-            testResolvedApplied = true;
-            ResolveRow("Staph");
-        }
-    }
 
     private void UpdateRows(float gameplayDeltaTime)
     {
