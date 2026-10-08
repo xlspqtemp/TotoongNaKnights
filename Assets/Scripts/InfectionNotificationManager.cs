@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 
 /// <summary>Displays floating infection icons and forwards picker clicks through InfectionSpawner's public API.</summary>
 [DefaultExecutionOrder(-100)]
@@ -59,12 +60,53 @@ public sealed class InfectionNotificationManager : MonoBehaviour
 
     private void Awake()
     {
+        DontDestroyOnLoad(gameObject);
         ResolveReferences();
+    }
+
+    private void OnEnable()
+    {
+        SceneManager.sceneLoaded += HandleSceneLoaded;
+        ClearNotifications();
+        infectionSpawner = null;
+        cameraScript = null;
+        gameplayCamera = null;
+        ResolveReferences();
+        SyncNotifications();
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= HandleSceneLoaded;
+        ClearNotifications();
+        infectionSpawner = null;
+        cameraScript = null;
+        gameplayCamera = null;
+    }
+
+    private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        ClearNotifications();
+        infectionSpawner = null;
+        cameraScript = null;
+        gameplayCamera = null;
+        ResolveReferences();
+        SyncNotifications();
     }
 
     private void Update()
     {
         ResolveReferences();
+        if (infectionSpawner == null)
+            return;
+
+        SyncNotifications();
+        if (IsCirculatoryLayerActive() && infectionSpawner.IsAwaitingInfectionTargetSelection && GameplaySpeed.DeltaTime > 0f)
+            HandlePickerClick();
+    }
+
+    private void SyncNotifications()
+    {
         if (infectionSpawner == null)
             return;
 
@@ -86,7 +128,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
                 existing.desired = true;
                 existing.fadingOut = false;
             }
-            else if (circulatoryActive)
+            else
             {
                 NotificationState created = CreateNotification(marker);
                 if (created != null)
@@ -115,9 +157,18 @@ public sealed class InfectionNotificationManager : MonoBehaviour
 
         foreach (InfectionSpawner.InfectionMarker marker in removalBuffer)
             notifications.Remove(marker);
+    }
 
-        if (circulatoryActive && infectionSpawner.IsAwaitingInfectionTargetSelection && GameplaySpeed.DeltaTime > 0f)
-            HandlePickerClick();
+    private void ClearNotifications()
+    {
+        foreach (NotificationState state in notifications.Values)
+        {
+            if (state.gameObject != null)
+                Destroy(state.gameObject);
+        }
+
+        notifications.Clear();
+        removalBuffer.Clear();
     }
 
     private void ResolveReferences()

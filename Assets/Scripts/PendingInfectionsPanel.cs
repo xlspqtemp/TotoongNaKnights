@@ -12,7 +12,8 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     {
         Pending,
         Ongoing,
-        Resolved
+        Resolved,
+        Failed
     }
 
     private const string PanelPrefabResourcePath = "PendingInfectionsPanel";
@@ -41,6 +42,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     [SerializeField] private GameObject rowPrefab;
     [SerializeField] private TMP_FontAsset panelFont;
     [SerializeField] private Sprite whiteSwatchSprite;
+    [SerializeField] private Color failedColor = new Color(0.95f, 0.2f, 0.18f, 0.98f);
 
     private sealed class RowView
     {
@@ -209,7 +211,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 continue;
 
             if (row.marker == null || row.marker.isRemoving || !displayedMarkers.Contains(row.marker))
-                ResolveRow(row);
+                MarkRemovedRow(row);
         }
     }
 
@@ -226,21 +228,29 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private void SetRowStatus(RowView row, RowStatus status)
     {
-        if (row == null || row.status == RowStatus.Resolved || row.status == status)
+        if (row == null || row.status == RowStatus.Resolved || row.status == RowStatus.Failed || row.status == status)
             return;
 
         row.status = status;
+        if (status == RowStatus.Resolved || status == RowStatus.Failed)
+            row.resolvedElapsed = 0f;
         ApplyRowStatusVisuals(row);
+    }
+
+    private void MarkRemovedRow(RowView row)
+    {
+        if (row == null || row.status == RowStatus.Resolved || row.status == RowStatus.Failed)
+            return;
+
+        bool wasSquadCleared = row.marker != null && (row.marker.resolutionPending || row.marker.isContained);
+        RowStatus removalStatus = wasSquadCleared ? RowStatus.Resolved : RowStatus.Failed;
+        Debug.Log($"[PendingPanel] Row {row.displayName} removed as {removalStatus}.", this);
+        SetRowStatus(row, removalStatus);
     }
 
     private void ResolveRow(RowView row)
     {
-        if (row == null || row.status == RowStatus.Resolved)
-            return;
-
-        row.status = RowStatus.Resolved;
-        row.resolvedElapsed = 0f;
-        ApplyRowStatusVisuals(row);
+        SetRowStatus(row, RowStatus.Resolved);
     }
 
     /// <summary>Changes the status of rows with the specified display name.</summary>
@@ -443,6 +453,12 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 row.swatchImage.color = ResolvedColor;
                 row.statusLabel.color = Color.white;
                 break;
+            case RowStatus.Failed:
+                row.statusLabel.text = "Failed";
+                row.backgroundImage.color = failedColor;
+                row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
+                row.statusLabel.color = Color.white;
+                break;
             default:
                 row.statusLabel.text = "Pending";
                 row.backgroundImage.color = DefaultRowColor;
@@ -471,7 +487,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 Vector2 targetPosition = new Vector2(0f, row.targetY);
                 row.visualRect.anchoredPosition = Vector2.MoveTowards(currentPosition, targetPosition, RowSlideSpeed * gameplayDeltaTime);
 
-                if (row.status == RowStatus.Resolved)
+                if (row.status == RowStatus.Resolved || row.status == RowStatus.Failed)
                 {
                     row.resolvedElapsed += gameplayDeltaTime;
                     if (row.resolvedElapsed >= ResolvedFlashDuration)

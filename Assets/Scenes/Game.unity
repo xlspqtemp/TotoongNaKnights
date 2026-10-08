@@ -5330,7 +5330,7 @@ MonoBehaviour:
   dispatchAvatarSize: {x: 38, y: 38}
   dispatchAvatarOffset: {x: 0, y: -44}
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
-  useFixedDurationClash: 0
+  useFixedDurationClash: 1
   bacterialClashDurationSeconds: 4
   mildBacterialWellnessGain: 2
   moderateBacterialWellnessGain: 4
