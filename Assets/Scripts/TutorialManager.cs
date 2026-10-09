@@ -28,6 +28,11 @@ public sealed class TutorialManager : MonoBehaviour
     private const float HorizontalPanelPadding = 190f;
     private const float VerticalPanelPadding = 174f;
     private const float PanelScreenMargin = 28f;
+    private const float DefaultBodyFontSize = 21f;
+    private const float MinimumBodyFontSize = 12f;
+    private const float HighlightPulseSpeed = 2f;
+    private static readonly Color HighlightPulseColor = new Color(0.35f, 0.95f, 1f, 1f);
+    private const float TutorialWellnessBaseline = 95f;
 
     [Serializable]
     public sealed class TutorialStep
@@ -42,6 +47,7 @@ public sealed class TutorialManager : MonoBehaviour
         public string targetKey;
         public Sprite secondaryIcon;
         public ContainerAnchor containerAnchor = ContainerAnchor.Center;
+        public GameObject highlightTarget;
     }
 
     [Header("Tutorial Steps")]
@@ -62,6 +68,13 @@ public sealed class TutorialManager : MonoBehaviour
     [SerializeField] private Image iconImage;
     [SerializeField] private GameObject secondaryIconSlot;
     [SerializeField] private Image secondaryIconImage;
+    [SerializeField] private TextMeshProUGUI bacterialIconLabel;
+    [SerializeField] private TextMeshProUGUI viralIconLabel;
+    [SerializeField] private RectTransform bodyViewport;
+    [SerializeField] private ScrollRect bodyScrollRect;
+    [SerializeField] private RectMask2D bodyViewportMask;
+    [SerializeField] private Scrollbar bodyVerticalScrollbar;
+    [SerializeField, Min(1f)] private float bodyFontSize = DefaultBodyFontSize;
     [SerializeField] private Button backButton;
     [SerializeField] private Button nextButton;
     [SerializeField] private Button skipButton;
@@ -83,6 +96,13 @@ public sealed class TutorialManager : MonoBehaviour
     private InfectionSpawner.InfectionMarker tutorialSpawnedMarker;
     private bool wellnessResolutionListenerAttached;
     private bool pendingInfectionRowListenerAttached;
+    private bool fastForwardListenerAttached;
+    private Button fastForwardButton;
+    private bool wellnessValueStored;
+    private float wellnessValueBeforeTutorial;
+    private Graphic highlightedGraphic;
+    private Color highlightedGraphicOriginalColor;
+    private int currentScrollStepIndex = -1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneLoadHandler()
@@ -132,6 +152,12 @@ public sealed class TutorialManager : MonoBehaviour
             tutorialPanel.SetActive(false);
         if (startGameButton != null)
             startGameButton.gameObject.SetActive(false);
+        if (bodyScrollRect != null)
+            bodyScrollRect.enabled = false;
+        if (bodyViewportMask != null)
+            bodyViewportMask.enabled = false;
+        if (bodyVerticalScrollbar != null)
+            bodyVerticalScrollbar.gameObject.SetActive(false);
     }
 
     private void Start()
@@ -163,13 +189,15 @@ public sealed class TutorialManager : MonoBehaviour
 
     private void Update()
     {
-        if (tutorialIsOpen)
-        {
-            ResolveSceneTargets();
-            BindPendingInfectionsPanel();
-            RevealSpawnedNotificationIcon();
-            EnforceHiddenTargets();
-        }
+        if (!tutorialIsOpen)
+            return;
+
+        ResolveSceneTargets();
+        BindPendingInfectionsPanel();
+        BindFastForwardButtonForCurrentStep();
+        RevealSpawnedNotificationIcon();
+        EnforceHiddenTargets();
+        UpdateHighlightPulse();
     }
 
     private void LateUpdate()
@@ -219,6 +247,7 @@ public sealed class TutorialManager : MonoBehaviour
             RegisterTarget("pendingInfections", hudCanvas.Find("Pending Infections Panel/Pending Infections Toggle")?.gameObject, true);
             RegisterTarget("dayCounter", hudCanvas.Find("DayCounterPanel")?.gameObject, true);
             RegisterTarget("pauseButton", hudCanvas.Find("PauseButton")?.gameObject, true);
+            RegisterTarget("fastForward", FindFastForwardButton()?.gameObject, true);
             RegisterTarget("tacticalOrders", hudCanvas.Find("TacticalOrdersContainer")?.gameObject, true);
             RegisterTarget("digestiveOrders", hudCanvas.Find("DigestiveOrdersContainer")?.gameObject, true);
             RegisterTarget("respiratoryOrders", hudCanvas.Find("RespiratoryOrdersContainer")?.gameObject, true);
@@ -228,6 +257,18 @@ public sealed class TutorialManager : MonoBehaviour
         RegisterTarget("wbcHeadshot", GameObject.Find("WBC Squad HUD"), true);
         RegisterTarget("wbcHeadshot", GameObject.Find("WBC Squad Headshot Button"), true);
         CaptureExistingNotificationTargets();
+    }
+
+    private static Button FindFastForwardButton()
+    {
+        Button[] buttons = FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (Button button in buttons)
+        {
+            if (button != null && button.gameObject.name == "FastForwardButton")
+                return button;
+        }
+
+        return null;
     }
 
     private void EnforceHiddenTargets()
@@ -328,6 +369,71 @@ public sealed class TutorialManager : MonoBehaviour
             CompleteCurrentStep();
     }
 
+    private void BindFastForwardButtonForCurrentStep()
+    {
+        bool shouldListen = tutorialIsOpen && IsCurrentAction("pressFastForward") && !currentActionCompleted;
+        if (!shouldListen)
+        {
+            if (fastForwardButton != null && fastForwardListenerAttached)
+                fastForwardButton.onClick.RemoveListener(HandleFastForwardPressed);
+            fastForwardListenerAttached = false;
+            fastForwardButton = null;
+            return;
+        }
+
+        Button foundButton = FindFastForwardButton();
+        if (foundButton == fastForwardButton && fastForwardListenerAttached)
+            return;
+
+        if (fastForwardButton != null && fastForwardListenerAttached)
+            fastForwardButton.onClick.RemoveListener(HandleFastForwardPressed);
+
+        fastForwardButton = foundButton;
+        fastForwardListenerAttached = fastForwardButton != null;
+        if (fastForwardListenerAttached)
+            fastForwardButton.onClick.AddListener(HandleFastForwardPressed);
+    }
+
+    private void UnbindFastForwardButton()
+    {
+        if (fastForwardButton != null && fastForwardListenerAttached)
+            fastForwardButton.onClick.RemoveListener(HandleFastForwardPressed);
+        fastForwardButton = null;
+        fastForwardListenerAttached = false;
+    }
+
+    private void HandleFastForwardPressed()
+    {
+        if (!tutorialIsOpen || !IsCurrentAction("pressFastForward"))
+            return;
+
+        CompleteCurrentStep();
+    }
+
+    private void SetWellnessForTutorial()
+    {
+        wellnessManager = WellnessManager.Instance != null ? WellnessManager.Instance : FindFirstObjectByType<WellnessManager>();
+        if (wellnessManager == null || wellnessManager.HasRunEnded || wellnessValueStored)
+            return;
+
+        wellnessValueBeforeTutorial = wellnessManager.CurrentWellness;
+        wellnessValueStored = true;
+        wellnessManager.ApplyInfectionResolutionDelta("Tutorial wellness baseline", TutorialWellnessBaseline - wellnessManager.CurrentWellness);
+    }
+
+    private void RestoreWellnessAfterTutorial()
+    {
+        if (!wellnessValueStored)
+            return;
+
+        if (wellnessManager == null)
+            wellnessManager = WellnessManager.Instance;
+        if (wellnessManager != null && !wellnessManager.HasRunEnded)
+            wellnessManager.ApplyInfectionResolutionDelta("Tutorial wellness restore", wellnessValueBeforeTutorial - wellnessManager.CurrentWellness);
+
+        wellnessValueStored = false;
+    }
+
     private void BindResolutionEventForCurrentStep()
     {
         if (wellnessManager == null)
@@ -369,20 +475,43 @@ public sealed class TutorialManager : MonoBehaviour
                 ResolveSceneTargets();
                 CameraScript cameraController = FindFirstObjectByType<CameraScript>();
                 if (cameraController != null)
+                {
                     cameraController.SelectLayer(2);
+                    Debug.Log("[Tutorial] Selected the Circulatory layer before the first infection step.", this);
+                }
+                else
+                {
+                    Debug.LogWarning("[Tutorial] Cannot select the Circulatory layer because no CameraScript was found.", this);
+                }
                 infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+                tutorialSpawnedMarker = null;
                 if (infectionSpawner != null)
                 {
                     HashSet<InfectionSpawner.InfectionMarker> existingMarkers = new HashSet<InfectionSpawner.InfectionMarker>(infectionSpawner.ActiveInfections);
+                    Debug.Log("[Tutorial] Forced spawn fired on the 'YOUR FIRST INFECTION' step.", this);
                     infectionSpawner.ForceSpawnOneBacterialInfection();
                     foreach (InfectionSpawner.InfectionMarker marker in infectionSpawner.ActiveInfections)
                     {
                         if (marker != null && !existingMarkers.Contains(marker))
                         {
                             tutorialSpawnedMarker = marker;
+                            Debug.Log($"[Tutorial] Forced spawn created '{marker.infection?.displayName ?? "infection"}' at {marker.worldPosition}.", this);
+                            CameraScript focusController = FindFirstObjectByType<CameraScript>();
+                            if (focusController != null)
+                            {
+                                focusController.FocusOnWorldPosition(marker.worldPosition);
+                                Debug.Log("[Tutorial] Requested camera focus on the spawned infection.", this);
+                            }
                             break;
                         }
                     }
+
+                    if (tutorialSpawnedMarker == null)
+                        Debug.LogWarning("[Tutorial] Forced spawn call completed without adding a new active infection marker. Check spawner warnings above.", this);
+                }
+                else
+                {
+                    Debug.LogWarning("[Tutorial] Forced infection spawn was skipped because no InfectionSpawner was found.", this);
                 }
                 break;
             case "applyWellnessDrop":
@@ -465,6 +594,7 @@ public sealed class TutorialManager : MonoBehaviour
         }
 
         tutorialIsOpen = true;
+        SetWellnessForTutorial();
         BindPendingInfectionsPanel();
         currentStepIndex = 0;
         currentActionCompleted = false;
@@ -559,6 +689,7 @@ public sealed class TutorialManager : MonoBehaviour
 
     private void ShowCurrentStep()
     {
+        StopHighlightPulse();
         ResolveSceneTargets();
         if (currentStepIndex < 0 || currentStepIndex >= steps.Count)
             return;
@@ -566,6 +697,11 @@ public sealed class TutorialManager : MonoBehaviour
         TutorialStep step = steps[currentStepIndex];
         if (step == null)
             return;
+        GameObject primaryStepTarget = ResolvePrimaryTarget(step.targetKey);
+        if (step.revealTarget == null)
+            step.revealTarget = primaryStepTarget;
+        if (step.highlightTarget == null)
+            step.highlightTarget = primaryStepTarget;
         currentActionCompleted = completedActionSteps.Contains(currentStepIndex);
 
         if (step.revealTarget != null)
@@ -590,7 +726,11 @@ public sealed class TutorialManager : MonoBehaviour
         if (titleLabel != null)
             titleLabel.text = step.title ?? string.Empty;
         if (bodyLabel != null)
+        {
             bodyLabel.text = step.body ?? string.Empty;
+            bodyLabel.enableAutoSizing = false;
+            bodyLabel.fontSize = bodyFontSize;
+        }
         if (stepCounterLabel != null)
             stepCounterLabel.text = $"Step {currentStepIndex + 1} of {steps.Count}";
         if (iconImage != null)
@@ -601,6 +741,17 @@ public sealed class TutorialManager : MonoBehaviour
             secondaryIconImage.sprite = step.secondaryIcon;
         if (secondaryIconSlot != null)
             secondaryIconSlot.SetActive(step.secondaryIcon != null);
+        bool isPathogenComparisonStep = string.Equals(step.actionId, "infectionTypes", StringComparison.Ordinal);
+        if (bacterialIconLabel != null)
+        {
+            bacterialIconLabel.text = "BACTERIAL";
+            bacterialIconLabel.gameObject.SetActive(isPathogenComparisonStep);
+        }
+        if (viralIconLabel != null)
+        {
+            viralIconLabel.text = "VIRAL";
+            viralIconLabel.gameObject.SetActive(isPathogenComparisonStep);
+        }
 
         bool isFinalStep = currentStepIndex == steps.Count - 1;
         if (startGameButton != null)
@@ -608,10 +759,69 @@ public sealed class TutorialManager : MonoBehaviour
         RefreshNavigationState();
         ResizePanelToBodyContent();
         ApplyContainerAnchor(step.containerAnchor);
+        Debug.Log($"[Tutorial] Applied {step.containerAnchor} container anchor for step {currentStepIndex + 1} of {steps.Count}.", this);
         if (IsCurrentAction("resolveInfection") && !currentActionCompleted)
+        {
             Time.timeScale = 1f;
+            if (tutorialSpawnedMarker != null)
+            {
+                CameraScript focusController = FindFirstObjectByType<CameraScript>();
+                if (focusController != null)
+                {
+                    focusController.FocusOnWorldPosition(tutorialSpawnedMarker.worldPosition);
+                    Debug.Log("[Tutorial] Resumed the camera focus on the first infection for the live dispatch step.", this);
+                }
+            }
+        }
         BindResolutionEventForCurrentStep();
         RunStepEntryAction(step);
+        ApplyHighlightPulse(step.highlightTarget != null ? step.highlightTarget : ResolvePrimaryTarget(step.targetKey));
+        BindFastForwardButtonForCurrentStep();
+    }
+
+    private GameObject ResolvePrimaryTarget(string targetKey)
+    {
+        if (string.IsNullOrWhiteSpace(targetKey) || !targetsByKey.TryGetValue(targetKey, out List<GameObject> targets))
+            return null;
+
+        foreach (GameObject target in targets)
+        {
+            if (target != null && target.GetComponent<RectTransform>() != null)
+                return target;
+        }
+
+        return null;
+    }
+
+    private void ApplyHighlightPulse(GameObject target)
+    {
+        if (target == null || target.GetComponent<RectTransform>() == null)
+            return;
+
+        Graphic graphic = target.GetComponent<Graphic>();
+        if (graphic == null)
+            graphic = target.GetComponentInChildren<Graphic>();
+        if (graphic == null)
+            return;
+
+        highlightedGraphic = graphic;
+        highlightedGraphicOriginalColor = graphic.color;
+    }
+
+    private void UpdateHighlightPulse()
+    {
+        if (highlightedGraphic == null)
+            return;
+
+        float pulse = Mathf.PingPong(Time.unscaledTime * HighlightPulseSpeed, 1f);
+        highlightedGraphic.color = Color.Lerp(highlightedGraphicOriginalColor, HighlightPulseColor, pulse * 0.28f);
+    }
+
+    private void StopHighlightPulse()
+    {
+        if (highlightedGraphic != null)
+            highlightedGraphic.color = highlightedGraphicOriginalColor;
+        highlightedGraphic = null;
     }
 
     private void ApplyContainerAnchor(ContainerAnchor anchor)
@@ -685,21 +895,116 @@ public sealed class TutorialManager : MonoBehaviour
         float availableHeight = canvasRect != null ? Mathf.Max(300f, canvasRect.rect.height - 2f * PanelScreenMargin) : 720f;
         maxWidth = Mathf.Min(maxWidth, availableWidth);
         float minimumWidth = Mathf.Min(MinimumPanelWidth, maxWidth);
-        float textWidthAtMaximum = Mathf.Max(120f, maxWidth - HorizontalPanelPadding);
-        Vector2 preferredAtMaximumWidth = bodyLabel.GetPreferredValues(bodyLabel.text, textWidthAtMaximum, 0f);
-        float panelWidth = Mathf.Clamp(preferredAtMaximumWidth.x + HorizontalPanelPadding, minimumWidth, maxWidth);
-        float bodyWidth = Mathf.Max(120f, panelWidth - HorizontalPanelPadding);
-        Vector2 preferredBodySize = bodyLabel.GetPreferredValues(bodyLabel.text, bodyWidth, 0f);
-        float panelHeight = Mathf.Clamp(Mathf.Max(320f, preferredBodySize.y + VerticalPanelPadding), Mathf.Min(320f, availableHeight), availableHeight);
         RectTransform bodyRect = bodyLabel.rectTransform;
+        bool isPathogenComparisonStep = IsCurrentAction("infectionTypes");
+
+        if (bodyViewport == null)
+        {
+            float textWidth = Mathf.Max(120f, maxWidth - HorizontalPanelPadding);
+            Vector2 preferred = bodyLabel.GetPreferredValues(bodyLabel.text, textWidth, 0f);
+            float panelWidthFallback = Mathf.Clamp(preferred.x + HorizontalPanelPadding, minimumWidth, maxWidth);
+            float bodyWidthFallback = Mathf.Max(120f, panelWidthFallback - HorizontalPanelPadding);
+            float panelHeightFallback = Mathf.Clamp(Mathf.Max(320f, preferred.y + VerticalPanelPadding), Mathf.Min(320f, availableHeight), availableHeight);
+            bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, bodyWidthFallback);
+            bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Min(preferred.y, panelHeightFallback - VerticalPanelPadding));
+            panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, panelWidthFallback);
+            panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, panelHeightFallback);
+            return;
+        }
+
+        float bodyWidth = isPathogenComparisonStep
+            ? Mathf.Max(240f, maxWidth - 2f * PanelScreenMargin)
+            : Mathf.Max(120f, maxWidth - HorizontalPanelPadding);
+        float maximumBodyHeight = Mathf.Max(80f, availableHeight - VerticalPanelPadding);
+        bodyLabel.fontSize = bodyFontSize;
+        Vector2 preferredBodySize = bodyLabel.GetPreferredValues(bodyLabel.text, bodyWidth, 0f);
+        if (!isPathogenComparisonStep && preferredBodySize.y > maximumBodyHeight)
+        {
+            float fittedFontSize = Mathf.Max(MinimumBodyFontSize, bodyFontSize * maximumBodyHeight / preferredBodySize.y);
+            bodyLabel.fontSize = fittedFontSize;
+            preferredBodySize = bodyLabel.GetPreferredValues(bodyLabel.text, bodyWidth, 0f);
+        }
+
+        RectTransform viewportRect = bodyViewport;
+        float viewportTop = isPathogenComparisonStep ? -190f : -94f;
+        float viewportX = isPathogenComparisonStep ? PanelScreenMargin : 142f;
+        viewportRect.anchorMin = new Vector2(0f, 1f);
+        viewportRect.anchorMax = new Vector2(0f, 1f);
+        viewportRect.pivot = new Vector2(0f, 1f);
+        viewportRect.anchoredPosition = new Vector2(viewportX, viewportTop);
+        viewportRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, bodyWidth);
+
+        float maxScrollViewportHeight = 190f;
+        float viewportHeight = isPathogenComparisonStep
+            ? Mathf.Min(maxScrollViewportHeight, Mathf.Max(96f, preferredBodySize.y))
+            : Mathf.Min(preferredBodySize.y, Mathf.Max(100f, availableHeight - VerticalPanelPadding));
+        viewportRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, viewportHeight);
+
+        bodyRect.anchorMin = new Vector2(0f, 1f);
+        bodyRect.anchorMax = new Vector2(0f, 1f);
+        bodyRect.pivot = new Vector2(0f, 1f);
+        bodyRect.anchoredPosition = Vector2.zero;
         bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, bodyWidth);
-        bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Min(preferredBodySize.y, Mathf.Max(80f, panelHeight - VerticalPanelPadding)));
-        panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, panelWidth);
+        bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, preferredBodySize.y);
+        RectTransform scrollContentRect = bodyRect.parent as RectTransform;
+        if (scrollContentRect != null)
+        {
+            scrollContentRect.anchorMin = new Vector2(0f, 1f);
+            scrollContentRect.anchorMax = new Vector2(0f, 1f);
+            scrollContentRect.pivot = new Vector2(0f, 1f);
+            scrollContentRect.anchoredPosition = Vector2.zero;
+            scrollContentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, bodyWidth);
+            scrollContentRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, preferredBodySize.y);
+        }
+
+        bool needsPathogenScroll = isPathogenComparisonStep && preferredBodySize.y > viewportHeight + 1f;
+        if (bodyViewportMask != null)
+            bodyViewportMask.enabled = needsPathogenScroll;
+        if (bodyScrollRect != null)
+        {
+            bodyScrollRect.enabled = false;
+            bodyScrollRect.horizontal = false;
+            bodyScrollRect.vertical = needsPathogenScroll && scrollContentRect != null && viewportRect != null;
+            bodyScrollRect.verticalScrollbarVisibility = UnityEngine.UI.ScrollRect.ScrollbarVisibility.AutoHide;
+            if (bodyScrollRect.vertical)
+            {
+                bodyScrollRect.content = scrollContentRect;
+                bodyScrollRect.viewport = viewportRect;
+                bodyScrollRect.verticalScrollbar = bodyVerticalScrollbar;
+                bodyScrollRect.enabled = true;
+                if (bodyScrollRect.content != null && bodyScrollRect.viewport != null)
+                    bodyScrollRect.verticalNormalizedPosition = 1f;
+            }
+            else
+            {
+                bodyScrollRect.content = null;
+                bodyScrollRect.viewport = null;
+                bodyScrollRect.verticalScrollbar = null;
+            }
+        }
+        if (bodyVerticalScrollbar != null)
+            bodyVerticalScrollbar.gameObject.SetActive(needsPathogenScroll);
+        currentScrollStepIndex = needsPathogenScroll ? currentStepIndex : -1;
+
+        float panelHeight = isPathogenComparisonStep
+            ? Mathf.Max(380f, viewportHeight + 300f)
+            : Mathf.Max(320f, preferredBodySize.y + VerticalPanelPadding);
+        panelHeight = Mathf.Clamp(panelHeight, Mathf.Min(320f, availableHeight), availableHeight);
+        panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, maxWidth);
         panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, panelHeight);
     }
 
     private void RestoreTutorialState()
     {
+        StopHighlightPulse();
+        UnbindFastForwardButton();
+        if (bodyScrollRect != null)
+            bodyScrollRect.enabled = false;
+        if (bodyViewportMask != null)
+            bodyViewportMask.enabled = false;
+        if (bodyVerticalScrollbar != null)
+            bodyVerticalScrollbar.gameObject.SetActive(false);
+
         if (pendingInfectionsPanel != null && pendingInfectionRowListenerAttached)
         {
             pendingInfectionsPanel.OnRowClickedPublic -= HandlePendingInfectionRowClicked;
@@ -710,6 +1015,7 @@ public sealed class TutorialManager : MonoBehaviour
             wellnessManager.OnWellnessDeltaApplied -= HandleWellnessDeltaApplied;
             wellnessResolutionListenerAttached = false;
         }
+        RestoreWellnessAfterTutorial();
 
         foreach (KeyValuePair<GameObject, bool> targetState in originalTargetStates)
         {
