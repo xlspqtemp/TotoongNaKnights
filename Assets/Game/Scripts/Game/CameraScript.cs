@@ -6,7 +6,7 @@ using UnityEngine.EventSystems;
 public class CameraScript : MonoBehaviour
 {
     private const int LayerCount = 4;
-    private const int MousePanButton = 2;
+    private const int MousePanButton = 1;
     private const float DefaultPanSpeed = 5f;
     private const float DefaultInfectionFocusDuration = 0.4f;
     private const float DefaultInfectionFocusOrthographicSize = 10f;
@@ -63,8 +63,7 @@ public class CameraScript : MonoBehaviour
 
     private void Update()
     {
-        if (infectionFocusCoroutine != null && Time.timeScale > 0f &&
-            (Input.GetMouseButtonDown(MousePanButton) || Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f))
+        if (infectionFocusCoroutine != null && Time.timeScale > 0f && Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f)
         {
             StopInfectionFocus();
         }
@@ -85,6 +84,9 @@ public class CameraScript : MonoBehaviour
 
             if (mouseDelta.sqrMagnitude > 0.01f && Screen.height > 0)
             {
+                if (infectionFocusCoroutine != null && Time.timeScale > 0f)
+                    StopInfectionFocus();
+
                 float worldUnitsPerPixel = sceneCamera != null && sceneCamera.orthographic
                     ? (sceneCamera.orthographicSize * 2f) / Screen.height
                     : 0.01f;
@@ -101,7 +103,7 @@ public class CameraScript : MonoBehaviour
             mousePanStartedOverWorld = false;
         }
 
-        // World panning uses middle-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
+        // World panning uses right-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
         UpdateMovementAudio(cameraMoved);
     }
 

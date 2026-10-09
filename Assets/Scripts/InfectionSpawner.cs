@@ -1118,7 +1118,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!awaitingSquadDestination)
             return;
 
-        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
             awaitingSquadDestination = false;
             FadeOutSquadPrompt();
