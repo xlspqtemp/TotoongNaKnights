@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using UnityEngine.Events;
+using TMPro;
 
 /// <summary>
 /// Controls the main menu and its demo confirmation and difficulty selection flow.
@@ -10,6 +11,7 @@ public class MainMenuController : MonoBehaviour
 {
     private const string GameSceneName = "Game";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
+    private const string BankGothicFontResourceName = "BankGothicMediumSDF";
     private const int OverlayWidth = 920;
     private const int OverlayHeight = 720;
     private const int PromptWidth = 780;
@@ -24,6 +26,11 @@ public class MainMenuController : MonoBehaviour
     private const int ButtonHeight = 64;
     private const int DifficultyOptionWidth = 190;
     private const int DifficultyOptionHeight = 112;
+    private const int DifficultyInfoPanelWidth = 760;
+    private const int DifficultyInfoPanelHeight = 196;
+    private const int DifficultyInfoPanelY = -138;
+    private const int DifficultyInfoHeaderFontSize = 19;
+    private const int DifficultyInfoBodyFontSize = 21;
     private const int RowHeight = 112;
     private const int SliderWidth = 480;
     private const int SliderHeight = 30;
@@ -48,6 +55,8 @@ public class MainMenuController : MonoBehaviour
     private Button[] difficultyOptionButtons;
     private Image[] difficultyOptionBackgrounds;
     private Outline[] difficultyOptionOutlines;
+    private TextMeshProUGUI difficultyInfoText;
+    private TMP_FontAsset difficultyInfoFont;
     [SerializeField] private DifficultyStats[] difficultyStats = DifficultySettings.CreateDefaultStats();
     private int selectedDifficultyIndex = 1;
 
@@ -195,6 +204,7 @@ public class MainMenuController : MonoBehaviour
             Button button = CreateButton(parent, "DifficultyOption" + optionLabels[index] + "Button",
                 optionLabels[index], DifficultyOptionWidth, DifficultyOptionHeight, position,
                 () => SetSelectedDifficulty(optionIndex));
+            HideDifficultyOptionExtraText(button);
             Outline outline = button.gameObject.AddComponent<Outline>();
             outline.effectColor = AccentColor;
             outline.effectDistance = new Vector2(3f, -3f);
@@ -205,7 +215,74 @@ public class MainMenuController : MonoBehaviour
             difficultyOptionOutlines[index] = outline;
         }
 
+        CreateDifficultyInfoPanel(parent);
         SetSelectedDifficulty(selectedDifficultyIndex);
+    }
+
+    private static void HideDifficultyOptionExtraText(Button button)
+    {
+        if (button == null)
+            return;
+
+        Text[] labels = button.GetComponentsInChildren<Text>(true);
+        foreach (Text label in labels)
+        {
+            if (label != null && label.gameObject.name != "Label")
+                label.enabled = false;
+        }
+
+        TMP_Text[] additionalLabels = button.GetComponentsInChildren<TMP_Text>(true);
+        foreach (TMP_Text label in additionalLabels)
+        {
+            if (label != null && label.gameObject.name != "Label")
+                label.enabled = false;
+        }
+    }
+
+    private void CreateDifficultyInfoPanel(Transform parent)
+    {
+        GameObject panel = CreatePanel(parent, "SelectedDifficultyInfoPanel",
+            DifficultyInfoPanelWidth, DifficultyInfoPanelHeight);
+        RectTransform panelRect = panel.GetComponent<RectTransform>();
+        panelRect.anchoredPosition = new Vector2(0f, DifficultyInfoPanelY);
+
+        Outline outline = panel.AddComponent<Outline>();
+        outline.effectColor = AccentColor;
+        outline.effectDistance = new Vector2(2f, -2f);
+        outline.useGraphicAlpha = true;
+
+        difficultyInfoFont = Resources.Load<TMP_FontAsset>(BankGothicFontResourceName);
+        if (difficultyInfoFont == null)
+            difficultyInfoFont = TMP_Settings.defaultFontAsset;
+
+        CreateDifficultyInfoLabel(panel.transform, "DifficultyInfoHeader", "SELECTED DIFFICULTY",
+            DifficultyInfoHeaderFontSize, AccentColor, TextAlignmentOptions.Center,
+            new Vector2(0f, 70f), new Vector2(DifficultyInfoPanelWidth - 48f, 30f));
+        difficultyInfoText = CreateDifficultyInfoLabel(panel.transform, "DifficultyInfoStats", string.Empty,
+            DifficultyInfoBodyFontSize, TextColor, TextAlignmentOptions.MidlineLeft,
+            new Vector2(0f, -12f), new Vector2(DifficultyInfoPanelWidth - 72f, 126f));
+    }
+
+    private TextMeshProUGUI CreateDifficultyInfoLabel(Transform parent, string objectName, string content,
+        int fontSize, Color color, TextAlignmentOptions alignment, Vector2 anchoredPosition, Vector2 sizeDelta)
+    {
+        GameObject labelObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI));
+        labelObject.transform.SetParent(parent, false);
+        RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+        SetRect(labelRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), anchoredPosition, sizeDelta);
+
+        TextMeshProUGUI label = labelObject.GetComponent<TextMeshProUGUI>();
+        label.font = difficultyInfoFont;
+        label.fontSize = fontSize;
+        label.fontStyle = FontStyles.Bold;
+        label.color = color;
+        label.alignment = alignment;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.text = content;
+        label.raycastTarget = false;
+        return label;
     }
 
     private void SetSelectedDifficulty(int optionIndex)
@@ -223,6 +300,30 @@ public class MainMenuController : MonoBehaviour
             difficultyOptionOutlines[index].enabled = isSelected;
             difficultyOptionButtons[index].interactable = true;
         }
+
+        RefreshDifficultyInfoPanel();
+    }
+
+    private void RefreshDifficultyInfoPanel()
+    {
+        if (difficultyInfoText == null)
+            return;
+
+        DifficultyStats stats = DifficultySettings.CurrentStats;
+        if (stats == null)
+            return;
+
+        difficultyInfoText.text =
+            $"INFECTIONS PER DAY: {stats.eventsPerDay}\n" +
+            $"YOUR WBCs: {FormatDifficultyValue(stats.wbcHp)} HP, {FormatDifficultyValue(stats.wbcAttack)} ATTACK\n" +
+            $"BACTERIA: {FormatDifficultyValue(stats.bacteriaHp)} HP\n" +
+            $"VIRUSES: {FormatDifficultyValue(stats.virusHp)} HP\n" +
+            $"MAX SQUADS AT ONCE: {stats.displayMaxActiveSquads}";
+    }
+
+    private static string FormatDifficultyValue(float value)
+    {
+        return value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
     }
 
 

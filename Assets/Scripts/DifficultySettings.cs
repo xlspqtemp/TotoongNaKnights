@@ -6,6 +6,7 @@ public sealed class DifficultyStats
 {
     public string difficultyName;
     public int maxActiveSquads = 2;
+    public int displayMaxActiveSquads = 2;
     public int eventsPerDay;
     public float wbcHp;
     public float wbcAttack;
