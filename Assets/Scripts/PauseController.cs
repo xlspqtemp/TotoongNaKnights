@@ -28,6 +28,20 @@ public class PauseController : MonoBehaviour
             pausePanel.SetActive(isPaused);
     }
 
+    /// <summary>Closes the pause menu and opens the gameplay tutorial from its first step.</summary>
+    public void ReopenTutorial()
+    {
+        GameplayTutorial tutorial = FindFirstObjectByType<GameplayTutorial>();
+        if (tutorial == null)
+            return;
+
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
+
+        tutorial.OpenTutorial();
+    }
+
+
     /// <summary>
     /// Clears run-local state and reloads the current gameplay scene from its configured start state.
     /// </summary>
