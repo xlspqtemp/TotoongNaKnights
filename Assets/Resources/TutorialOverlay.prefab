@@ -2953,19 +2953,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TutorialManager
   steps:
-  - title: NAVIGATION
-    body: "Drag with the RIGHT MOUSE BUTTON to pan the camera. Use the SCROLL WHEEL
-      to zoom. Click the LAYERS header to collapse or expand that panel. Your job
-      is to find infections and defend the body \u2014 get comfortable moving around."
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 1
-    actionId: panOrZoomCamera
-    targetKey: navigationFrame
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
   - title: WELCOME TO NA-KNIGHTS
     body: You are the immune system of a human body. Over the next 14 days, infections
       will enter the bloodstream. Your job is to find them, deploy white blood cells,
@@ -2976,6 +2963,19 @@ MonoBehaviour:
     requiresAction: 0
     actionId: 
     targetKey: 
+    secondaryIcon: {fileID: 0}
+    containerAnchor: 3
+    highlightTarget: {fileID: 0}
+  - title: NAVIGATION
+    body: "Drag with the RIGHT MOUSE BUTTON to pan the camera. Use the SCROLL WHEEL
+      to zoom. Your job is to find infections and defend the body \u2014 get comfortable
+      moving around."
+    icon: {fileID: 0}
+    revealTarget: {fileID: 0}
+    hideTarget: {fileID: 0}
+    requiresAction: 1
+    actionId: panOrZoomCamera
+    targetKey: navigationFrame
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
@@ -3044,7 +3044,8 @@ MonoBehaviour:
     highlightTarget: {fileID: 0}
   - title: THE BODY'S LAYERS
     body: 'The body has four defense layers: Circulatory, Lymphatic, Digestive, Respiratory.
-      You''ll explore each one now.'
+      You''ll explore each one now. Click the LAYERS header to collapse or expand
+      that panel.'
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
@@ -3206,6 +3207,10 @@ MonoBehaviour:
     containerAnchor: 3
     highlightTarget: {fileID: 0}
   hideAllTargets: []
+  highlightColor: {r: 0, g: 1, b: 1, a: 1}
+  highlightFadeInDuration: 0.6
+  highlightHoldDuration: 0.2
+  highlightFadeOutDuration: 0.6
   ForceShowOnEveryStart: 1
   AlwaysShowForGuest: 1
   tutorialPanel: {fileID: 7662445882601576588}

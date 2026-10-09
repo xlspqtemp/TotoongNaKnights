@@ -5,7 +5,7 @@ using UnityEngine.Events;
 using TMPro;
 
 /// <summary>
-/// Controls the main menu and its demo confirmation and difficulty selection flow.
+/// Controls the main menu and difficulty selection flow.
 /// </summary>
 public class MainMenuController : MonoBehaviour
 {
@@ -14,9 +14,6 @@ public class MainMenuController : MonoBehaviour
     private const string BankGothicFontResourceName = "BankGothicMediumSDF";
     private const int OverlayWidth = 920;
     private const int OverlayHeight = 720;
-    private const int PromptWidth = 780;
-    private const int PromptHeight = 440;
-    private const int PromptTitleFontSize = 48;
     private const int SubtitleFontSize = 22;
     private const int ButtonFontSize = 22;
     private const int DifficultyTitleFontSize = 38;
@@ -50,7 +47,6 @@ public class MainMenuController : MonoBehaviour
 
     private Canvas menuCanvas;
     private GameObject overlay;
-    private GameObject promptPanel;
     private GameObject difficultyPanel;
     private Button[] difficultyOptionButtons;
     private Image[] difficultyOptionBackgrounds;
@@ -92,7 +88,7 @@ public class MainMenuController : MonoBehaviour
     }
 
     /// <summary>
-    /// Opens the demo confirmation window when the Play button is selected.
+    /// Opens the difficulty selection screen when the Play button is selected.
     /// </summary>
     public void PlayGame()
     {
@@ -114,8 +110,7 @@ public class MainMenuController : MonoBehaviour
 
         overlay.SetActive(true);
         overlay.transform.SetAsLastSibling();
-        promptPanel.SetActive(true);
-        difficultyPanel.SetActive(false);
+        difficultyPanel.SetActive(true);
     }
 
     /// <summary>
@@ -152,15 +147,6 @@ public class MainMenuController : MonoBehaviour
         Image overlayImage = overlay.GetComponent<Image>();
         overlayImage.color = OverlayColor;
         overlayImage.raycastTarget = true;
-
-        promptPanel = CreatePanel(overlay.transform, "PlayDemoPrompt", PromptWidth, PromptHeight);
-        CreateText(promptPanel.transform, "PromptTitle", "Play demo?", PromptTitleFontSize, FontStyle.Bold,
-            TextColor, TextAnchor.MiddleCenter, new Vector2(0, 70), new Vector2(680, 90));
-
-        CreateButton(promptPanel.transform, "YesButton", "Yes", ButtonWidth, ButtonHeight,
-            new Vector2(-142, -72), LoadDemoScene);
-        CreateButton(promptPanel.transform, "ContinueAnywaysButton", "Continue Anyways", ButtonWidth, ButtonHeight,
-            new Vector2(142, -72), ShowDifficultySelection);
 
         difficultyPanel = CreatePanel(overlay.transform, "DifficultySelection", OverlayWidth, OverlayHeight);
         CreateText(difficultyPanel.transform, "DifficultyTitle", "Difficulty Selection", DifficultyTitleFontSize,
@@ -480,17 +466,6 @@ public class MainMenuController : MonoBehaviour
         rect.anchoredPosition = anchoredPosition;
         rect.sizeDelta = sizeDelta;
         rect.localScale = Vector3.one;
-    }
-
-    private void LoadDemoScene()
-    {
-        SceneManager.LoadScene("Demo");
-    }
-
-    private void ShowDifficultySelection()
-    {
-        promptPanel.SetActive(false);
-        difficultyPanel.SetActive(true);
     }
 
     private void StartGame()

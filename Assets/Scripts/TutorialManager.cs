@@ -33,8 +33,9 @@ public sealed class TutorialManager : MonoBehaviour
     private const float PanelScreenMargin = 28f;
     private const float DefaultBodyFontSize = 21f;
     private const float MinimumBodyFontSize = 12f;
-    private const float HighlightPulseSpeed = 2f;
-    private static readonly Color HighlightPulseColor = new Color(0.35f, 0.95f, 1f, 1f);
+    private const float DefaultHighlightFadeInDuration = 0.6f;
+    private const float DefaultHighlightHoldDuration = 0.2f;
+    private const float DefaultHighlightFadeOutDuration = 0.6f;
     private const float TutorialWellnessBaseline = 95f;
     private const int FirstLiveDemonstrationStepIndex = 15;
     private const float NavigationPanThresholdPixels = 5f;
@@ -60,6 +61,12 @@ public sealed class TutorialManager : MonoBehaviour
     [Header("Tutorial Steps")]
     [SerializeField] private List<TutorialStep> steps = new List<TutorialStep>();
     [SerializeField] private List<GameObject> hideAllTargets = new List<GameObject>();
+
+    [Header("Tutorial Highlight")]
+    [SerializeField] private Color highlightColor = new Color(0f, 1f, 1f, 1f);
+    [SerializeField, Min(0f)] private float highlightFadeInDuration = DefaultHighlightFadeInDuration;
+    [SerializeField, Min(0f)] private float highlightHoldDuration = DefaultHighlightHoldDuration;
+    [SerializeField, Min(0f)] private float highlightFadeOutDuration = DefaultHighlightFadeOutDuration;
 
     [Header("Launch Behavior")]
     [SerializeField] private bool ForceShowOnEveryStart = true;
@@ -111,7 +118,10 @@ public sealed class TutorialManager : MonoBehaviour
     private bool wellnessValueStored;
     private float wellnessValueBeforeTutorial;
     private Graphic highlightedGraphic;
+    private SpriteRenderer highlightedSpriteRenderer;
     private Color highlightedGraphicOriginalColor;
+    private Color highlightedSpriteRendererOriginalColor;
+    private float highlightCycleElapsed;
     private int currentScrollStepIndex = -1;
     private bool navigationPanTracking;
     private Vector2 navigationPanStartPosition;
@@ -923,6 +933,7 @@ public sealed class TutorialManager : MonoBehaviour
         }
         BindResolutionEventForCurrentStep();
         RunStepEntryAction(step);
+        ResolveSceneTargets();
         ApplyHighlightPulse(step.highlightTarget != null ? step.highlightTarget : ResolvePrimaryTarget(step.targetKey));
         BindFastForwardButtonForCurrentStep();
     }
@@ -934,7 +945,8 @@ public sealed class TutorialManager : MonoBehaviour
 
         foreach (GameObject target in targets)
         {
-            if (target != null && target.GetComponent<RectTransform>() != null)
+            if (target != null && (target.GetComponent<RectTransform>() != null ||
+                                   target.GetComponent<SpriteRenderer>() != null))
                 return target;
         }
 
@@ -943,37 +955,90 @@ public sealed class TutorialManager : MonoBehaviour
 
     private void ApplyHighlightPulse(GameObject target)
     {
-        if (target == null || target.GetComponent<RectTransform>() == null)
+        if (target == null)
             return;
 
         Graphic graphic = target.GetComponent<Graphic>();
         if (graphic == null)
             graphic = target.GetComponentInChildren<Graphic>(true);
-        if (graphic == null)
+        SpriteRenderer spriteRenderer = target.GetComponent<SpriteRenderer>();
+        if (spriteRenderer == null)
+            spriteRenderer = target.GetComponentInChildren<SpriteRenderer>(true);
+        if (graphic == null && spriteRenderer == null)
         {
-            Debug.LogWarning($"[Tutorial] Highlight target '{target.name}' has no UI Graphic to pulse.", this);
+            Debug.LogWarning($"[Tutorial] Highlight target '{target.name}' has no UI Graphic or SpriteRenderer to pulse.", this);
             return;
         }
 
         highlightedGraphic = graphic;
-        highlightedGraphicOriginalColor = graphic.color;
-        Debug.Log($"[Tutorial] Started unscaled UI highlight pulse on '{target.name}' using '{graphic.GetType().Name}'.", this);
+        highlightedSpriteRenderer = spriteRenderer;
+        if (highlightedGraphic != null)
+            highlightedGraphicOriginalColor = highlightedGraphic.color;
+        if (highlightedSpriteRenderer != null)
+            highlightedSpriteRendererOriginalColor = highlightedSpriteRenderer.color;
+        highlightCycleElapsed = 0f;
+        string graphicType = graphic != null ? graphic.GetType().Name : spriteRenderer.GetType().Name;
+        Debug.Log($"[Tutorial] Started unscaled color highlight fade on '{target.name}' using '{graphicType}'.", this);
     }
 
     private void UpdateHighlightPulse()
     {
-        if (highlightedGraphic == null)
+        if (highlightedGraphic == null && highlightedSpriteRenderer == null)
             return;
 
-        float pulse = Mathf.PingPong(Time.unscaledTime * HighlightPulseSpeed, 1f);
-        highlightedGraphic.color = Color.Lerp(highlightedGraphicOriginalColor, HighlightPulseColor, pulse * 0.28f);
+        float fadeInDuration = Mathf.Max(0f, highlightFadeInDuration);
+        float holdDuration = Mathf.Max(0f, highlightHoldDuration);
+        float fadeOutDuration = Mathf.Max(0f, highlightFadeOutDuration);
+        float cycleDuration = fadeInDuration + holdDuration + fadeOutDuration;
+        if (cycleDuration <= 0f)
+        {
+            SetHighlightedColor(highlightColor);
+            return;
+        }
+
+        highlightCycleElapsed = Mathf.Repeat(highlightCycleElapsed + Time.unscaledDeltaTime, cycleDuration);
+        Color currentColor;
+        if (fadeInDuration > 0f && highlightCycleElapsed < fadeInDuration)
+        {
+            float fadeProgress = highlightCycleElapsed / fadeInDuration;
+            currentColor = Color.Lerp(highlightedGraphic != null ? highlightedGraphicOriginalColor : highlightedSpriteRendererOriginalColor,
+                highlightColor, fadeProgress);
+        }
+        else if (highlightCycleElapsed < fadeInDuration + holdDuration)
+        {
+            currentColor = highlightColor;
+        }
+        else if (fadeOutDuration > 0f)
+        {
+            float fadeProgress = (highlightCycleElapsed - fadeInDuration - holdDuration) / fadeOutDuration;
+            Color originalColor = highlightedGraphic != null ? highlightedGraphicOriginalColor : highlightedSpriteRendererOriginalColor;
+            currentColor = Color.Lerp(highlightColor, originalColor, fadeProgress);
+        }
+        else
+        {
+            currentColor = highlightedGraphic != null ? highlightedGraphicOriginalColor : highlightedSpriteRendererOriginalColor;
+        }
+
+        SetHighlightedColor(currentColor);
+    }
+
+    private void SetHighlightedColor(Color color)
+    {
+        if (highlightedGraphic != null)
+            highlightedGraphic.color = color;
+        if (highlightedSpriteRenderer != null)
+            highlightedSpriteRenderer.color = color;
     }
 
     private void StopHighlightPulse()
     {
         if (highlightedGraphic != null)
             highlightedGraphic.color = highlightedGraphicOriginalColor;
+        if (highlightedSpriteRenderer != null)
+            highlightedSpriteRenderer.color = highlightedSpriteRendererOriginalColor;
         highlightedGraphic = null;
+        highlightedSpriteRenderer = null;
+        highlightCycleElapsed = 0f;
     }
 
     private void ApplyContainerAnchor(ContainerAnchor anchor)

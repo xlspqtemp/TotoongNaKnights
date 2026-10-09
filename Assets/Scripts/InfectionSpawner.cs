@@ -680,35 +680,11 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void HandleMapClick()
     {
-        if (awaitingInfectionTargetSelection && Input.GetMouseButtonDown(0))
-        {
-            if (TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
-            {
-                RequestDispatchToInfection(infectionTarget);
-                return;
-            }
-
-            awaitingInfectionTargetSelection = false;
-            awaitingSquadDestination = false;
-            FadeOutSquadPrompt();
-            return;
-        }
-
-        if (!enableWbcDispatch || idleSquad == null || !Input.GetMouseButtonDown(0) || PointerIsOverClickableUi())
+        if (!awaitingInfectionTargetSelection || !Input.GetMouseButtonDown(0))
             return;
 
-        if (!TryGetMapDestination(Input.mousePosition, out Vector3 destination, out string locationName, out Vector3 clickedPoint))
-            return;
-
-        InfectionMarker matchingInfection = FindInfectionNearAnchor(clickedPoint);
-        if (matchingInfection != null)
-        {
-            SelectMarker(matchingInfection);
-            return;
-        }
-
-        if (!DispatchIdleSquadTo(destination, null, locationName))
-            LogWbcSquadMessage("WBC squad could not reach that map location.", ConsoleLogUI.LogType.Warning);
+        if (TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
+            RequestDispatchToInfection(infectionTarget);
     }
 
     private bool TryGetInfectionTargetAtScreenPosition(Vector2 screenPosition, out InfectionMarker infectionTarget)
