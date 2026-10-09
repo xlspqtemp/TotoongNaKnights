@@ -73,7 +73,7 @@ public sealed class GameplayTutorial : MonoBehaviour
 
         pauseController = Object.FindFirstObjectByType<PauseController>();
         CreateReplayButtons();
-        if (PlayerPrefs.GetInt(TutorialSeenKey, 0) == 0)
+        if (PlayerPrefs.GetInt(TutorialSeenKey, 0) == 0 && FindFirstObjectByType<TutorialManager>() == null)
             OpenTutorial();
     }
 
