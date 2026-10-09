@@ -147,11 +147,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField, Min(0f)] private float wbcCombatMoveSpeed = 3.5f;
     [SerializeField] private bool verboseCombatLogging;
     [SerializeField, Min(0f)] private float infectionAnchorMatchRadius = 2f;
-    [SerializeField] private Color destinationHoverColor = new Color(0.15f, 1f, 0.9f, 0.85f);
-    [SerializeField, Min(0.1f)] private float destinationHoverRadius = 1f;
-    [SerializeField, Min(0.005f)] private float destinationHoverLineWidth = 0.06f;
     [SerializeField] private Vector2 promptBannerSize = new Vector2(700f, 58f);
-    [SerializeField] private Vector2 promptBannerTopOffset = new Vector2(0f, -24f);
+    [SerializeField, Min(0f)] private float promptBannerWellnessGap = 10f;
     [SerializeField] private Color promptBannerColor = new Color(0.025f, 0.045f, 0.065f, 0.92f);
     [SerializeField, Min(0f)] private float promptAutoFadeSeconds = 8f;
 
@@ -189,8 +186,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     private bool awaitingInfectionTargetSelection;
     private bool promptFadingOut;
     private Camera gameplayCamera;
-    private LineRenderer destinationHoverRing;
-    private Material destinationHoverMaterial;
 
     public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
 
@@ -381,7 +376,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         Debug.Log($"Difficulty: {stats.difficultyName} | eventsPerDay={stats.eventsPerDay} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
         CreateWbcSquadHud();
         CreateSquadPromptBanner();
-        CreateDestinationHoverRing();
         RefreshWbcSquadHud();
         if (dayCounter == null)
             Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; day-advance infection spawning is disabled.", this);
@@ -404,7 +398,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         UpdateInfectionCombat();
         HandleSquadPromptCancellation();
         UpdateSquadPrompt();
-        UpdateDestinationHover();
         HandleMapClick();
         RefreshWbcSquadHud();
     }
@@ -423,8 +416,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (dayCounter != null)
             dayCounter.OnDayAdvanced -= HandleDayAdvanced;
-        if (destinationHoverRing != null)
-            destinationHoverRing.gameObject.SetActive(false);
     }
 
     private void OnValidate()
@@ -583,11 +574,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         promptBannerObject.transform.SetParent(canvasRect, false);
         promptBannerObject.transform.SetAsLastSibling();
         RectTransform bannerRect = promptBannerObject.GetComponent<RectTransform>();
-        bannerRect.anchorMin = new Vector2(1f, 1f);
-        bannerRect.anchorMax = new Vector2(1f, 1f);
-        bannerRect.pivot = new Vector2(1f, 1f);
-        bannerRect.anchoredPosition = promptBannerTopOffset;
+        bannerRect.anchorMin = new Vector2(0.5f, 1f);
+        bannerRect.anchorMax = new Vector2(0.5f, 1f);
+        bannerRect.pivot = new Vector2(0.5f, 1f);
         bannerRect.sizeDelta = promptBannerSize;
+        PositionPromptBelowWellnessBar(canvasRect);
 
         Image bannerBackground = promptBannerObject.GetComponent<Image>();
         bannerBackground.color = promptBannerColor;
@@ -598,7 +589,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         promptBannerCanvasGroup.blocksRaycasts = false;
 
         promptBannerLabel = CreateSquadHudText("WBC Squad Destination Prompt Text", bannerRect,
-            "Select a destination on the map or an infection to send your WBC squad.", 18f, FontStyles.Bold, Color.white);
+            "Click an infection to send your squad.", 18f, FontStyles.Bold, Color.white);
         promptBannerLabel.alignment = TextAlignmentOptions.Center;
         promptBannerLabel.textWrappingMode = TextWrappingModes.Normal;
         promptBannerLabel.rectTransform.anchorMin = Vector2.zero;
@@ -620,6 +611,33 @@ public sealed class InfectionSpawner : MonoBehaviour
         promptFadeElapsed = 0f;
         promptFadeStartAlpha = 0f;
         promptFadingOut = false;
+    }
+
+    private void PositionPromptBelowWellnessBar(RectTransform canvasRect)
+    {
+        if (promptBannerObject == null || canvasRect == null)
+            return;
+
+        RectTransform wellnessBarRect = hudCanvas != null
+            ? hudCanvas.transform.Find("GameProgressBar") as RectTransform
+            : null;
+        if (wellnessBarRect == null)
+        {
+            RectTransform fallbackRect = promptBannerObject.transform as RectTransform;
+            if (fallbackRect != null)
+                fallbackRect.anchoredPosition = new Vector2(0f, -promptBannerWellnessGap);
+            return;
+        }
+
+        Vector3[] wellnessBarCorners = new Vector3[4];
+        wellnessBarRect.GetWorldCorners(wellnessBarCorners);
+        Vector3 bottomCenterWorld = (wellnessBarCorners[0] + wellnessBarCorners[3]) * 0.5f;
+        Vector3 bottomCenterCanvasLocal = canvasRect.InverseTransformPoint(bottomCenterWorld);
+        float xFromCanvasCenter = bottomCenterCanvasLocal.x - canvasRect.rect.center.x;
+        float yFromCanvasTop = bottomCenterCanvasLocal.y - canvasRect.rect.yMax - promptBannerWellnessGap;
+        RectTransform bannerRect = promptBannerObject.transform as RectTransform;
+        if (bannerRect != null)
+            bannerRect.anchoredPosition = new Vector2(xFromCanvasCenter, yFromCanvasTop);
     }
 
     private void FadeOutSquadPrompt()
@@ -660,94 +678,15 @@ public sealed class InfectionSpawner : MonoBehaviour
             promptBannerObject.SetActive(false);
     }
 
-    private void CreateDestinationHoverRing()
-    {
-        GameObject ringObject = new GameObject("WBC Destination Hover Ring", typeof(LineRenderer));
-        destinationHoverRing = ringObject.GetComponent<LineRenderer>();
-        destinationHoverRing.useWorldSpace = true;
-        destinationHoverRing.loop = true;
-        destinationHoverRing.positionCount = 48;
-        destinationHoverRing.startWidth = destinationHoverLineWidth;
-        destinationHoverRing.endWidth = destinationHoverLineWidth;
-        destinationHoverRing.startColor = destinationHoverColor;
-        destinationHoverRing.endColor = destinationHoverColor;
-        destinationHoverRing.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        destinationHoverRing.receiveShadows = false;
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (shader == null)
-            shader = Shader.Find("Sprites/Default");
-        if (shader != null)
-        {
-            destinationHoverMaterial = new Material(shader)
-            {
-                name = "WBC Destination Hover Material",
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            destinationHoverRing.sharedMaterial = destinationHoverMaterial;
-        }
-        ringObject.SetActive(false);
-    }
-
-    private void UpdateDestinationHover()
-    {
-        if (idleSquad == null || destinationHoverRing == null || PointerIsOverClickableUi() ||
-            !TryGetMapDestination(Input.mousePosition, out Vector3 targetPosition, out _, out _))
-        {
-            if (destinationHoverRing != null)
-                destinationHoverRing.gameObject.SetActive(false);
-            return;
-        }
-
-        destinationHoverRing.gameObject.SetActive(true);
-        destinationHoverRing.startWidth = destinationHoverLineWidth;
-        destinationHoverRing.endWidth = destinationHoverLineWidth;
-        destinationHoverRing.startColor = destinationHoverColor;
-        destinationHoverRing.endColor = destinationHoverColor;
-        for (int index = 0; index < destinationHoverRing.positionCount; index++)
-        {
-            float angle = index * Mathf.PI * 2f / destinationHoverRing.positionCount;
-            Vector3 point = targetPosition + Vector3.up * 0.08f +
-                new Vector3(Mathf.Cos(angle) * destinationHoverRadius, 0f, Mathf.Sin(angle) * destinationHoverRadius);
-            destinationHoverRing.SetPosition(index, point);
-        }
-    }
-
     private void HandleMapClick()
     {
         if (awaitingInfectionTargetSelection && Input.GetMouseButtonDown(0))
         {
-            bool clickedActiveInfectionDiamond = false;
-            if (EventSystem.current != null)
+            if (TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
             {
-                PointerEventData pointerData = new PointerEventData(EventSystem.current)
-                {
-                    position = Input.mousePosition
-                };
-                List<RaycastResult> raycastResults = new List<RaycastResult>();
-                EventSystem.current.RaycastAll(pointerData, raycastResults);
-                foreach (RaycastResult result in raycastResults)
-                {
-                    if (result.gameObject == null)
-                        continue;
-
-                    foreach (InfectionMarker marker in activeInfectionMarkers)
-                    {
-                        if (marker != null && !marker.isRemoving && marker.markerButton != null &&
-                            (result.gameObject == marker.markerButton.gameObject ||
-                             result.gameObject.transform.IsChildOf(marker.markerButton.transform)))
-                        {
-                            clickedActiveInfectionDiamond = true;
-                            break;
-                        }
-                    }
-
-                    if (clickedActiveInfectionDiamond)
-                        break;
-                }
-            }
-
-            if (clickedActiveInfectionDiamond)
+                RequestDispatchToInfection(infectionTarget);
                 return;
+            }
 
             awaitingInfectionTargetSelection = false;
             awaitingSquadDestination = false;
@@ -770,6 +709,81 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (!DispatchIdleSquadTo(destination, null, locationName))
             LogWbcSquadMessage("WBC squad could not reach that map location.", ConsoleLogUI.LogType.Warning);
+    }
+
+    private bool TryGetInfectionTargetAtScreenPosition(Vector2 screenPosition, out InfectionMarker infectionTarget)
+    {
+        infectionTarget = null;
+        if (EventSystem.current != null)
+        {
+            PointerEventData pointerData = new PointerEventData(EventSystem.current)
+            {
+                position = screenPosition
+            };
+            List<RaycastResult> raycastResults = new List<RaycastResult>();
+            EventSystem.current.RaycastAll(pointerData, raycastResults);
+            foreach (RaycastResult result in raycastResults)
+            {
+                if (result.gameObject == null)
+                    continue;
+
+                foreach (InfectionMarker marker in activeInfectionMarkers)
+                {
+                    if (marker == null || marker.isRemoving || marker.markerButton == null)
+                        continue;
+
+                    if (result.gameObject == marker.markerButton.gameObject ||
+                        result.gameObject.transform.IsChildOf(marker.markerButton.transform))
+                    {
+                        infectionTarget = marker;
+                        return true;
+                    }
+                }
+            }
+
+            foreach (RaycastResult result in raycastResults)
+            {
+                if (result.module is GraphicRaycaster)
+                    return false;
+            }
+        }
+
+        if (gameplayCamera == null)
+            gameplayCamera = cameraScript != null ? cameraScript.GetComponentInChildren<Camera>() : Camera.main;
+        if (gameplayCamera == null)
+            return false;
+
+        Ray ray = gameplayCamera.ScreenPointToRay(screenPosition);
+        RaycastHit[] hits = Physics.RaycastAll(ray, gameplayCamera.farClipPlane, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        Array.Sort(hits, (first, second) => first.distance.CompareTo(second.distance));
+        const string NotificationObjectPrefix = "Infection Notification - ";
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider == null)
+                continue;
+
+            Transform candidate = hit.collider.transform;
+            while (candidate != null)
+            {
+                if (candidate.name.StartsWith(NotificationObjectPrefix, StringComparison.Ordinal))
+                {
+                    string infectionDisplayName = candidate.name.Substring(NotificationObjectPrefix.Length);
+                    foreach (InfectionMarker marker in activeInfectionMarkers)
+                    {
+                        if (marker != null && !marker.isRemoving && marker.infection != null &&
+                            string.Equals(marker.infection.displayName, infectionDisplayName, StringComparison.Ordinal))
+                        {
+                            infectionTarget = marker;
+                            return true;
+                        }
+                    }
+                }
+
+                candidate = candidate.parent;
+            }
+        }
+
+        return false;
     }
 
     private bool PointerIsOverClickableUi()
@@ -1057,7 +1071,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (cameraScript == null)
                 cameraScript = FindFirstObjectByType<CameraScript>();
             if (cameraScript != null)
-                cameraScript.SelectLayer(2);
+                cameraScript.SelectLayerWithoutCameraMove(2);
         }
 
         if (useLegacySelectFirst && selectedMarker != null && !selectedMarker.isRemoving && activeInfectionMarkers.Contains(selectedMarker))
@@ -1081,7 +1095,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             awaitingInfectionTargetSelection = !useLegacySelectFirst;
             if (promptBannerLabel != null)
                 promptBannerLabel.text = awaitingInfectionTargetSelection
-                    ? "Select an infection to deploy."
+                    ? "Click an infection to send your squad."
                     : "Select a destination on the map or an infection to send your WBC squad.";
             ShowSquadPrompt();
         }

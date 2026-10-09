@@ -33,6 +33,10 @@ public sealed class TutorialManager : MonoBehaviour
     private const float HighlightPulseSpeed = 2f;
     private static readonly Color HighlightPulseColor = new Color(0.35f, 0.95f, 1f, 1f);
     private const float TutorialWellnessBaseline = 95f;
+    private const int FirstLiveDemonstrationStepIndex = 15;
+    private const float NavigationPanThresholdPixels = 5f;
+    private const float WellnessDemoInfectionRevealDelaySeconds = 1.5f;
+    private const int WellnessDemoInfectionSpawnCount = 2;
 
     [Serializable]
     public sealed class TutorialStep
@@ -75,6 +79,7 @@ public sealed class TutorialManager : MonoBehaviour
     [SerializeField] private RectMask2D bodyViewportMask;
     [SerializeField] private Scrollbar bodyVerticalScrollbar;
     [SerializeField, Min(1f)] private float bodyFontSize = DefaultBodyFontSize;
+    [SerializeField] private Vector2 dualIconSize = new Vector2(72f, 72f);
     [SerializeField] private Button backButton;
     [SerializeField] private Button nextButton;
     [SerializeField] private Button skipButton;
@@ -89,7 +94,7 @@ public sealed class TutorialManager : MonoBehaviour
     private int currentStepIndex;
     private bool currentActionCompleted;
     private bool tutorialIsOpen;
-    private bool wasPausedBeforeTutorial;
+    private float timeScaleBeforeTutorial;
     private InfectionSpawner infectionSpawner;
     private PendingInfectionsPanel pendingInfectionsPanel;
     private WellnessManager wellnessManager;
@@ -103,6 +108,8 @@ public sealed class TutorialManager : MonoBehaviour
     private Graphic highlightedGraphic;
     private Color highlightedGraphicOriginalColor;
     private int currentScrollStepIndex = -1;
+    private bool navigationPanTracking;
+    private Vector2 navigationPanStartPosition;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneLoadHandler()
@@ -187,12 +194,51 @@ public sealed class TutorialManager : MonoBehaviour
             OpenTutorial();
     }
 
+    private void DetectNavigationPanOrZoom()
+    {
+        if (!tutorialIsOpen || !IsCurrentAction("panOrZoomCamera") || currentActionCompleted)
+        {
+            navigationPanTracking = false;
+            return;
+        }
+
+        if (Mathf.Abs(Input.mouseScrollDelta.y) > 0f)
+        {
+            CompleteNavigationPanOrZoomAction();
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(1))
+        {
+            navigationPanTracking = true;
+            navigationPanStartPosition = Input.mousePosition;
+        }
+
+        if (navigationPanTracking && Input.GetMouseButton(1))
+        {
+            Vector2 mouseDelta = (Vector2)Input.mousePosition - navigationPanStartPosition;
+            if (mouseDelta.sqrMagnitude >= NavigationPanThresholdPixels * NavigationPanThresholdPixels)
+                CompleteNavigationPanOrZoomAction();
+        }
+
+        if (!Input.GetMouseButton(1))
+            navigationPanTracking = false;
+    }
+
+    private void CompleteNavigationPanOrZoomAction()
+    {
+        navigationPanTracking = false;
+        Debug.Log("[Tutorial] Pan or zoom detected — advancing Navigation step.", this);
+        CompleteCurrentStep();
+    }
+
     private void Update()
     {
         if (!tutorialIsOpen)
             return;
 
         ResolveSceneTargets();
+        DetectNavigationPanOrZoom();
         BindPendingInfectionsPanel();
         BindFastForwardButtonForCurrentStep();
         RevealSpawnedNotificationIcon();
@@ -466,7 +512,37 @@ public sealed class TutorialManager : MonoBehaviour
 
     private void RunStepEntryAction(TutorialStep step)
     {
-        if (step == null || !completedStepEntryActions.Add(currentStepIndex))
+        if (step == null)
+            return;
+
+        if (string.Equals(step.actionId, "frameFullBody", StringComparison.Ordinal) ||
+            (currentStepIndex == 0 && string.Equals(step.actionId, "panOrZoomCamera", StringComparison.Ordinal)))
+        {
+            CameraScript cameraController = FindFirstObjectByType<CameraScript>();
+            if (cameraController != null)
+            {
+                cameraController.FrameFullBody();
+                Debug.Log("[Tutorial] Framed the full body for the navigation step.", this);
+            }
+            return;
+        }
+
+        if (step.actionId != null && step.actionId.StartsWith("frameLayer", StringComparison.Ordinal))
+        {
+            string layerNumberText = step.actionId.Substring("frameLayer".Length);
+            if (int.TryParse(layerNumberText, out int layerNumber))
+            {
+                CameraScript cameraController = FindFirstObjectByType<CameraScript>();
+                if (cameraController != null)
+                {
+                    cameraController.FrameLayer(layerNumber);
+                    Debug.Log($"[Tutorial] Framed layer {layerNumber} for step '{step.title}'.", this);
+                }
+            }
+            return;
+        }
+
+        if (!completedStepEntryActions.Add(currentStepIndex))
             return;
 
         switch (step.actionId)
@@ -515,11 +591,48 @@ public sealed class TutorialManager : MonoBehaviour
                 }
                 break;
             case "applyWellnessDrop":
-                wellnessManager = WellnessManager.Instance != null ? WellnessManager.Instance : FindFirstObjectByType<WellnessManager>();
-                if (wellnessManager != null)
-                    wellnessManager.ApplyInfectionResolutionDelta("Tutorial consequences example", -10f);
+                StartCoroutine(RunWellnessDrainDemonstration());
                 break;
         }
+    }
+
+    private IEnumerator RunWellnessDrainDemonstration()
+    {
+        infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+        if (infectionSpawner == null)
+        {
+            Debug.LogWarning("[Tutorial] Cannot run the wellness drain demonstration because no InfectionSpawner was found.", this);
+            yield break;
+        }
+
+        HashSet<InfectionSpawner.InfectionMarker> existingMarkers = new HashSet<InfectionSpawner.InfectionMarker>(infectionSpawner.ActiveInfections);
+        for (int index = 0; index < WellnessDemoInfectionSpawnCount; index++)
+            infectionSpawner.ForceSpawnOneBacterialInfection();
+
+        int spawnedCount = 0;
+        foreach (InfectionSpawner.InfectionMarker marker in infectionSpawner.ActiveInfections)
+        {
+            if (marker != null && !existingMarkers.Contains(marker))
+                spawnedCount++;
+        }
+
+        Debug.Log("[Tutorial] Step 19 — spawned 2 infections, advancing day for demonstration.", this);
+        if (spawnedCount != WellnessDemoInfectionSpawnCount)
+            Debug.LogWarning($"[Tutorial] Wellness demo spawned {spawnedCount} of {WellnessDemoInfectionSpawnCount} requested infections. Check spawner warnings above.", this);
+
+        int demonstrationStepIndex = currentStepIndex;
+        yield return new WaitForSecondsRealtime(WellnessDemoInfectionRevealDelaySeconds);
+        if (!tutorialIsOpen || currentStepIndex != demonstrationStepIndex)
+            yield break;
+
+        DayCounterUI dayCounter = FindFirstObjectByType<DayCounterUI>();
+        if (dayCounter == null)
+        {
+            Debug.LogError("[Tutorial] Cannot advance the day for the wellness demonstration because DayCounterUI was not found.", this);
+            yield break;
+        }
+
+        dayCounter.AdvanceDay();
     }
 
     private void RevealSpawnedNotificationIcon()
@@ -588,7 +701,7 @@ public sealed class TutorialManager : MonoBehaviour
         ResolveSceneTargets();
         if (!tutorialIsOpen)
         {
-            wasPausedBeforeTutorial = Time.timeScale <= 0f;
+            timeScaleBeforeTutorial = Time.timeScale;
             CaptureAndHideInitialTargets();
             Time.timeScale = 0f;
         }
@@ -649,7 +762,7 @@ public sealed class TutorialManager : MonoBehaviour
 
         currentActionCompleted = true;
         completedActionSteps.Add(currentStepIndex);
-        Time.timeScale = 0f;
+        Time.timeScale = IsLiveDemonstrationStep() ? 1f : 0f;
         RefreshNavigationState();
     }
 
@@ -687,6 +800,13 @@ public sealed class TutorialManager : MonoBehaviour
             originalTargetStates.Add(target, target.activeSelf);
     }
 
+    private bool IsLiveDemonstrationStep()
+    {
+        return steps != null && currentStepIndex >= FirstLiveDemonstrationStepIndex &&
+               currentStepIndex < steps.Count - 1;
+    }
+
+
     private void ShowCurrentStep()
     {
         StopHighlightPulse();
@@ -697,12 +817,34 @@ public sealed class TutorialManager : MonoBehaviour
         TutorialStep step = steps[currentStepIndex];
         if (step == null)
             return;
-        GameObject primaryStepTarget = ResolvePrimaryTarget(step.targetKey);
+        GameObject primaryStepTarget = null;
+        if (string.Equals(step.targetKey, "wbcHeadshot", StringComparison.Ordinal))
+        {
+            primaryStepTarget = GameObject.Find("WBC Squad Headshot Button");
+            if (primaryStepTarget != null)
+                RegisterTarget("wbcHeadshot", primaryStepTarget, true);
+            else
+                primaryStepTarget = ResolvePrimaryTarget(step.targetKey);
+        }
+        else
+        {
+            primaryStepTarget = ResolvePrimaryTarget(step.targetKey);
+        }
+        if (primaryStepTarget == null && string.Equals(step.targetKey, "fastForward", StringComparison.Ordinal))
+        {
+            Button speedButton = FindFastForwardButton();
+            if (speedButton != null)
+            {
+                RegisterTarget("fastForward", speedButton.gameObject, true);
+                primaryStepTarget = speedButton.gameObject;
+            }
+        }
         if (step.revealTarget == null)
             step.revealTarget = primaryStepTarget;
         if (step.highlightTarget == null)
             step.highlightTarget = primaryStepTarget;
         currentActionCompleted = completedActionSteps.Contains(currentStepIndex);
+        navigationPanTracking = false;
 
         if (step.revealTarget != null)
         {
@@ -760,17 +902,14 @@ public sealed class TutorialManager : MonoBehaviour
         ResizePanelToBodyContent();
         ApplyContainerAnchor(step.containerAnchor);
         Debug.Log($"[Tutorial] Applied {step.containerAnchor} container anchor for step {currentStepIndex + 1} of {steps.Count}.", this);
-        if (IsCurrentAction("resolveInfection") && !currentActionCompleted)
+        Time.timeScale = IsLiveDemonstrationStep() ? 1f : 0f;
+        if (IsCurrentAction("resolveInfection") && tutorialSpawnedMarker != null)
         {
-            Time.timeScale = 1f;
-            if (tutorialSpawnedMarker != null)
+            CameraScript focusController = FindFirstObjectByType<CameraScript>();
+            if (focusController != null)
             {
-                CameraScript focusController = FindFirstObjectByType<CameraScript>();
-                if (focusController != null)
-                {
-                    focusController.FocusOnWorldPosition(tutorialSpawnedMarker.worldPosition);
-                    Debug.Log("[Tutorial] Resumed the camera focus on the first infection for the live dispatch step.", this);
-                }
+                focusController.FocusOnWorldPosition(tutorialSpawnedMarker.worldPosition);
+                Debug.Log("[Tutorial] Resumed the camera focus on the first infection for the live dispatch step.", this);
             }
         }
         BindResolutionEventForCurrentStep();
@@ -800,12 +939,16 @@ public sealed class TutorialManager : MonoBehaviour
 
         Graphic graphic = target.GetComponent<Graphic>();
         if (graphic == null)
-            graphic = target.GetComponentInChildren<Graphic>();
+            graphic = target.GetComponentInChildren<Graphic>(true);
         if (graphic == null)
+        {
+            Debug.LogWarning($"[Tutorial] Highlight target '{target.name}' has no UI Graphic to pulse.", this);
             return;
+        }
 
         highlightedGraphic = graphic;
         highlightedGraphicOriginalColor = graphic.color;
+        Debug.Log($"[Tutorial] Started unscaled UI highlight pulse on '{target.name}' using '{graphic.GetType().Name}'.", this);
     }
 
     private void UpdateHighlightPulse()
@@ -884,6 +1027,59 @@ public sealed class TutorialManager : MonoBehaviour
         }
     }
 
+    private float ConfigureDualIconLayout(float panelWidth)
+    {
+        const float IconTopOffset = 98f;
+        const float IconGap = 24f;
+        const float LabelGap = 6f;
+        const float LabelHeight = 22f;
+        const float BodyGap = 12f;
+
+        float iconAreaWidth = Mathf.Min(300f, panelWidth * 0.34f);
+        float iconWidthLimit = Mathf.Max(1f, (iconAreaWidth - IconGap) * 0.5f);
+        float iconWidth = Mathf.Min(Mathf.Max(1f, dualIconSize.x), iconWidthLimit);
+        float iconHeight = Mathf.Clamp(dualIconSize.y, 1f, 100f);
+        float rowCenterX = iconAreaWidth * 0.5f;
+        float iconCenterOffset = iconWidth * 0.5f + IconGap * 0.5f;
+        float labelWidth = Mathf.Min(iconAreaWidth * 0.5f, iconWidth + 20f);
+        float labelTop = -IconTopOffset - iconHeight - LabelGap;
+
+        ConfigureDualIcon(iconImage, rowCenterX - iconCenterOffset, -IconTopOffset, iconWidth, iconHeight);
+        ConfigureDualIcon(secondaryIconImage, rowCenterX + iconCenterOffset, -IconTopOffset, iconWidth, iconHeight);
+        ConfigureDualIconLabel(bacterialIconLabel, rowCenterX - iconCenterOffset, labelTop, labelWidth, LabelHeight);
+        ConfigureDualIconLabel(viralIconLabel, rowCenterX + iconCenterOffset, labelTop, labelWidth, LabelHeight);
+
+        return labelTop - LabelHeight - BodyGap;
+    }
+
+    private static void ConfigureDualIcon(Image image, float iconCenterX, float iconTop, float iconWidth, float iconHeight)
+    {
+        if (image == null)
+            return;
+
+        RectTransform rect = image.rectTransform;
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(iconCenterX, iconTop);
+        rect.sizeDelta = new Vector2(iconWidth, iconHeight);
+        image.preserveAspect = true;
+    }
+
+    private static void ConfigureDualIconLabel(TextMeshProUGUI label, float centerX, float labelTop, float width, float height)
+    {
+        if (label == null)
+            return;
+
+        RectTransform rect = label.rectTransform;
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(centerX, labelTop);
+        rect.sizeDelta = new Vector2(width, height);
+        label.alignment = TextAlignmentOptions.Center;
+    }
+
     private void ResizePanelToBodyContent()
     {
         if (panelRect == null || bodyLabel == null)
@@ -926,7 +1122,7 @@ public sealed class TutorialManager : MonoBehaviour
         }
 
         RectTransform viewportRect = bodyViewport;
-        float viewportTop = isPathogenComparisonStep ? -190f : -94f;
+        float viewportTop = isPathogenComparisonStep ? ConfigureDualIconLayout(maxWidth) : -94f;
         float viewportX = isPathogenComparisonStep ? PanelScreenMargin : 142f;
         viewportRect.anchorMin = new Vector2(0f, 1f);
         viewportRect.anchorMax = new Vector2(0f, 1f);
@@ -1033,6 +1229,6 @@ public sealed class TutorialManager : MonoBehaviour
             return;
 
         tutorialIsOpen = false;
-        Time.timeScale = wasPausedBeforeTutorial ? 0f : 1f;
+        Time.timeScale = timeScaleBeforeTutorial;
     }
 }

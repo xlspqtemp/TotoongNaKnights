@@ -36,6 +36,23 @@ public class CameraScript : MonoBehaviour
     [SerializeField] private CanvasGroup digestiveOrdersCanvasGroup;
     [SerializeField] private CanvasGroup respiratoryOrdersCanvasGroup;
 
+    [Header("Tutorial Framing")]
+    [SerializeField] private Vector3 fullBodyFramePosition = new Vector3(3000f, 0f, -1000f);
+    [SerializeField, Min(1f)] private float fullBodyFrameZoom = 250f;
+    [SerializeField] private bool calculateFullBodyFrameFromRendererBounds = true;
+    [SerializeField] private Vector3[] layerFramePositions =
+    {
+        new Vector3(0f, 0f, -1000f),
+        new Vector3(2000f, 0f, -1000f),
+        new Vector3(4000f, 0f, -1000f),
+        new Vector3(6000f, 0f, -1000f)
+    };
+    [SerializeField] private float[] layerFrameZooms = { 150f, 150f, 150f, 150f };
+    [SerializeField] private bool calculateLayerFrameZoomFromRendererBounds = true;
+    [SerializeField, Min(0f)] private float frameCameraDistance = 80f;
+    [SerializeField, Min(0f)] private float frameTweenDuration;
+    [SerializeField, Min(1f)] private float framingPadding = 1.15f;
+
     [Header("Camera Movement Audio")]
     [SerializeField] private AudioSource movementAudioSource;
     [SerializeField] private AudioClip movementSfx;
@@ -48,8 +65,12 @@ public class CameraScript : MonoBehaviour
     private Camera sceneCamera;
     private int selectedLayer = 1;
     private Coroutine infectionFocusCoroutine;
+    private Coroutine frameCoroutine;
     private CameraScript_Zoom focusZoomController;
+    private CameraScript_Zoom frameZoomController;
     private bool focusZoomControllerWasEnabled;
+    private bool frameZoomControllerWasEnabled;
+    private bool suppressCameraPositionOnLayerSelection;
 
     private void Awake()
     {
@@ -105,6 +126,219 @@ public class CameraScript : MonoBehaviour
 
         // World panning uses right-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
         UpdateMovementAudio(cameraMoved);
+    }
+
+    /// <summary>Frames the combined body map with a zoomed-out orthographic view.</summary>
+    public void FrameFullBody()
+    {
+        SelectLayer(2);
+        Bounds bodyBounds;
+        Vector3 center = fullBodyFramePosition;
+        float targetZoom = fullBodyFrameZoom;
+        if (calculateFullBodyFrameFromRendererBounds && TryGetCombinedLayerBounds(out bodyBounds))
+        {
+            center = bodyBounds.center;
+            targetZoom = Mathf.Max(targetZoom, CalculateOrthographicFrameSize(bodyBounds));
+        }
+
+        FrameCameraToPosition(center, targetZoom);
+    }
+
+    /// <summary>Switches to and frames one body layer. Layer indices match SelectLayer (1-4).</summary>
+    public void FrameLayer(int layerIndex)
+    {
+        if (layerIndex < 1 || layerIndex > LayerCount)
+        {
+            Debug.LogWarning($"CameraScript cannot frame invalid layer index {layerIndex}. Expected 1-{LayerCount}.", this);
+            return;
+        }
+
+        SelectLayer(layerIndex);
+        Transform layerRoot = GetLayerRoot(layerIndex);
+        Vector3 fallbackPosition = layerRoot != null ? layerRoot.position : GetLayerFramePosition(layerIndex);
+        Vector3 center = GetLayerFramePosition(layerIndex, fallbackPosition);
+        float targetZoom = GetLayerFrameZoom(layerIndex);
+        if (calculateLayerFrameZoomFromRendererBounds && layerRoot != null && TryGetRendererBounds(layerRoot, out Bounds layerBounds))
+            targetZoom = Mathf.Max(targetZoom, CalculateOrthographicFrameSize(layerBounds));
+
+        FrameCameraToPosition(center, targetZoom);
+    }
+
+    private Transform GetLayerRoot(int layerIndex)
+    {
+        switch (layerIndex)
+        {
+            case 1: return floor1;
+            case 2: return floor2;
+            case 3: return floor3;
+            case 4: return floor4;
+            default: return null;
+        }
+    }
+
+    private Vector3 GetLayerFramePosition(int layerIndex, Vector3 fallbackPosition = default)
+    {
+        int arrayIndex = layerIndex - 1;
+        if (layerFramePositions != null && arrayIndex >= 0 && arrayIndex < layerFramePositions.Length)
+        {
+            Vector3 configuredPosition = layerFramePositions[arrayIndex];
+            if (configuredPosition != Vector3.zero)
+                return configuredPosition;
+        }
+
+        return fallbackPosition;
+    }
+
+    private float GetLayerFrameZoom(int layerIndex)
+    {
+        int arrayIndex = layerIndex - 1;
+        if (layerFrameZooms != null && arrayIndex >= 0 && arrayIndex < layerFrameZooms.Length && layerFrameZooms[arrayIndex] > 0f)
+            return layerFrameZooms[arrayIndex];
+
+        return fullBodyFrameZoom;
+    }
+
+    private bool TryGetCombinedLayerBounds(out Bounds combinedBounds)
+    {
+        combinedBounds = default;
+        bool hasBounds = false;
+        for (int layerIndex = 1; layerIndex <= LayerCount; layerIndex++)
+        {
+            Transform layerRoot = GetLayerRoot(layerIndex);
+            if (!TryGetRendererBounds(layerRoot, out Bounds layerBounds))
+                continue;
+
+            if (!hasBounds)
+            {
+                combinedBounds = layerBounds;
+                hasBounds = true;
+            }
+            else
+            {
+                combinedBounds.Encapsulate(layerBounds);
+            }
+        }
+
+        return hasBounds;
+    }
+
+    private static bool TryGetRendererBounds(Transform root, out Bounds bounds)
+    {
+        bounds = default;
+        if (root == null)
+            return false;
+
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        bool hasBounds = false;
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                continue;
+
+            if (!hasBounds)
+            {
+                bounds = renderer.bounds;
+                hasBounds = true;
+            }
+            else
+            {
+                bounds.Encapsulate(renderer.bounds);
+            }
+        }
+
+        return hasBounds;
+    }
+
+    private float CalculateOrthographicFrameSize(Bounds bounds)
+    {
+        if (sceneCamera == null || !sceneCamera.orthographic)
+            return fullBodyFrameZoom;
+
+        Vector3 extents = bounds.extents;
+        Vector3 cameraRight = transform.right;
+        Vector3 cameraUp = transform.up;
+        float projectedHalfWidth = Mathf.Abs(cameraRight.x) * extents.x + Mathf.Abs(cameraRight.y) * extents.y + Mathf.Abs(cameraRight.z) * extents.z;
+        float projectedHalfHeight = Mathf.Abs(cameraUp.x) * extents.x + Mathf.Abs(cameraUp.y) * extents.y + Mathf.Abs(cameraUp.z) * extents.z;
+        float aspect = Mathf.Max(0.1f, sceneCamera.aspect);
+        return Mathf.Max(projectedHalfHeight, projectedHalfWidth / aspect) * Mathf.Max(1f, framingPadding);
+    }
+
+    private void FrameCameraToPosition(Vector3 targetPosition, float targetZoom)
+    {
+        StopInfectionFocus();
+        StopCameraFrame();
+        sceneCamera = sceneCamera != null ? sceneCamera : GetComponentInChildren<Camera>();
+        frameZoomController = GetComponent<CameraScript_Zoom>();
+        frameZoomControllerWasEnabled = frameZoomController != null && frameZoomController.enabled;
+        if (frameZoomController != null)
+            frameZoomController.enabled = false;
+
+        Vector3 targetCameraPosition = targetPosition - transform.forward * frameCameraDistance;
+        float duration = Mathf.Max(0f, frameTweenDuration);
+        if (duration <= MinimumInfectionFocusDuration)
+        {
+            ApplyFramePose(targetCameraPosition, targetZoom);
+            FinishCameraFrame(targetZoom);
+            return;
+        }
+
+        frameCoroutine = StartCoroutine(AnimateCameraFrame(targetCameraPosition, targetZoom, duration));
+    }
+
+    private IEnumerator AnimateCameraFrame(Vector3 targetPosition, float targetZoom, float duration)
+    {
+        Vector3 startPosition = transform.position;
+        float startZoom = sceneCamera != null ? sceneCamera.orthographicSize : targetZoom;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(elapsed / duration);
+            float easedProgress = progress * progress * (3f - 2f * progress);
+            ApplyFramePose(Vector3.Lerp(startPosition, targetPosition, easedProgress), Mathf.Lerp(startZoom, targetZoom, easedProgress));
+            yield return null;
+        }
+
+        ApplyFramePose(targetPosition, targetZoom);
+        frameCoroutine = null;
+        FinishCameraFrame(targetZoom);
+    }
+
+    private void ApplyFramePose(Vector3 cameraPosition, float orthographicSize)
+    {
+        transform.position = cameraPosition;
+        if (sceneCamera != null && sceneCamera.orthographic)
+            sceneCamera.orthographicSize = orthographicSize;
+    }
+
+    private void FinishCameraFrame(float orthographicSize)
+    {
+        if (frameZoomController != null)
+        {
+            frameZoomController.maxZoom = Mathf.Max(frameZoomController.maxZoom, orthographicSize);
+            if (ZoomControllerCurrentZoomField != null)
+                ZoomControllerCurrentZoomField.SetValue(frameZoomController, orthographicSize);
+            frameZoomController.enabled = frameZoomControllerWasEnabled;
+        }
+
+        frameZoomController = null;
+    }
+
+    private void StopCameraFrame()
+    {
+        if (frameCoroutine != null)
+        {
+            StopCoroutine(frameCoroutine);
+            frameCoroutine = null;
+        }
+
+        if (frameZoomController != null)
+        {
+            if (sceneCamera != null && sceneCamera.orthographic && ZoomControllerCurrentZoomField != null)
+                ZoomControllerCurrentZoomField.SetValue(frameZoomController, sceneCamera.orthographicSize);
+            frameZoomController.enabled = frameZoomControllerWasEnabled;
+            frameZoomController = null;
+        }
     }
 
     /// <summary>Smoothly pans and zooms the camera to an infection world position.</summary>
@@ -180,6 +414,21 @@ public class CameraScript : MonoBehaviour
         focusZoomController = null;
     }
 
+    /// <summary>Selects a body-system layer while keeping the camera at its current position.</summary>
+    public void SelectLayerWithoutCameraMove(int layerNumber)
+    {
+        bool previousSuppressionState = suppressCameraPositionOnLayerSelection;
+        suppressCameraPositionOnLayerSelection = true;
+        try
+        {
+            SelectLayer(layerNumber);
+        }
+        finally
+        {
+            suppressCameraPositionOnLayerSelection = previousSuppressionState;
+        }
+    }
+
     /// <summary>
     /// Selects the requested body-system layer and plays the layer-switch sound.
     /// </summary>
@@ -229,7 +478,7 @@ public class CameraScript : MonoBehaviour
                 break;
         }
 
-        if (destination != null)
+        if (destination != null && !suppressCameraPositionOnLayerSelection)
         {
             Vector3 focusOffset = selectedLayer == 1 ? defaultLayerFocusOffset : Vector3.zero;
             transform.position = destination.position + focusOffset;
