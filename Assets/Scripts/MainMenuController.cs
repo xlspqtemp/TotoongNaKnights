@@ -10,6 +10,7 @@ using TMPro;
 public class MainMenuController : MonoBehaviour
 {
     private const string GameSceneName = "Game";
+    private const string MainMenuSceneName = "MainMenu";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
     private const string BankGothicFontResourceName = "BankGothicMediumSDF";
     private const int OverlayWidth = 920;
@@ -158,6 +159,8 @@ public class MainMenuController : MonoBehaviour
 
         CreateButton(difficultyPanel.transform, "StartGameButton", "Start Game", ButtonWidth, ButtonHeight,
             new Vector2(0, StartButtonY), StartGame);
+        CreateButton(difficultyPanel.transform, "DifficultyBackButton", "Back", ButtonWidth, ButtonHeight,
+            new Vector2(-300, StartButtonY), ReturnToMainMenu);
         difficultyPanel.SetActive(false);
     }
 
@@ -466,6 +469,11 @@ public class MainMenuController : MonoBehaviour
         rect.anchoredPosition = anchoredPosition;
         rect.sizeDelta = sizeDelta;
         rect.localScale = Vector3.one;
+    }
+
+    private void ReturnToMainMenu()
+    {
+        SceneManager.LoadScene(MainMenuSceneName);
     }
 
     private void StartGame()

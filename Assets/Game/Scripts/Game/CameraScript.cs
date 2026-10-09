@@ -71,6 +71,7 @@ public class CameraScript : MonoBehaviour
     private bool focusZoomControllerWasEnabled;
     private bool frameZoomControllerWasEnabled;
     private bool suppressCameraPositionOnLayerSelection;
+    private int nextDeployedSquadFocusIndex;
 
     private void Awake()
     {
@@ -84,6 +85,8 @@ public class CameraScript : MonoBehaviour
 
     private void Update()
     {
+        HandleDeployedSquadFocusInput();
+
         if (infectionFocusCoroutine != null && Time.timeScale > 0f && Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f)
         {
             StopInfectionFocus();
@@ -126,6 +129,27 @@ public class CameraScript : MonoBehaviour
 
         // World panning uses right-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
         UpdateMovementAudio(cameraMoved);
+    }
+
+    private void HandleDeployedSquadFocusInput()
+    {
+        if (Time.timeScale <= 0f || !Input.GetMouseButtonDown(2))
+            return;
+
+        InfectionSpawner infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+        if (infectionSpawner == null || infectionSpawner.IsAwaitingInfectionTargetSelection)
+            return;
+
+        var squadPositions = infectionSpawner.GetDeployedSquadPositions();
+        if (squadPositions.Count == 0)
+        {
+            nextDeployedSquadFocusIndex = 0;
+            return;
+        }
+
+        nextDeployedSquadFocusIndex %= squadPositions.Count;
+        FocusOnWorldPosition(squadPositions[nextDeployedSquadFocusIndex]);
+        nextDeployedSquadFocusIndex = (nextDeployedSquadFocusIndex + 1) % squadPositions.Count;
     }
 
     /// <summary>Frames the combined body map with a zoomed-out orthographic view.</summary>

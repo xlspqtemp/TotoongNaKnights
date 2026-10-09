@@ -28,6 +28,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float SquadSpawnOffsetRadius = 1.75f;
     private const float SquadStandingOffsetRadius = 2.8f;
     private const float SquadOffsetAngleStep = 2.39996323f;
+    private const float MinimumPromptWellnessGap = 30f;
+    private const float DefaultPromptWellnessGap = 36f;
     private const float SquadPromptFadeDuration = 0.4f;
     private const float InfectionPopupFadeDuration = 0.3f;
     private const float InfectionPopupReferenceDistance = 5f;
@@ -148,7 +150,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private bool verboseCombatLogging;
     [SerializeField, Min(0f)] private float infectionAnchorMatchRadius = 2f;
     [SerializeField] private Vector2 promptBannerSize = new Vector2(700f, 58f);
-    [SerializeField, Min(0f)] private float promptBannerWellnessGap = 10f;
+    [SerializeField, Min(MinimumPromptWellnessGap)] private float promptBannerWellnessGap = DefaultPromptWellnessGap;
     [SerializeField] private Color promptBannerColor = new Color(0.025f, 0.045f, 0.065f, 0.92f);
     [SerializeField, Min(0f)] private float promptAutoFadeSeconds = 8f;
 
@@ -188,6 +190,37 @@ public sealed class InfectionSpawner : MonoBehaviour
     private Camera gameplayCamera;
 
     public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
+
+    /// <summary>Returns the world-space average position of each deployed squad with at least one living unit.</summary>
+    public IReadOnlyList<Vector3> GetDeployedSquadPositions()
+    {
+        List<Vector3> positions = new List<Vector3>(dispatchedWbcSquads.Count);
+        foreach (DispatchedWbcSquad squad in dispatchedWbcSquads)
+        {
+            if (squad == null || squad.units == null)
+                continue;
+
+            Vector3 positionSum = Vector3.zero;
+            int liveUnitCount = 0;
+            foreach (GameObject unit in squad.units)
+            {
+                if (unit == null || !unit.activeInHierarchy)
+                    continue;
+
+                Health health = unit.GetComponent<Health>();
+                if (health != null && health.IsDead)
+                    continue;
+
+                positionSum += unit.transform.position;
+                liveUnitCount++;
+            }
+
+            if (liveUnitCount > 0)
+                positions.Add(positionSum / liveUnitCount);
+        }
+
+        return positions;
+    }
 
     public bool IsSquadDispatchedTo(InfectionMarker marker)
     {
@@ -360,6 +393,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         squadMemberCount = Mathf.Max(1, squadMemberCount);
         headshotCooldownSeconds = Mathf.Max(0f, headshotCooldownSeconds);
         squadLifetimeSeconds = Mathf.Max(0.1f, squadLifetimeSeconds);
+        promptBannerWellnessGap = Mathf.Max(MinimumPromptWellnessGap, promptBannerWellnessGap);
         EnsureDispatchSlots();
         ApplyBodyPartButtonVisibility();
     }
@@ -430,6 +464,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         dispatchNavMeshSampleRadius = Mathf.Max(0.1f, dispatchNavMeshSampleRadius);
         dispatchArrivalRadius = Mathf.Max(0.1f, dispatchArrivalRadius);
+        promptBannerWellnessGap = Mathf.Max(MinimumPromptWellnessGap, promptBannerWellnessGap);
         combatDetectionRange = Mathf.Max(0f, combatDetectionRange);
         combatMeleeRange = Mathf.Max(0f, combatMeleeRange);
         wbcCombatMoveSpeed = Mathf.Max(0f, wbcCombatMoveSpeed);
@@ -618,26 +653,36 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (promptBannerObject == null || canvasRect == null)
             return;
 
+        float wellnessBottomLocalY = float.PositiveInfinity;
         RectTransform wellnessBarRect = hudCanvas != null
             ? hudCanvas.transform.Find("GameProgressBar") as RectTransform
             : null;
-        if (wellnessBarRect == null)
-        {
-            RectTransform fallbackRect = promptBannerObject.transform as RectTransform;
-            if (fallbackRect != null)
-                fallbackRect.anchoredPosition = new Vector2(0f, -promptBannerWellnessGap);
-            return;
-        }
+        RectTransform wellnessValueRect = hudCanvas != null
+            ? hudCanvas.transform.Find("ProgressValueLabel") as RectTransform
+            : null;
 
-        Vector3[] wellnessBarCorners = new Vector3[4];
-        wellnessBarRect.GetWorldCorners(wellnessBarCorners);
-        Vector3 bottomCenterWorld = (wellnessBarCorners[0] + wellnessBarCorners[3]) * 0.5f;
-        Vector3 bottomCenterCanvasLocal = canvasRect.InverseTransformPoint(bottomCenterWorld);
-        float xFromCanvasCenter = bottomCenterCanvasLocal.x - canvasRect.rect.center.x;
-        float yFromCanvasTop = bottomCenterCanvasLocal.y - canvasRect.rect.yMax - promptBannerWellnessGap;
+        if (wellnessBarRect != null)
+            wellnessBottomLocalY = GetBottomEdgeCanvasLocalY(wellnessBarRect, canvasRect);
+        if (wellnessValueRect != null)
+            wellnessBottomLocalY = Mathf.Min(wellnessBottomLocalY, GetBottomEdgeCanvasLocalY(wellnessValueRect, canvasRect));
+
+        float verticalGap = Mathf.Max(MinimumPromptWellnessGap, promptBannerWellnessGap);
+        float yFromCanvasTop = verticalGap;
+        if (!float.IsPositiveInfinity(wellnessBottomLocalY))
+            yFromCanvasTop = wellnessBottomLocalY - canvasRect.rect.yMax - verticalGap;
+
         RectTransform bannerRect = promptBannerObject.transform as RectTransform;
         if (bannerRect != null)
-            bannerRect.anchoredPosition = new Vector2(xFromCanvasCenter, yFromCanvasTop);
+            bannerRect.anchoredPosition = new Vector2(0f, yFromCanvasTop);
+    }
+
+    private static float GetBottomEdgeCanvasLocalY(RectTransform targetRect, RectTransform canvasRect)
+    {
+        Vector3[] corners = new Vector3[4];
+        targetRect.GetWorldCorners(corners);
+        float bottomLeftY = canvasRect.InverseTransformPoint(corners[0]).y;
+        float bottomRightY = canvasRect.InverseTransformPoint(corners[3]).y;
+        return Mathf.Min(bottomLeftY, bottomRightY);
     }
 
     private void FadeOutSquadPrompt()

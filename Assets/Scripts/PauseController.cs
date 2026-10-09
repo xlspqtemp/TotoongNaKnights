@@ -10,6 +10,25 @@ public class PauseController : MonoBehaviour
 
     private bool isPaused;
 
+    private void Update()
+    {
+        if (!Input.GetKeyDown(KeyCode.Escape))
+            return;
+
+        InfectionSpawner infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+        if (infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection)
+            return;
+
+        GameObject tutorialPanelObject = GameObject.Find("TutorialPanel");
+        if (tutorialPanelObject != null && tutorialPanelObject.activeInHierarchy)
+            return;
+
+        if (isPaused && (pausePanel == null || !pausePanel.activeInHierarchy))
+            return;
+
+        TogglePause();
+    }
+
     /// <summary>
     /// Toggles the game between paused and running states.
     /// </summary>

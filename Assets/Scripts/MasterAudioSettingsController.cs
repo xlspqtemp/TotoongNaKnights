@@ -13,6 +13,8 @@ public class MasterAudioSettingsController : MonoBehaviour
     private const float VolumeRowAnchorY = 0.62f;
     private const float VolumeSliderWidth = 360f;
     private const float VolumeSliderHorizontalOffset = -68f;
+    private const float SoundLabelGap = 10f;
+    private const float SoundLabelHeight = 24f;
     private const float VolumePercentageWidth = 120f;
     private const float VolumePercentageHorizontalOffset = 180f;
 
@@ -184,6 +186,10 @@ public class MasterAudioSettingsController : MonoBehaviour
             new Vector2(VolumePercentageWidth, 44f), TextAlignmentOptions.Right);
         percentageLabel.overflowMode = TextOverflowModes.Overflow;
         masterVolumeSlider = CreateMasterSlider(card.transform);
+        CreateText(card.transform, "SettingsSoundLabel", "SOUND", 22, FontStyles.Bold,
+            new Vector2(0.5f, VolumeRowAnchorY),
+            new Vector2(VolumeSliderHorizontalOffset, 15f + SoundLabelGap + SoundLabelHeight * 0.5f),
+            new Vector2(VolumeSliderWidth, SoundLabelHeight), TextAlignmentOptions.Left);
 
         CreateButton(card.transform, "SettingsBackButton", "BACK", new Vector2(0.5f, 0f),
             new Vector2(0f, 58f), new Vector2(200f, 52f), CloseSettings);
