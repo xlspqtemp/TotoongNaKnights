@@ -51,6 +51,9 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     [SerializeField] private Color failedColor = new Color(0.95f, 0.2f, 0.18f, 0.98f);
     [SerializeField] private bool startCollapsed = false;
 
+    /// <summary>Raised when a live infection row is clicked, even if camera focus is currently blocked.</summary>
+    public event System.Action<InfectionSpawner.InfectionMarker> OnRowClickedPublic;
+
     private sealed class RowView
     {
         public InfectionSpawner.InfectionMarker marker;
@@ -232,7 +235,11 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private void HandleRowClicked(RowView row)
     {
-        if (row == null || row.marker == null || row.marker.isRemoving || !CanFocusInfection())
+        if (row == null || row.marker == null)
+            return;
+
+        OnRowClickedPublic?.Invoke(row.marker);
+        if (row.marker.isRemoving || !CanFocusInfection())
             return;
 
         CameraScript cameraController = Object.FindFirstObjectByType<CameraScript>();

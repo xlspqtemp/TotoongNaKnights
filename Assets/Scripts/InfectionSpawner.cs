@@ -211,6 +211,34 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     public bool IsAwaitingInfectionTargetSelection => awaitingInfectionTargetSelection;
 
+    /// <summary>Spawns one infection through the same configured path used for daily infection events.</summary>
+    public void ForceSpawnOneInfection()
+    {
+        if (activeInfectionMarkers.Count >= maxActiveInfections)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because the active infection cap has been reached.", this);
+            return;
+        }
+
+        List<InfectionData> validEntries = BuildValidInfectionEntries();
+        if (validEntries.Count == 0 || GetValidBodyPartButtonCount() == 0)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because no valid entries or body-part mappings are configured.", this);
+            return;
+        }
+
+        InfectionData infection = validEntries[UnityEngine.Random.Range(0, validEntries.Count)];
+        InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
+        if (bodyPartButton == null)
+            return;
+
+        int infectionCountBeforeSpawn = activeInfectionMarkers.Count;
+        SpawnMarker(infection, bodyPartButton);
+        if (activeInfectionMarkers.Count == infectionCountBeforeSpawn + 1)
+            LogInfection(infection, bodyPartButton);
+    }
+
+
     public sealed class InfectionMarker
     {
         public InfectionData infection;
