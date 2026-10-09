@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Object = UnityEngine.Object;
 
 /// <summary>Displays live infections in a fixed HUD panel.</summary>
 [DefaultExecutionOrder(-100)]
@@ -61,6 +62,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         public CanvasGroup visualCanvasGroup;
         public RectTransform visualRect;
         public Image backgroundImage;
+        public Button button;
         public Image swatchImage;
         public TextMeshProUGUI nameLabel;
         public TextMeshProUGUI statusLabel;
@@ -222,9 +224,41 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             canvasGroup = canvasGroup
         };
         CreateRowVisuals(row);
+        row.button.onClick.AddListener(() => HandleRowClicked(row));
         rows.Add(row);
         ApplyRowStatusVisuals(row);
         ReflowRows();
+    }
+
+    private void HandleRowClicked(RowView row)
+    {
+        if (row == null || row.marker == null || row.marker.isRemoving || !CanFocusInfection())
+            return;
+
+        CameraScript cameraController = Object.FindFirstObjectByType<CameraScript>();
+        if (cameraController != null)
+            cameraController.FocusOnWorldPosition(row.marker.worldPosition);
+    }
+
+    private bool CanFocusInfection()
+    {
+        if (Time.timeScale <= 0f)
+            return false;
+
+        if (infectionSpawner == null)
+            infectionSpawner = Object.FindFirstObjectByType<InfectionSpawner>();
+        if (infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection)
+            return false;
+
+        GameplayTutorial tutorial = Object.FindFirstObjectByType<GameplayTutorial>();
+        if (tutorial != null)
+        {
+            Transform tutorialOverlay = tutorial.transform.Find("GameplayTutorialOverlay");
+            if (tutorialOverlay != null && tutorialOverlay.gameObject.activeInHierarchy)
+                return false;
+        }
+
+        return true;
     }
 
     private void SyncRows()
@@ -287,7 +321,13 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
         row.status = status;
         if (status == RowStatus.Resolved || status == RowStatus.Failed)
+        {
             row.resolvedElapsed = 0f;
+            row.canvasGroup.interactable = false;
+            row.canvasGroup.blocksRaycasts = false;
+            row.visualCanvasGroup.interactable = false;
+            row.visualCanvasGroup.blocksRaycasts = false;
+        }
         ApplyRowStatusVisuals(row);
     }
 
@@ -515,12 +555,15 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         row.visualRect.anchoredPosition = new Vector2(0f, row.targetY);
         row.visualRect.sizeDelta = new Vector2(0f, RowHeight);
         row.visualCanvasGroup = visualObject.AddComponent<CanvasGroup>();
-        row.visualCanvasGroup.interactable = false;
-        row.visualCanvasGroup.blocksRaycasts = false;
+        row.visualCanvasGroup.interactable = true;
+        row.visualCanvasGroup.blocksRaycasts = true;
 
         row.backgroundImage = visualObject.GetComponent<Image>();
         row.backgroundImage.sprite = whiteSwatchSprite;
-        row.backgroundImage.raycastTarget = false;
+        row.backgroundImage.raycastTarget = true;
+        row.button = visualObject.AddComponent<Button>();
+        row.button.targetGraphic = row.backgroundImage;
+        row.button.transition = Selectable.Transition.None;
 
         GameObject swatchObject = CreateUiObject("Pathogen Color Swatch", visualObject.transform);
         RectTransform swatchRect = swatchObject.GetComponent<RectTransform>();
