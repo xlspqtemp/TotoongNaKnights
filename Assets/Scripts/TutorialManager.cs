@@ -9,6 +9,16 @@ using TMPro;
 /// <summary>Runs the first-play tutorial overlay and manages temporary UI visibility and pause state.</summary>
 public sealed class TutorialManager : MonoBehaviour
 {
+    public enum ContainerAnchor
+    {
+        Center,
+        TopLeft,
+        TopRight,
+        BottomCenter,
+        BottomLeft,
+        BottomRight
+    }
+
     private const string GameplaySceneName = "Game";
     private const string TutorialOverlayResourceName = "TutorialOverlay";
     private const string TutorialSeenPreferenceKey = "tutorialSeen";
@@ -17,6 +27,7 @@ public sealed class TutorialManager : MonoBehaviour
     private const float MinimumPanelWidth = 700f;
     private const float HorizontalPanelPadding = 190f;
     private const float VerticalPanelPadding = 174f;
+    private const float PanelScreenMargin = 28f;
 
     [Serializable]
     public sealed class TutorialStep
@@ -30,6 +41,7 @@ public sealed class TutorialManager : MonoBehaviour
         public string actionId;
         public string targetKey;
         public Sprite secondaryIcon;
+        public ContainerAnchor containerAnchor = ContainerAnchor.Center;
     }
 
     [Header("Tutorial Steps")]
@@ -362,7 +374,7 @@ public sealed class TutorialManager : MonoBehaviour
                 if (infectionSpawner != null)
                 {
                     HashSet<InfectionSpawner.InfectionMarker> existingMarkers = new HashSet<InfectionSpawner.InfectionMarker>(infectionSpawner.ActiveInfections);
-                    infectionSpawner.ForceSpawnOneInfection();
+                    infectionSpawner.ForceSpawnOneBacterialInfection();
                     foreach (InfectionSpawner.InfectionMarker marker in infectionSpawner.ActiveInfections)
                     {
                         if (marker != null && !existingMarkers.Contains(marker))
@@ -595,10 +607,60 @@ public sealed class TutorialManager : MonoBehaviour
             startGameButton.gameObject.SetActive(isFinalStep);
         RefreshNavigationState();
         ResizePanelToBodyContent();
+        ApplyContainerAnchor(step.containerAnchor);
         if (IsCurrentAction("resolveInfection") && !currentActionCompleted)
             Time.timeScale = 1f;
         BindResolutionEventForCurrentStep();
         RunStepEntryAction(step);
+    }
+
+    private void ApplyContainerAnchor(ContainerAnchor anchor)
+    {
+        if (panelRect == null)
+            return;
+
+        Vector2 anchorPoint;
+        Vector2 pivot;
+        Vector2 anchoredPosition;
+        const float ScreenMargin = PanelScreenMargin;
+        switch (anchor)
+        {
+            case ContainerAnchor.TopLeft:
+                anchorPoint = new Vector2(0f, 1f);
+                pivot = new Vector2(0f, 1f);
+                anchoredPosition = new Vector2(ScreenMargin, -ScreenMargin);
+                break;
+            case ContainerAnchor.TopRight:
+                anchorPoint = new Vector2(1f, 1f);
+                pivot = new Vector2(1f, 1f);
+                anchoredPosition = new Vector2(-ScreenMargin, -ScreenMargin);
+                break;
+            case ContainerAnchor.BottomCenter:
+                anchorPoint = new Vector2(0.5f, 0f);
+                pivot = new Vector2(0.5f, 0f);
+                anchoredPosition = new Vector2(0f, ScreenMargin);
+                break;
+            case ContainerAnchor.BottomLeft:
+                anchorPoint = Vector2.zero;
+                pivot = Vector2.zero;
+                anchoredPosition = new Vector2(ScreenMargin, ScreenMargin);
+                break;
+            case ContainerAnchor.BottomRight:
+                anchorPoint = new Vector2(1f, 0f);
+                pivot = new Vector2(1f, 0f);
+                anchoredPosition = new Vector2(-ScreenMargin, ScreenMargin);
+                break;
+            default:
+                anchorPoint = new Vector2(0.5f, 0.5f);
+                pivot = new Vector2(0.5f, 0.5f);
+                anchoredPosition = Vector2.zero;
+                break;
+        }
+
+        panelRect.anchorMin = anchorPoint;
+        panelRect.anchorMax = anchorPoint;
+        panelRect.pivot = pivot;
+        panelRect.anchoredPosition = anchoredPosition;
     }
 
     private void RefreshNavigationState()
@@ -618,15 +680,20 @@ public sealed class TutorialManager : MonoBehaviour
             return;
 
         float maxWidth = Mathf.Max(MinimumPanelWidth, maximumPanelWidth);
+        RectTransform canvasRect = panelRect.parent as RectTransform;
+        float availableWidth = canvasRect != null ? Mathf.Max(320f, canvasRect.rect.width - 2f * PanelScreenMargin) : maxWidth;
+        float availableHeight = canvasRect != null ? Mathf.Max(300f, canvasRect.rect.height - 2f * PanelScreenMargin) : 720f;
+        maxWidth = Mathf.Min(maxWidth, availableWidth);
+        float minimumWidth = Mathf.Min(MinimumPanelWidth, maxWidth);
         float textWidthAtMaximum = Mathf.Max(120f, maxWidth - HorizontalPanelPadding);
         Vector2 preferredAtMaximumWidth = bodyLabel.GetPreferredValues(bodyLabel.text, textWidthAtMaximum, 0f);
-        float panelWidth = Mathf.Clamp(preferredAtMaximumWidth.x + HorizontalPanelPadding, MinimumPanelWidth, maxWidth);
+        float panelWidth = Mathf.Clamp(preferredAtMaximumWidth.x + HorizontalPanelPadding, minimumWidth, maxWidth);
         float bodyWidth = Mathf.Max(120f, panelWidth - HorizontalPanelPadding);
         Vector2 preferredBodySize = bodyLabel.GetPreferredValues(bodyLabel.text, bodyWidth, 0f);
+        float panelHeight = Mathf.Clamp(Mathf.Max(320f, preferredBodySize.y + VerticalPanelPadding), Mathf.Min(320f, availableHeight), availableHeight);
         RectTransform bodyRect = bodyLabel.rectTransform;
         bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, bodyWidth);
-        bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, preferredBodySize.y);
-        float panelHeight = Mathf.Max(320f, preferredBodySize.y + VerticalPanelPadding);
+        bodyRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Min(preferredBodySize.y, Mathf.Max(80f, panelHeight - VerticalPanelPadding)));
         panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, panelWidth);
         panelRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, panelHeight);
     }

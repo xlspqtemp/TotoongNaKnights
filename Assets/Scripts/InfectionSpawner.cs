@@ -238,6 +238,54 @@ public sealed class InfectionSpawner : MonoBehaviour
             LogInfection(infection, bodyPartButton);
     }
 
+    /// <summary>Spawns one bacterial infection through the configured marker creation path, preferring its configured body parts.</summary>
+    public void ForceSpawnOneBacterialInfection()
+    {
+        if (activeInfectionMarkers.Count >= maxActiveInfections)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn a bacterial infection because the active infection cap has been reached.", this);
+            return;
+        }
+
+        List<InfectionData> validBacterialEntries = new List<InfectionData>();
+        List<List<InfectionBodyPartButtonReference>> preferredMappingsByEntry = new List<List<InfectionBodyPartButtonReference>>();
+        foreach (InfectionData infection in BuildValidInfectionEntries())
+        {
+            if (infection.pathogenType != InfectionPathogenType.Bacterial || infection.preferredBodyParts == null)
+                continue;
+
+            List<InfectionBodyPartButtonReference> preferredMappings = new List<InfectionBodyPartButtonReference>();
+            if (bodyPartButtons != null)
+            {
+                foreach (InfectionBodyPartButtonReference mapping in bodyPartButtons)
+                {
+                    if (mapping != null && mapping.button != null && infection.preferredBodyParts.Contains(mapping.bodyPartGroup))
+                        preferredMappings.Add(mapping);
+                }
+            }
+
+            if (preferredMappings.Count == 0)
+                continue;
+
+            validBacterialEntries.Add(infection);
+            preferredMappingsByEntry.Add(preferredMappings);
+        }
+
+        if (validBacterialEntries.Count == 0)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn a bacterial infection because no valid bacterial entries have mapped preferred body parts.", this);
+            return;
+        }
+
+        int entryIndex = UnityEngine.Random.Range(0, validBacterialEntries.Count);
+        InfectionData selectedInfection = validBacterialEntries[entryIndex];
+        List<InfectionBodyPartButtonReference> preferredBodyPartMappings = preferredMappingsByEntry[entryIndex];
+        InfectionBodyPartButtonReference selectedBodyPart = preferredBodyPartMappings[UnityEngine.Random.Range(0, preferredBodyPartMappings.Count)];
+        int infectionCountBeforeSpawn = activeInfectionMarkers.Count;
+        SpawnMarker(selectedInfection, selectedBodyPart);
+        if (activeInfectionMarkers.Count == infectionCountBeforeSpawn + 1)
+            LogInfection(selectedInfection, selectedBodyPart);
+    }
 
     public sealed class InfectionMarker
     {

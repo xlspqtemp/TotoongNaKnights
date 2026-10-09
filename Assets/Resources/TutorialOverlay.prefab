@@ -2540,6 +2540,7 @@ MonoBehaviour:
     actionId: 
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: THE WELLNESS BAR
     body: This is the body's overall health. It starts at 100. Every infection you
       clear adds points. Every infection you neglect or fail costs points. Reach
@@ -2551,6 +2552,7 @@ MonoBehaviour:
     actionId: 
     targetKey: wellness
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: HUMAN SNAPSHOT
     body: This is the human you're protecting. Routines like sleeping, eating, and
       working happen here. They can affect the body's state.
@@ -2561,6 +2563,7 @@ MonoBehaviour:
     actionId: 
     targetKey: humanSnapshot
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: CONSOLE LOG
     body: "Everything that happens in the body is logged here \u2014 infections,
       routines, random events. Watch this to know what's going on."
@@ -2571,6 +2574,7 @@ MonoBehaviour:
     actionId: 
     targetKey: consoleLog
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: THE BODY'S LAYERS
     body: 'The body has four defense layers: Circulatory, Lymphatic, Digestive, Respiratory.
       You''ll explore each one now.'
@@ -2581,6 +2585,7 @@ MonoBehaviour:
     actionId: 
     targetKey: layers
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: CIRCULATORY SYSTEM
     body: The bloodstream. Pathogens travel through here. This is where most of your
       defenses will be needed.
@@ -2591,6 +2596,7 @@ MonoBehaviour:
     actionId: 
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: LYMPHATIC SYSTEM
     body: The body's drainage and adaptive-immune highway. Viruses and adaptive responses
       live here. (More gameplay will be added in a future update.)
@@ -2601,6 +2607,7 @@ MonoBehaviour:
     actionId: 
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: DIGESTIVE SYSTEM
     body: Your gut barrier. Food and drink enter here, and contaminated intake can
       spawn infections in the bloodstream.
@@ -2611,6 +2618,7 @@ MonoBehaviour:
     actionId: 
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: RESPIRATORY SYSTEM
     body: Your airway barrier. Airborne pathogens can breach here during commutes
       and crowded places.
@@ -2621,6 +2629,7 @@ MonoBehaviour:
     actionId: 
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: YOUR FIRST INFECTION
     body: 'An infection just entered the body. You''ll see two types of infections:
       bacterial (red) and viral (blue). Your job is to clear them before they drain
@@ -2632,6 +2641,7 @@ MonoBehaviour:
     actionId: spawnFirstInfection
     targetKey: notificationIcon
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: BACTERIAL VS VIRAL
     body: "Bacterial infections (red) are cleared directly by white blood cells through
       a process called phagocytosis. Viral infections (blue) are contained by WBCs
@@ -2644,6 +2654,7 @@ MonoBehaviour:
     actionId: infectionTypes
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: PENDING INFECTIONS
     body: "Each active infection shows here. Click a row to focus the camera on that
       infection. States will change as you engage: Pending \u2192 Ongoing \u2192
@@ -2655,6 +2666,7 @@ MonoBehaviour:
     actionId: clickPendingRow
     targetKey: pendingInfections
     secondaryIcon: {fileID: 0}
+    containerAnchor: 3
   - title: DEPLOY YOUR DEFENDERS
     body: "Click the WBC headshot to start a deployment. A prompt will ask you to
       select an infection \u2014 click the infection on the map or its panel row
@@ -2667,6 +2679,7 @@ MonoBehaviour:
     actionId: 
     targetKey: wbcHeadshot
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   - title: RESOLVE AN INFECTION
     body: Now deploy a squad and clear the infection. You'll see wellness rise when
       you succeed. Click the WBC headshot, then select the pending infection to send
@@ -2678,6 +2691,7 @@ MonoBehaviour:
     actionId: resolveInfection
     targetKey: 
     secondaryIcon: {fileID: 0}
+    containerAnchor: 3
   - title: IGNORING INFECTIONS HAS A COST
     body: 'Infections that aren''t resolved escalate and drain wellness each day.
       Watch this example:'
@@ -2688,6 +2702,7 @@ MonoBehaviour:
     actionId: applyWellnessDrop
     targetKey: wellness
     secondaryIcon: {fileID: 0}
+    containerAnchor: 3
   - title: HOW TO WIN
     body: Reach Day 14 with wellness at 50 or higher to win. If wellness drops below
       50 by Day 14, you lose. If it ever reaches 0, the run ends immediately. Good
@@ -2699,6 +2714,7 @@ MonoBehaviour:
     actionId: 
     targetKey: dayCounter
     secondaryIcon: {fileID: 0}
+    containerAnchor: 0
   hideAllTargets: []
   ForceShowOnEveryStart: 1
   AlwaysShowForGuest: 1
