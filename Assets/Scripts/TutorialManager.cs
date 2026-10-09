@@ -24,6 +24,9 @@ public sealed class TutorialManager : MonoBehaviour
     private const string TutorialSeenPreferenceKey = "tutorialSeen";
     private const string GuestSessionType = "Guest";
     private const string NoSessionType = "NoActiveSession";
+    private const string BacterialIconResourcePath = "UI/Red bacteria icon";
+    private const string ViralIconResourcePath = "UI/Blue virus icon";
+    private const float TutorialIconPixelsPerUnit = 100f;
     private const float MinimumPanelWidth = 700f;
     private const float HorizontalPanelPadding = 190f;
     private const float VerticalPanelPadding = 174f;
@@ -80,6 +83,8 @@ public sealed class TutorialManager : MonoBehaviour
     [SerializeField] private Scrollbar bodyVerticalScrollbar;
     [SerializeField, Min(1f)] private float bodyFontSize = DefaultBodyFontSize;
     [SerializeField] private Vector2 dualIconSize = new Vector2(72f, 72f);
+    [SerializeField] private Texture2D bacterialIconTexture;
+    [SerializeField] private Texture2D viralIconTexture;
     [SerializeField] private Button backButton;
     [SerializeField] private Button nextButton;
     [SerializeField] private Button skipButton;
@@ -656,8 +661,8 @@ public sealed class TutorialManager : MonoBehaviour
 
     private void InitializeOptionalPathogenIcons()
     {
-        Sprite bacterialIcon = LoadIconFromTexture("UI/bacteria_notification-removebg-preview");
-        Sprite viralIcon = LoadIconFromTexture("UI/Virus_notification-removebg-preview");
+        Sprite bacterialIcon = LoadIconFromTexture(bacterialIconTexture, BacterialIconResourcePath);
+        Sprite viralIcon = LoadIconFromTexture(viralIconTexture, ViralIconResourcePath);
         foreach (TutorialStep step in steps)
         {
             if (step == null)
@@ -675,10 +680,14 @@ public sealed class TutorialManager : MonoBehaviour
         }
     }
 
-    private static Sprite LoadIconFromTexture(string resourcePath)
+    private static Sprite LoadIconFromTexture(Texture2D sourceTexture, string resourcePath)
     {
-        Texture2D texture = Resources.Load<Texture2D>(resourcePath);
-        return texture == null ? null : Sprite.Create(texture, new Rect(0f, 0f, texture.width, texture.height), new Vector2(0.5f, 0.5f), 100f);
+        if (sourceTexture == null)
+            sourceTexture = Resources.Load<Texture2D>(resourcePath);
+        return sourceTexture == null
+            ? null
+            : Sprite.Create(sourceTexture, new Rect(0f, 0f, sourceTexture.width, sourceTexture.height),
+                new Vector2(0.5f, 0.5f), TutorialIconPixelsPerUnit);
     }
 
     private void OnDisable()

@@ -1,30 +1,42 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>Displays floating infection icons and forwards picker clicks through InfectionSpawner's public API.</summary>
 [DefaultExecutionOrder(-100)]
 public sealed class InfectionNotificationManager : MonoBehaviour
 {
     private const string NotificationPrefabResourcePath = "InfectionNotification";
-    private const string BacteriaSpriteResourcePath = "UI/bacteria_notification-removebg-preview";
-    private const string VirusSpriteResourcePath = "UI/Virus_notification-removebg-preview";
+    private const string BacteriaSpriteResourcePath = "UI/Red bacteria icon";
+    private const string VirusSpriteResourcePath = "UI/Blue virus icon";
+    private const string CategoryCanvasObjectName = "NotificationCategoryCanvas";
+    private const string CategoryLabelObjectName = "CategoryLabel";
     private const int MaximumNotifications = 5;
-    private const float GeneratedSpritePixelsPerUnit = 1024f;
+    private const int GeneratedSpritePixelsPerUnit = 1024;
+    private const float CategoryContainerFontSize = 30f;
 
     [SerializeField] private InfectionSpawner infectionSpawner;
     [SerializeField] private CameraScript cameraScript;
     [SerializeField] private Camera gameplayCamera;
     [SerializeField] private GameObject notificationPrefab;
-    [SerializeField] private Texture2D bacteriaSprite;
-    [SerializeField] private Texture2D virusSprite;
+    [SerializeField, HideInInspector] private Texture2D bacteriaSprite;
+    [SerializeField, HideInInspector] private Texture2D virusSprite;
+    [Header("Pathogen Icon Textures")]
+    [SerializeField] private Texture2D bacterialIconTexture;
+    [SerializeField] private Texture2D viralIconTexture;
     [SerializeField, Min(0.01f)] private float scaleMultiplier = 1f;
     [SerializeField, Min(0f)] private float bobAmplitude = 0.18f;
     [SerializeField, Min(0f)] private float bobSpeed = 1.6f;
     [SerializeField, Min(0f)] private float fadeDuration = 0.3f;
     [SerializeField, Min(0.01f)] private float iconScale = 0.65f;
     [SerializeField, Min(0f)] private float foregroundOffset = 1.5f;
+    [SerializeField] private Color containerBackgroundColor = new Color(0.012f, 0.028f, 0.038f, 0.96f);
+    [SerializeField] private Color bacterialTextColor = new Color(1f, 0.2f, 0.23f, 1f);
+    [SerializeField] private Color viralTextColor = new Color(0.25f, 0.66f, 1f, 1f);
+    [SerializeField] private Vector2 containerPadding = new Vector2(9f, 4f);
 
     private sealed class NotificationState
     {
@@ -32,6 +44,10 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         public GameObject gameObject;
         public SpriteRenderer spriteRenderer;
         public BoxCollider boxCollider;
+        public Canvas categoryCanvas;
+        public Image categoryBackground;
+        public TextMeshProUGUI categoryLabel;
+        public Color categoryTextColor;
         public float alpha;
         public float bobTime;
         public bool fadingOut;
@@ -182,25 +198,29 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             gameplayCamera = Camera.main;
         if (notificationPrefab == null)
             notificationPrefab = Resources.Load<GameObject>(NotificationPrefabResourcePath);
-        if (bacteriaSprite == null)
-            bacteriaSprite = Resources.Load<Texture2D>(BacteriaSpriteResourcePath);
-        if (virusSprite == null)
-            virusSprite = Resources.Load<Texture2D>(VirusSpriteResourcePath);
+        if (bacterialIconTexture == null)
+            bacterialIconTexture = Resources.Load<Texture2D>(BacteriaSpriteResourcePath);
+        if (bacterialIconTexture == null)
+            bacterialIconTexture = bacteriaSprite;
+        if (viralIconTexture == null)
+            viralIconTexture = Resources.Load<Texture2D>(VirusSpriteResourcePath);
+        if (viralIconTexture == null)
+            viralIconTexture = virusSprite;
 
-        if (cachedBacteriaTexture != bacteriaSprite)
+        if (cachedBacteriaTexture != bacterialIconTexture)
         {
             if (bacteriaNotificationIcon != null)
                 Destroy(bacteriaNotificationIcon);
-            cachedBacteriaTexture = bacteriaSprite;
-            bacteriaNotificationIcon = CreateNotificationSprite(bacteriaSprite, "Bacterial Infection Notification");
+            cachedBacteriaTexture = bacterialIconTexture;
+            bacteriaNotificationIcon = CreateNotificationSprite(bacterialIconTexture, "Bacterial Infection Notification");
         }
 
-        if (cachedVirusTexture != virusSprite)
+        if (cachedVirusTexture != viralIconTexture)
         {
             if (virusNotificationIcon != null)
                 Destroy(virusNotificationIcon);
-            cachedVirusTexture = virusSprite;
-            virusNotificationIcon = CreateNotificationSprite(virusSprite, "Viral Infection Notification");
+            cachedVirusTexture = viralIconTexture;
+            virusNotificationIcon = CreateNotificationSprite(viralIconTexture, "Viral Infection Notification");
         }
     }
 
@@ -261,14 +281,57 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         boxCollider.size = new Vector3(0.9f, 0.9f, 0.3f);
         boxCollider.enabled = false;
 
+        Transform categoryCanvasTransform = notificationObject.transform.Find(CategoryCanvasObjectName);
+        Canvas categoryCanvas = categoryCanvasTransform != null ? categoryCanvasTransform.GetComponent<Canvas>() : null;
+        Image categoryBackground = categoryCanvasTransform != null ? categoryCanvasTransform.GetComponent<Image>() : null;
+        Transform categoryLabelTransform = categoryCanvasTransform != null
+            ? categoryCanvasTransform.Find(CategoryLabelObjectName)
+            : null;
+        TextMeshProUGUI categoryLabel = categoryLabelTransform != null
+            ? categoryLabelTransform.GetComponent<TextMeshProUGUI>()
+            : null;
+        Color categoryTextColor = ConfigureCategoryContainer(marker, categoryBackground, categoryLabel);
+
         return new NotificationState
         {
             marker = marker,
             gameObject = notificationObject,
             spriteRenderer = spriteRenderer,
             boxCollider = boxCollider,
+            categoryCanvas = categoryCanvas,
+            categoryBackground = categoryBackground,
+            categoryLabel = categoryLabel,
+            categoryTextColor = categoryTextColor,
             alpha = 0f
         };
+    }
+
+    private Color ConfigureCategoryContainer(InfectionSpawner.InfectionMarker marker, Image background,
+        TextMeshProUGUI label)
+    {
+        if (marker == null || marker.infection == null || label == null || background == null)
+            return Color.white;
+
+        bool isViral = marker.infection.pathogenType == InfectionPathogenType.Viral;
+        label.text = isViral ? "VIRAL" : "BACTERIAL";
+        label.fontSize = CategoryContainerFontSize;
+        label.alignment = TextAlignmentOptions.Center;
+        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.raycastTarget = false;
+        background.color = containerBackgroundColor;
+        background.raycastTarget = false;
+
+        RectTransform labelRect = label.rectTransform;
+        labelRect.offsetMin = new Vector2(containerPadding.x, containerPadding.y);
+        labelRect.offsetMax = new Vector2(-containerPadding.x, -containerPadding.y);
+        label.ForceMeshUpdate();
+
+        RectTransform containerRect = background.rectTransform;
+        containerRect.sizeDelta = new Vector2(
+            label.preferredWidth + containerPadding.x * 2f,
+            label.preferredHeight + containerPadding.y * 2f);
+
+        return isViral ? viralTextColor : bacterialTextColor;
     }
 
     private void AssignNotificationSprite(SpriteRenderer spriteRenderer, InfectionSpawner.InfectionMarker marker)
@@ -299,6 +362,28 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         displayColor.a = state.alpha;
         state.spriteRenderer.color = displayColor;
 
+        if (state.categoryCanvas != null)
+        {
+            state.categoryCanvas.worldCamera = gameplayCamera;
+            state.categoryCanvas.overrideSorting = true;
+            state.categoryCanvas.sortingOrder = state.spriteRenderer.sortingOrder + 1;
+            state.categoryCanvas.enabled = circulatoryActive;
+        }
+        if (state.categoryBackground != null)
+        {
+            state.categoryBackground.enabled = circulatoryActive;
+            Color backgroundColor = containerBackgroundColor;
+            backgroundColor.a *= state.alpha;
+            state.categoryBackground.color = backgroundColor;
+        }
+        if (state.categoryLabel != null)
+        {
+            state.categoryLabel.enabled = circulatoryActive;
+            Color textColor = state.categoryTextColor;
+            textColor.a *= state.alpha;
+            state.categoryLabel.color = textColor;
+        }
+
         if (!circulatoryActive || state.fadingOut)
             return;
 
@@ -313,6 +398,8 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             Vector3 bobOffset = cameraTransform.up * (Mathf.Sin(state.bobTime) * bobAmplitude);
             state.gameObject.transform.position = anchor + towardCamera * foregroundOffset + sideOffset + bobOffset;
             state.gameObject.transform.rotation = cameraTransform.rotation * Quaternion.Euler(0f, 0f, 45f);
+            if (state.categoryCanvas != null)
+                state.categoryCanvas.transform.rotation = cameraTransform.rotation;
             state.gameObject.transform.localScale = Vector3.one * scale;
         }
         else

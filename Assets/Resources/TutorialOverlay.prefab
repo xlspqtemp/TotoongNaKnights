@@ -3225,6 +3225,8 @@ MonoBehaviour:
   bodyVerticalScrollbar: {fileID: 43991753350337241}
   bodyFontSize: 21
   dualIconSize: {x: 72, y: 72}
+  bacterialIconTexture: {fileID: 2800000, guid: e1d1ae949ac2c2f438e5caeac9f11a3b, type: 3}
+  viralIconTexture: {fileID: 2800000, guid: 85a2a69ba1c79714883c22cfb0676d07, type: 3}
   backButton: {fileID: 7332680600160306313}
   nextButton: {fileID: 3863827034958328806}
   skipButton: {fileID: 3407935839685718728}

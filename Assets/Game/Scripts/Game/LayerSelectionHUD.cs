@@ -18,13 +18,20 @@ internal static class LayerSelectionHUD
     private const float LayerToggleHeight = 36f;
     private const float LayerToggleGap = 8f;
 
+    private static readonly int[] LayerNumbers = { 4, 3, 2, 1 };
     private static readonly Color NormalButtonColor = new Color(0.035f, 0.065f, 0.085f, 0.96f);
     private static readonly Color SelectedButtonColor = new Color(0.055f, 0.24f, 0.28f, 1f);
     private static readonly Color AccentColor = new Color(0.12f, 0.78f, 0.88f, 1f);
     private static readonly Color LabelColor = new Color(0.92f, 0.96f, 0.97f, 1f);
+    private static readonly Color InfoButtonColor = new Color(0.09f, 0.15f, 0.18f, 1f);
+    private static Color SelectedLayerRowColor = new Color(0.08f, 0.78f, 0.9f, 0.4f);
+    private static Color SelectedLayerTextColor = new Color(0.22f, 0.92f, 1f, 1f);
 
     private static Button[] layerButtons;
     private static Image[] layerButtonBackgrounds;
+    private static TextMeshProUGUI[] layerButtonLabels;
+    private static TextMeshProUGUI[] layerButtonArrowLabels;
+    private static Image[] layerButtonInfoBackgrounds;
     private static Outline[] layerButtonOutlines;
     private static RectTransform layerRowsRoot;
     private static HashSet<string>[] activeThreatKeys;
@@ -45,6 +52,9 @@ internal static class LayerSelectionHUD
         activeThreatKeys = null;
         layerButtons = null;
         layerButtonBackgrounds = null;
+        layerButtonLabels = null;
+        layerButtonArrowLabels = null;
+        layerButtonInfoBackgrounds = null;
         layerButtonOutlines = null;
         layerRowsRoot = null;
         if (scene.name != GameSceneName)
@@ -130,9 +140,12 @@ internal static class LayerSelectionHUD
             "The circulatory system uses the heart and blood vessels to pump oxygen, nutrients, and hormones to cells throughout the body.",
             "The lymphatic system maintains fluid balance and defends the body against infections by filtering pathogens and transporting lymph fluid."
         };
-        int[] layerNumbers = { 4, 3, 2, 1 };
+        int[] layerNumbers = LayerNumbers;
         layerButtons = new Button[labels.Length];
         layerButtonBackgrounds = new Image[labels.Length];
+        layerButtonLabels = new TextMeshProUGUI[labels.Length];
+        layerButtonArrowLabels = new TextMeshProUGUI[labels.Length];
+        layerButtonInfoBackgrounds = new Image[labels.Length];
         layerButtonOutlines = new Outline[labels.Length];
         activeThreatKeys = new HashSet<string>[labels.Length];
 
@@ -146,7 +159,7 @@ internal static class LayerSelectionHUD
             layerOutline.effectDistance = new Vector2(2f, -2f);
             layerOutline.useGraphicAlpha = true;
             layerOutline.enabled = false;
-            CreateLabel("LayerButtonLabel", layerButton.transform as RectTransform, labels[index], 15f, TextAlignmentOptions.MidlineLeft);
+            layerButtonLabels[index] = CreateLabel("LayerButtonLabel", layerButton.transform as RectTransform, labels[index], 15f, TextAlignmentOptions.MidlineLeft);
             int layerNumber = layerNumbers[index];
             layerButton.onClick.AddListener(() => SelectLayer(layerNumber));
 
@@ -157,16 +170,25 @@ internal static class LayerSelectionHUD
             infoRect.anchorMax = new Vector2(1f, 0.5f);
             infoRect.pivot = new Vector2(1f, 0.5f);
             infoRect.sizeDelta = new Vector2(30f, 30f);
-            infoRect.anchoredPosition = Vector2.zero;
+            infoRect.anchoredPosition = new Vector2(-26f, 0f);
 
             Image infoBackground = infoObject.GetComponent<Image>();
-            infoBackground.color = new Color(0.09f, 0.15f, 0.18f, 1f);
+            infoBackground.color = InfoButtonColor;
             infoBackground.raycastTarget = true;
             Button infoButton = infoObject.GetComponent<Button>();
             infoButton.targetGraphic = infoBackground;
             infoButton.transition = Selectable.Transition.ColorTint;
             infoButton.colors = CreateButtonColors(infoBackground.color);
             CreateLabel("InfoIndicator", infoRect, "i", 14f, TextAlignmentOptions.Center);
+            TextMeshProUGUI selectionArrow = CreateLabel("SelectedLayerArrow", rowRect, string.Empty, 18f, TextAlignmentOptions.Center);
+            RectTransform arrowRect = selectionArrow.rectTransform;
+            arrowRect.anchorMin = new Vector2(1f, 0.5f);
+            arrowRect.anchorMax = new Vector2(1f, 0.5f);
+            arrowRect.pivot = new Vector2(1f, 0.5f);
+            arrowRect.sizeDelta = new Vector2(20f, 26f);
+            arrowRect.anchoredPosition = new Vector2(-2f, 0f);
+            layerButtonArrowLabels[index] = selectionArrow;
+            layerButtonInfoBackgrounds[index] = infoBackground;
 
             GameObject tooltipObject = CreateTooltip(canvasRect, descriptions[index]);
             LayerInfoTooltip tooltip = infoObject.AddComponent<LayerInfoTooltip>();
@@ -200,7 +222,7 @@ internal static class LayerSelectionHUD
         buttonRect.anchorMin = Vector2.zero;
         buttonRect.anchorMax = Vector2.one;
         buttonRect.offsetMin = Vector2.zero;
-        buttonRect.offsetMax = new Vector2(-38f, 0f);
+        buttonRect.offsetMax = Vector2.zero;
 
         background = buttonObject.GetComponent<Image>();
         background.color = NormalButtonColor;
@@ -258,7 +280,7 @@ internal static class LayerSelectionHUD
         return tooltipObject;
     }
 
-    private static void CreateLabel(string objectName, RectTransform parent, string value, float fontSize, TextAlignmentOptions alignment)
+    private static TextMeshProUGUI CreateLabel(string objectName, RectTransform parent, string value, float fontSize, TextAlignmentOptions alignment)
     {
         GameObject labelObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
         labelObject.transform.SetParent(parent, false);
@@ -277,6 +299,7 @@ internal static class LayerSelectionHUD
         label.textWrappingMode = TextWrappingModes.NoWrap;
         label.text = value;
         label.raycastTarget = false;
+        return label;
     }
 
     private static void SelectLayer(int layerNumber)
@@ -363,7 +386,8 @@ internal static class LayerSelectionHUD
         if (layerButtonBackgrounds == null || layerButtonOutlines == null || activeThreatKeys == null)
             return;
 
-        float wave = Mathf.SmoothStep(0f, 1f, (Mathf.Sin(unscaledTime * 4.5f) + 1f) * 0.5f);
+        float warningWave = Mathf.SmoothStep(0f, 1f, (Mathf.Sin(unscaledTime * 4.5f) + 1f) * 0.5f);
+        float arrowAlpha = Mathf.Lerp(0.5f, 1f, (Mathf.Sin(unscaledTime * 3.5f) + 1f) * 0.5f);
         for (int index = 0; index < layerButtonBackgrounds.Length; index++)
         {
             Image background = layerButtonBackgrounds[index];
@@ -371,25 +395,44 @@ internal static class LayerSelectionHUD
             if (background == null || outline == null)
                 continue;
 
+            bool isSelected = LayerNumbers[index] == selectedLayer;
             bool hasThreat = activeThreatKeys[index] != null && activeThreatKeys[index].Count > 0;
-            if (!hasThreat)
+            Color restingColor = isSelected ? SelectedLayerRowColor : NormalButtonColor;
+            background.color = hasThreat && !isSelected
+                ? Color.Lerp(restingColor, new Color(0.62f, 0.045f, 0.06f, 1f), 0.22f + warningWave * 0.36f)
+                : restingColor;
+
+            if (layerButtonLabels != null && layerButtonLabels[index] != null)
+                layerButtonLabels[index].color = isSelected ? SelectedLayerTextColor : LabelColor;
+            if (layerButtonInfoBackgrounds != null && layerButtonInfoBackgrounds[index] != null)
+                layerButtonInfoBackgrounds[index].color = isSelected ? SelectedLayerRowColor : InfoButtonColor;
+
+            if (layerButtonArrowLabels != null && layerButtonArrowLabels[index] != null)
             {
-                background.color = new[] { 4, 3, 2, 1 }[index] == selectedLayer
-                    ? SelectedButtonColor
-                    : NormalButtonColor;
-                outline.enabled = false;
-                continue;
+                TextMeshProUGUI arrowLabel = layerButtonArrowLabels[index];
+                string indicator = isSelected ? "◀" : "i";
+                if (arrowLabel.text != indicator)
+                    arrowLabel.text = indicator;
+
+                Color indicatorColor = isSelected ? SelectedLayerTextColor : AccentColor;
+                indicatorColor.a = isSelected ? arrowAlpha : 1f;
+                arrowLabel.color = indicatorColor;
             }
 
-            Color restingColor = new[] { 4, 3, 2, 1 }[index] == selectedLayer
-                ? SelectedButtonColor
-                : NormalButtonColor;
-            Color warningTint = new Color(0.62f, 0.045f, 0.06f, 1f);
-            background.color = Color.Lerp(restingColor, warningTint, 0.22f + wave * 0.36f);
-            outline.enabled = true;
-            outline.effectColor = new Color(1f, 0.08f, 0.1f, 0.35f + wave * 0.62f);
-            outline.effectDistance = new Vector2(1.5f + wave * 2f, -1.5f - wave * 2f);
+            outline.enabled = hasThreat;
+            if (hasThreat)
+            {
+                outline.effectColor = new Color(1f, 0.08f, 0.1f, 0.35f + warningWave * 0.62f);
+                outline.effectDistance = new Vector2(1.5f + warningWave * 2f, -1.5f - warningWave * 2f);
+            }
         }
+    }
+
+    internal static void ConfigureSelectionAppearance(Color selectedLayerColor, Color selectedTextColor)
+    {
+        SelectedLayerRowColor = selectedLayerColor;
+        SelectedLayerTextColor = selectedTextColor;
+        RefreshLayerButtonVisuals(Time.unscaledTime);
     }
 
     internal static void SetSelectedLayer(int layerNumber)
@@ -402,9 +445,17 @@ internal static class LayerSelectionHUD
     }
 }
 
-/// <summary>Animates independent layer warning glows using unscaled time.</summary>
+/// <summary>Animates independent layer warning glows and the selected-layer arrow using unscaled time.</summary>
 public sealed class LayerEventGlowAnimator : MonoBehaviour
 {
+    [SerializeField] private Color selectedLayerColor = new Color(0.08f, 0.78f, 0.9f, 0.4f);
+    [SerializeField] private Color selectedTextColor = new Color(0.22f, 0.92f, 1f, 1f);
+
+    private void OnEnable()
+    {
+        LayerSelectionHUD.ConfigureSelectionAppearance(selectedLayerColor, selectedTextColor);
+    }
+
     private void Update()
     {
         LayerSelectionHUD.UpdateThreatGlow(Time.unscaledTime);
