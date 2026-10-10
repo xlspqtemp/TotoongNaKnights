@@ -16,7 +16,8 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float ImmuneContactIntervalSeconds = 2f;
     private const float RepairProgressPerSecond = 1f;
     private const float FloatingHeight = 3f;
-    private const float CanvasWorldScale = 0.02f;
+    [SerializeField] private float panelScale = 0.04f;
+    [SerializeField] private bool useCameraBillboard = true;
     private const float CanvasPixelsPerUnit = 10f;
     private const float StatusFontSize = 42f;
     private const float LabelFontSize = 30f;
@@ -79,7 +80,6 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private readonly Dictionary<int, float> nextContactReductionTime = new Dictionary<int, float>();
     private bool isBreached;
     private bool isRepairing;
-    private bool hasCapturedCameraRotation;
     private float repairProgress;
     private float infectionPoints;
     private float infectionGrowthTimer;
@@ -166,10 +166,9 @@ public sealed class WoundRepairPoint : MonoBehaviour
         if (mainCamera != null)
         {
             floatingCanvas.worldCamera = mainCamera;
-            if (!hasCapturedCameraRotation)
+            if (useCameraBillboard)
             {
-                floatingCanvas.transform.rotation = Quaternion.LookRotation(mainCamera.transform.position - floatingCanvas.transform.position, mainCamera.transform.up);
-                hasCapturedCameraRotation = true;
+                floatingCanvas.transform.rotation = mainCamera.transform.rotation;
             }
         }
     }
@@ -283,7 +282,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         floatingCanvas.sortingOrder = 100;
         floatingCanvas.worldCamera = Camera.main;
         floatingCanvas.transform.position = transform.position + Vector3.up * FloatingHeight;
-        floatingCanvas.transform.localScale = Vector3.one * CanvasWorldScale;
+        floatingCanvas.transform.localScale = Vector3.one * panelScale;
 
         CanvasScaler canvasScaler = canvasObject.GetComponent<CanvasScaler>();
         canvasScaler.dynamicPixelsPerUnit = CanvasPixelsPerUnit;

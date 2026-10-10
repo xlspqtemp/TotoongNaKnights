@@ -10,7 +10,8 @@ public sealed class LungInfectionResponse : MonoBehaviour
 {
     private const float SecondsPerInfiltration = 10f;
     private const float FloatingHeight = 12f;
-    private const float WorldCanvasScale = 0.02f;
+    [SerializeField] private float panelScale = 0.04f;
+    [SerializeField] private bool useCameraBillboard = true;
     private const float NavMeshSampleRadius = 50f;
     private const float CanvasPixelsPerUnit = 12f;
     private const float StatusFontSize = 58f;
@@ -37,7 +38,6 @@ public sealed class LungInfectionResponse : MonoBehaviour
     private int infiltrationCount;
     private float remainingResponseSeconds;
     private bool responseInProgress;
-    private bool hasCapturedCameraRotation;
 
     private void Awake()
     {
@@ -75,10 +75,9 @@ public sealed class LungInfectionResponse : MonoBehaviour
         if (mainCamera != null)
         {
             floatingCanvas.worldCamera = mainCamera;
-            if (floatingCanvas.gameObject.activeSelf && !hasCapturedCameraRotation)
+            if (floatingCanvas.gameObject.activeSelf && useCameraBillboard)
             {
-                floatingCanvas.transform.rotation = Quaternion.LookRotation(mainCamera.transform.position - floatingCanvas.transform.position, mainCamera.transform.up);
-                hasCapturedCameraRotation = true;
+                floatingCanvas.transform.rotation = mainCamera.transform.rotation;
             }
         }
     }
@@ -115,7 +114,7 @@ public sealed class LungInfectionResponse : MonoBehaviour
         floatingCanvas.sortingOrder = 110;
         floatingCanvas.worldCamera = Camera.main;
         canvasObject.transform.position = transform.position + Vector3.up * FloatingHeight;
-        canvasObject.transform.localScale = Vector3.one * WorldCanvasScale;
+        canvasObject.transform.localScale = Vector3.one * panelScale;
 
         CanvasScaler canvasScaler = canvasObject.GetComponent<CanvasScaler>();
         canvasScaler.dynamicPixelsPerUnit = CanvasPixelsPerUnit;
