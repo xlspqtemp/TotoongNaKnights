@@ -34,7 +34,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     }
 
     private readonly List<ContaminationWindow> contaminationWindows = new List<ContaminationWindow>();
-    private float coughReadyAt;
+    private float coughCooldownRemaining;
     private Coroutine spawnRoutine;
 
     private void OnEnable()
@@ -99,6 +99,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void Update()
     {
+        coughCooldownRemaining = Mathf.Max(0f, coughCooldownRemaining - GameplaySpeed.DeltaTime);
         RefreshCoughButton();
     }
 
@@ -121,11 +122,14 @@ public sealed class RespiratorySystemController : MonoBehaviour
         else
             return;
 
+        string eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour);
         contaminationWindows.Add(new ContaminationWindow
         {
-            eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour),
+            eventKey = eventKey,
             expiresAt = Time.time + ContaminatedAirDurationSeconds
         });
+        if (eventData.triggersQTE)
+            QTETracker.Register(QTETracker.RespiratoryLayerIndex, eventKey);
     }
 
     private IEnumerator RunSpawnLoop()
@@ -248,7 +252,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             return;
         }
 
-        coughReadyAt = Time.time + CoughCooldownSeconds;
+        coughCooldownRemaining = CoughCooldownSeconds;
         HashSet<string> eventKeys = new HashSet<string>();
         foreach (ContaminationWindow window in contaminationWindows)
         {
@@ -284,7 +288,10 @@ public sealed class RespiratorySystemController : MonoBehaviour
             foreach (string eventKey in eventKeys)
             {
                 if (wellnessManager.TryAwardEventResponse(eventKey, "RespiratoryResponse", 0f, 5f, true))
+                {
                     wellnessManager.ResolveEventQTE(eventKey);
+                    QTETracker.Unregister(QTETracker.RespiratoryLayerIndex, eventKey);
+                }
             }
         }
 
@@ -310,7 +317,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             return;
         }
 
-        float remainingCooldown = coughReadyAt - Time.time;
+        float remainingCooldown = coughCooldownRemaining;
         bool isOnCooldown = remainingCooldown > 0f;
         coughButton.interactable = !isOnCooldown;
         if (coughButtonLabel != null)

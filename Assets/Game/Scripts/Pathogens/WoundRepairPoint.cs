@@ -180,7 +180,8 @@ public sealed class WoundRepairPoint : MonoBehaviour
             return;
         }
 
-        infectionGrowthTimer += Time.deltaTime;
+        float gameplayDeltaTime = GameplaySpeed.DeltaTime;
+        infectionGrowthTimer += gameplayDeltaTime;
         while (infectionGrowthTimer >= InfectionGrowthIntervalSeconds && isBreached)
         {
             infectionGrowthTimer -= InfectionGrowthIntervalSeconds;
@@ -189,7 +190,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
         if (isRepairing)
         {
-            repairProgress = Mathf.Min(100f, repairProgress + RepairProgressPerSecond * Time.deltaTime);
+            repairProgress = Mathf.Min(100f, repairProgress + RepairProgressPerSecond * gameplayDeltaTime);
             if (repairProgress >= 100f)
             {
                 CompleteRepair();
@@ -270,7 +271,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
         int selectedIndex = Random.Range(0, availablePoints.Count);
         HandledEventKeys.Add(eventKey);
-        availablePoints[selectedIndex].ShowBreach(eventKey);
+        availablePoints[selectedIndex].ShowBreach(eventKey, eventData.triggersQTE);
     }
 
     private void CreateFloatingPrompt()
@@ -322,7 +323,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         canvasObject.SetActive(false);
     }
 
-    private void ShowBreach(string eventKey)
+    private void ShowBreach(string eventKey, bool triggersQte)
     {
         if (isBreached || floatingCanvas == null)
         {
@@ -336,6 +337,8 @@ public sealed class WoundRepairPoint : MonoBehaviour
         infectionGrowthTimer = 0f;
         nextContactReductionTime.Clear();
         wellnessEventKey = eventKey;
+        if (triggersQte)
+            QTETracker.Register(QTETracker.CirculatoryLayerIndex, eventKey);
         LayerSelectionHUD.EndThreatGlow(eventKey);
         statusLabel.text = $"{gameObject.name} has been wounded!";
         repairButton.interactable = true;
@@ -370,6 +373,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
             wellnessManager.ResolveEventQTE(wellnessEventKey);
         }
 
+        QTETracker.Unregister(QTETracker.CirculatoryLayerIndex, wellnessEventKey);
         NotifySkinBreachStateChanged();
     }
 

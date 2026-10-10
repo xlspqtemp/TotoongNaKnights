@@ -90,6 +90,7 @@ public sealed class LungInfectionResponse : MonoBehaviour
         if (!string.IsNullOrWhiteSpace(eventKey))
         {
             pendingWellnessEventKeys.Add(eventKey);
+            QTETracker.Register(QTETracker.RespiratoryLayerIndex, eventKey);
             WellnessManager.Instance?.MarkEventReachedTarget(eventKey);
         }
         if (responseInProgress)
@@ -196,7 +197,7 @@ public sealed class LungInfectionResponse : MonoBehaviour
     {
         while (remainingResponseSeconds > 0f)
         {
-            remainingResponseSeconds -= Time.deltaTime;
+            remainingResponseSeconds -= GameplaySpeed.DeltaTime;
             RefreshPrompt();
             yield return null;
         }
@@ -212,6 +213,7 @@ public sealed class LungInfectionResponse : MonoBehaviour
             {
                 wellnessManager.TryAwardEventResponse(eventKey, "RespiratoryResponse", 3f, 5f);
                 wellnessManager.ResolveEventQTE(eventKey);
+                QTETracker.Unregister(QTETracker.RespiratoryLayerIndex, eventKey);
             }
         }
         pendingWellnessEventKeys.Clear();

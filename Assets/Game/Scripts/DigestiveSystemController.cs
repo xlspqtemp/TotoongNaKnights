@@ -209,6 +209,8 @@ public sealed class DigestiveSystemController : MonoBehaviour
                 ? "JunkFoodBinge"
                 : "AccidentallyAteSpoiledFood";
         string eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour);
+        if (eventData.triggersQTE)
+            QTETracker.Register(QTETracker.DigestiveLayerIndex, eventKey);
 
         DigestiveBatchRequest scheduledMeal = FindScheduledMealBatch(eventData.day, eventData.hour);
         if (scheduledMeal != null)
@@ -277,6 +279,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
             {
                 wellnessManager.TryAwardEventResponse(eventKey, "DigestiveResponse", 3f, 5f);
                 wellnessManager.ResolveEventQTE(eventKey);
+                QTETracker.Unregister(QTETracker.DigestiveLayerIndex, eventKey);
             }
         }
 

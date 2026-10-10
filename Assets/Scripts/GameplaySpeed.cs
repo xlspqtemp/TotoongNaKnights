@@ -16,8 +16,8 @@ public static class GameplaySpeed
     /// <summary>Returns the player's selected speed, independent of any active QTE override.</summary>
     public static float SelectedMultiplier => SpeedModes[selectedModeIndex];
 
-    /// <summary>Returns the effective gameplay speed, forced to 1x while a QTE is active.</summary>
-    public static float Multiplier => IsQTEActive ? 1f : SelectedMultiplier;
+    /// <summary>Returns the player's selected gameplay speed multiplier.</summary>
+    public static float Multiplier => SelectedMultiplier;
 
     /// <summary>Returns whether at least one QTE is currently unresolved.</summary>
     public static bool IsQTEActive => activeQteIds.Count > 0;

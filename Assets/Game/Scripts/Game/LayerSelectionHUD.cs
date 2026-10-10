@@ -15,6 +15,7 @@ internal static class LayerSelectionHUD
     private const string SelectorObjectName = "LayerSelectionButton";
     private const string ControlsObjectName = "SystemLayerButtons";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
+    private const string BankGothicResourcePath = "BankGothicMediumSDF";
     private const float LayerToggleHeight = 36f;
     private const float LayerToggleGap = 8f;
 
@@ -24,6 +25,7 @@ internal static class LayerSelectionHUD
     private static readonly Color AccentColor = new Color(0.12f, 0.78f, 0.88f, 1f);
     private static readonly Color LabelColor = new Color(0.92f, 0.96f, 0.97f, 1f);
     private static readonly Color InfoButtonColor = new Color(0.09f, 0.15f, 0.18f, 1f);
+    private static readonly Color QTELabelColor = new Color(1f, 0.16f, 0.18f, 1f);
     private static Color SelectedLayerRowColor = new Color(0.08f, 0.78f, 0.9f, 0.4f);
     private static Color SelectedLayerTextColor = new Color(0.22f, 0.92f, 1f, 1f);
 
@@ -31,6 +33,7 @@ internal static class LayerSelectionHUD
     private static Image[] layerButtonBackgrounds;
     private static TextMeshProUGUI[] layerButtonLabels;
     private static TextMeshProUGUI[] layerButtonArrowLabels;
+    private static TextMeshProUGUI[] layerButtonQteLabels;
     private static Image[] layerButtonInfoBackgrounds;
     private static Outline[] layerButtonOutlines;
     private static RectTransform layerRowsRoot;
@@ -49,11 +52,13 @@ internal static class LayerSelectionHUD
     {
         RandomEventSystem.OnRandomEventTriggered -= HandleRandomEventTriggered;
         ActiveThreatLayers.Clear();
+        QTETracker.ClearAll();
         activeThreatKeys = null;
         layerButtons = null;
         layerButtonBackgrounds = null;
         layerButtonLabels = null;
         layerButtonArrowLabels = null;
+        layerButtonQteLabels = null;
         layerButtonInfoBackgrounds = null;
         layerButtonOutlines = null;
         layerRowsRoot = null;
@@ -145,6 +150,7 @@ internal static class LayerSelectionHUD
         layerButtonBackgrounds = new Image[labels.Length];
         layerButtonLabels = new TextMeshProUGUI[labels.Length];
         layerButtonArrowLabels = new TextMeshProUGUI[labels.Length];
+        layerButtonQteLabels = new TextMeshProUGUI[labels.Length];
         layerButtonInfoBackgrounds = new Image[labels.Length];
         layerButtonOutlines = new Outline[labels.Length];
         activeThreatKeys = new HashSet<string>[labels.Length];
@@ -160,6 +166,17 @@ internal static class LayerSelectionHUD
             layerOutline.useGraphicAlpha = true;
             layerOutline.enabled = false;
             layerButtonLabels[index] = CreateLabel("LayerButtonLabel", layerButton.transform as RectTransform, labels[index], 15f, TextAlignmentOptions.MidlineLeft);
+            TextMeshProUGUI qteLabel = CreateLabel("LayerQTEIndicator", rowRect, "QTE", 11f, TextAlignmentOptions.Center);
+            qteLabel.font = Resources.Load<TMP_FontAsset>(BankGothicResourcePath) ?? TMP_Settings.defaultFontAsset;
+            qteLabel.color = QTELabelColor;
+            RectTransform qteRect = qteLabel.rectTransform;
+            qteRect.anchorMin = new Vector2(1f, 0.5f);
+            qteRect.anchorMax = new Vector2(1f, 0.5f);
+            qteRect.pivot = new Vector2(1f, 0.5f);
+            qteRect.sizeDelta = new Vector2(36f, 26f);
+            qteRect.anchoredPosition = new Vector2(-62f, 0f);
+            qteLabel.gameObject.SetActive(false);
+            layerButtonQteLabels[index] = qteLabel;
             int layerNumber = layerNumbers[index];
             layerButton.onClick.AddListener(() => SelectLayer(layerNumber));
 
@@ -397,6 +414,13 @@ internal static class LayerSelectionHUD
 
             bool isSelected = LayerNumbers[index] == selectedLayer;
             bool hasThreat = activeThreatKeys[index] != null && activeThreatKeys[index].Count > 0;
+            bool hasActiveQte = QTETracker.HasActiveQTE(index);
+            if (layerButtonQteLabels != null && layerButtonQteLabels[index] != null &&
+                layerButtonQteLabels[index].gameObject.activeSelf != hasActiveQte)
+            {
+                layerButtonQteLabels[index].gameObject.SetActive(hasActiveQte);
+            }
+
             Color restingColor = isSelected ? SelectedLayerRowColor : NormalButtonColor;
             background.color = hasThreat && !isSelected
                 ? Color.Lerp(restingColor, new Color(0.62f, 0.045f, 0.06f, 1f), 0.22f + warningWave * 0.36f)
