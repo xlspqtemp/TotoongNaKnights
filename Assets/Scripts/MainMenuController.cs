@@ -54,6 +54,7 @@ public class MainMenuController : MonoBehaviour
     private Outline[] difficultyOptionOutlines;
     private TextMeshProUGUI difficultyInfoText;
     private TMP_FontAsset difficultyInfoFont;
+    [SerializeField] private bool showManualButton = false;
     [SerializeField] private DifficultyStats[] difficultyStats = DifficultySettings.CreateDefaultStats();
     private int selectedDifficultyIndex = 1;
 
@@ -69,7 +70,27 @@ public class MainMenuController : MonoBehaviour
         if (menuCanvas != null)
         {
             ManualScreen.AddMenuEntry(menuCanvas.transform, ShowManual);
+            SetManualButtonVisibility();
         }
+    }
+
+    private void SetManualButtonVisibility()
+    {
+        Transform manualButton = menuCanvas != null ? menuCanvas.transform.Find("ManualEntryButton") : null;
+        if (manualButton == null)
+        {
+            return;
+        }
+
+        CanvasGroup canvasGroup = manualButton.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+        {
+            canvasGroup = manualButton.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        canvasGroup.alpha = showManualButton ? 1f : 0f;
+        canvasGroup.interactable = showManualButton;
+        canvasGroup.blocksRaycasts = showManualButton;
     }
 
     /// <summary>

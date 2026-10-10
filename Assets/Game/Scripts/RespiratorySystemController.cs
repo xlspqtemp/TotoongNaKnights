@@ -26,6 +26,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     [SerializeField] private Button coughButton;
     [SerializeField] private TextMeshProUGUI coughButtonLabel;
     [SerializeField] private Button testContaminatedAirButton;
+    [SerializeField] private bool showTestButtons = false;
 
     private sealed class ContaminationWindow
     {
@@ -44,6 +45,9 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void Start()
     {
+        SetButtonVisibility(coughButton, true);
+        SetButtonVisibility(testContaminatedAirButton, showTestButtons);
+
         if (coughButton != null)
         {
             coughButton.onClick.AddListener(HandleCoughPressed);
@@ -72,6 +76,24 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
         spawnRoutine = StartCoroutine(RunSpawnLoop());
         RefreshCoughButton();
+    }
+
+    private static void SetButtonVisibility(Button button, bool isVisible)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        CanvasGroup canvasGroup = button.GetComponent<CanvasGroup>();
+        if (canvasGroup == null)
+        {
+            canvasGroup = button.gameObject.AddComponent<CanvasGroup>();
+        }
+
+        canvasGroup.alpha = isVisible ? 1f : 0f;
+        canvasGroup.interactable = isVisible;
+        canvasGroup.blocksRaycasts = isVisible;
     }
 
     private void OnDisable()

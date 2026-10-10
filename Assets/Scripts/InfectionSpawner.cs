@@ -421,8 +421,10 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void Update()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (Time.timeScale > 0f && Input.GetKeyDown(debugWellnessLossKey))
             ApplyWellnessChange("Debug test", -debugWellnessLossAmount);
+#endif
 
         UpdateInfectionMarkerAnimations();
         UpdateInfectionThreatVisuals();

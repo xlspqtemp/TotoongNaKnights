@@ -79,6 +79,7 @@ public class RoutineSystem : MonoBehaviour
 
     private void Update()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (!enableDebugKeyboardShortcuts)
             return;
 
@@ -90,6 +91,7 @@ public class RoutineSystem : MonoBehaviour
 
         if (Input.GetKeyDown(jumpToHourKey))
             JumpToConfiguredHour();
+#endif
     }
 
     private void HandleHourAdvanced(int currentDay, int currentHour)

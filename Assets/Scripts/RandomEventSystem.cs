@@ -73,6 +73,7 @@ public class RandomEventSystem : MonoBehaviour
 
     private void Update()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (!enableDebugKeyboardShortcuts)
             return;
 
@@ -81,6 +82,7 @@ public class RandomEventSystem : MonoBehaviour
 
         if (Input.GetKeyDown(cycleDifficultyKey))
             CycleDifficulty();
+#endif
     }
 
     private void HandleHourAdvanced(int currentDay, int currentHour)
