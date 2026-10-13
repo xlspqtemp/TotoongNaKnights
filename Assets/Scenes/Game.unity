@@ -249,6 +249,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26ce3c651122ab948b709b40b4de369e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LungInfectionResponse
+  panelScale: 0.04
+  useCameraBillboard: 1
   tCellPrefab: {fileID: 8640416537868356536, guid: 04db253bddad3a54595071ecfa937ef1, type: 3}
   macrophagePrefab: {fileID: 5201823894453661281, guid: cbc3b4a07f31b6d4c8483566069372de, type: 3}
 --- !u!1 &3209388
@@ -5300,11 +5302,8 @@ MonoBehaviour:
   wbcHeadshotResourcePath: UI/WBC headshot
   headshotButtonSize: {x: 78, y: 78}
   squadHudBottomRightOffset: {x: -28, y: 28}
-  infectionRowBottomRightOffset: {x: -24, y: 122}
-  infectionRowSize: {x: 320, y: 96}
   squadHudPanelColor: {r: 0.025, g: 0.045, b: 0.065, a: 0.9}
   squadCountColor: {r: 1, g: 1, b: 1, a: 1}
-  markerPopDuration: 0.18
   markerFadeDuration: 0.22
   preferredBodyPartWeight: 4
   otherBodyPartWeight: 1
@@ -5312,14 +5311,6 @@ MonoBehaviour:
   markerSpriteResourcePath: HUDWhiteSwatch
   bacterialColor: {r: 0.95, g: 0.2, b: 0.18, a: 1}
   viralColor: {r: 0.2, g: 0.55, b: 1, a: 1}
-  selectionOutlineColor: {r: 1, g: 1, b: 1, a: 1}
-  selectionOutlineThickness: 3
-  mildMarkerSize: {x: 18, y: 18}
-  moderateMarkerSize: {x: 24, y: 24}
-  severeMarkerSize: {x: 30, y: 30}
-  markerOffset: {x: 88, y: 36}
-  maximumMarkerRowWidth: 220
-  markerSpacing: 8
   enableWbcDispatch: 1
   useLegacySelectFirst: 0
   maxActiveWbcs: 5
@@ -5328,7 +5319,6 @@ MonoBehaviour:
   wbcAvatarTexture: {fileID: 2800000, guid: caa350fd04df1fc4987d9815ef14a61e, type: 3}
   wbcAvatarResourcePath: Manual/WBC
   dispatchAvatarSize: {x: 38, y: 38}
-  dispatchAvatarOffset: {x: 0, y: -44}
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
   useFixedDurationClash: 1
   bacterialClashDurationSeconds: 4
@@ -5336,6 +5326,8 @@ MonoBehaviour:
   moderateBacterialWellnessGain: 4
   severeBacterialWellnessGain: 6
   wellnessGainOnResolve: 5
+  clearBonus: 10
+  containmentBonus: 5
   mildDailyInfectionWellnessCost: 1
   moderateDailyInfectionWellnessCost: 2
   severeDailyInfectionWellnessCost: 4
@@ -5367,7 +5359,7 @@ MonoBehaviour:
   verboseCombatLogging: 0
   infectionAnchorMatchRadius: 2
   promptBannerSize: {x: 360, y: 86}
-  promptBannerWellnessGap: 10
+  promptBannerWellnessGap: 30
   promptBannerColor: {r: 0.025, g: 0.045, b: 0.065, a: 0.92}
   promptAutoFadeSeconds: 8
 --- !u!1 &160062307
@@ -7558,6 +7550,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!1 &261755079
 GameObject:
   m_ObjectHideFlags: 0
@@ -10445,6 +10439,7 @@ RectTransform:
   - {fileID: 856869896}
   - {fileID: 1086863901}
   - {fileID: 1520046425}
+  - {fileID: 1454114273}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -10671,6 +10666,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!1 &454519207
 GameObject:
   m_ObjectHideFlags: 0
@@ -11358,6 +11355,7 @@ MonoBehaviour:
   coughButton: {fileID: 179529021}
   coughButtonLabel: {fileID: 116900731}
   testContaminatedAirButton: {fileID: 354688670}
+  showTestButtons: 0
 --- !u!1 &471669195
 GameObject:
   m_ObjectHideFlags: 0
@@ -14002,6 +14000,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!54 &595778648
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -15972,6 +15972,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!54 &667274047
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -16720,6 +16722,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26ce3c651122ab948b709b40b4de369e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LungInfectionResponse
+  panelScale: 0.04
+  useCameraBillboard: 1
   tCellPrefab: {fileID: 8640416537868356536, guid: 04db253bddad3a54595071ecfa937ef1, type: 3}
   macrophagePrefab: {fileID: 5201823894453661281, guid: cbc3b4a07f31b6d4c8483566069372de, type: 3}
 --- !u!1 &693083042
@@ -25347,6 +25351,7 @@ MonoBehaviour:
   coughButton: {fileID: 179529021}
   coughButtonLabel: {fileID: 116900731}
   testContaminatedAirButton: {fileID: 354688670}
+  showTestButtons: 0
 --- !u!1 &1062182307
 GameObject:
   m_ObjectHideFlags: 0
@@ -25617,6 +25622,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!1 &1077311854
 GameObject:
   m_ObjectHideFlags: 0
@@ -27518,6 +27525,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!54 &1134275130
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -27890,7 +27899,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 755701208}
   m_HandleRect: {fileID: 755701207}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -31126,6 +31135,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26ce3c651122ab948b709b40b4de369e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LungInfectionResponse
+  panelScale: 0.04
+  useCameraBillboard: 1
   tCellPrefab: {fileID: 8640416537868356536, guid: 04db253bddad3a54595071ecfa937ef1, type: 3}
   macrophagePrefab: {fileID: 5201823894453661281, guid: cbc3b4a07f31b6d4c8483566069372de, type: 3}
 --- !u!1 &1270792733
@@ -31947,6 +31958,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!54 &1314815023
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -32853,6 +32866,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!54 &1351263756
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -34669,6 +34684,166 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1446592391}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1454114272
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1454114273}
+  - component: {fileID: 1454114276}
+  - component: {fileID: 1454114275}
+  - component: {fileID: 1454114274}
+  m_Layer: 0
+  m_Name: Adaptive Response Popup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1454114273
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1454114272}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 447793134}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1454114274
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1454114272}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fdf930dd7d8530147849c1aa6e1a964c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AdaptiveResponsePopup
+  resolvedSoundClip: {fileID: 8300000, guid: 11d891b336c53cd439efe14d451ad341, type: 3}
+--- !u!82 &1454114275
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1454114272}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!225 &1454114276
+CanvasGroup:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1454114272}
+  m_Enabled: 1
+  m_Alpha: 1
+  m_Interactable: 1
+  m_BlocksRaycasts: 1
+  m_IgnoreParentGroups: 0
 --- !u!1 &1457935302
 GameObject:
   m_ObjectHideFlags: 0
@@ -46038,6 +46213,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 26ce3c651122ab948b709b40b4de369e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LungInfectionResponse
+  panelScale: 0.04
+  useCameraBillboard: 1
   tCellPrefab: {fileID: 8640416537868356536, guid: 04db253bddad3a54595071ecfa937ef1, type: 3}
   macrophagePrefab: {fileID: 5201823894453661281, guid: cbc3b4a07f31b6d4c8483566069372de, type: 3}
 --- !u!1 &1957637553
@@ -47786,6 +47963,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!1 &2061854977
 GameObject:
   m_ObjectHideFlags: 0
@@ -48138,6 +48317,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
 --- !u!54 &2064337410
 Rigidbody:
   m_ObjectHideFlags: 0

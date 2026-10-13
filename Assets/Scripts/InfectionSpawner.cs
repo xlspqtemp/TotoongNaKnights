@@ -164,6 +164,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private GameObject promptBannerObject;
     private TextMeshProUGUI promptBannerLabel;
     private CanvasGroup promptBannerCanvasGroup;
+    private AdaptiveResponsePopup adaptiveResponsePopup;
     private GameObject selectedInfectionPopupObject;
     private CanvasGroup selectedInfectionPopupCanvasGroup;
     private TextMeshProUGUI selectedInfectionCategoryLabel;
@@ -399,6 +400,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         Debug.Log($"Leukocyte supply: {leukocyteSupply:0.##}/{stats.maxSupply} | deployCost={stats.deployCost} | regenSecondsPerPoint={stats.regenSecondsPerPoint:0.##}", this);
         CreateWbcSquadHud();
         CreateSquadPromptBanner();
+        CreateAdaptiveResponsePopup();
         RefreshWbcSquadHud();
         EnsurePendingInfectionsPanelSubscription();
         if (dayCounter == null)
@@ -755,6 +757,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         promptBannerLabel.rectTransform.offsetMax = new Vector2(-12f, -8f);
         promptBannerLabel.raycastTarget = false;
         promptBannerObject.SetActive(false);
+    }
+
+    private void CreateAdaptiveResponsePopup()
+    {
+        adaptiveResponsePopup = FindFirstObjectByType<AdaptiveResponsePopup>();
+        if (adaptiveResponsePopup != null && hudCanvas != null)
+            adaptiveResponsePopup.Initialize(hudCanvas, promptBannerWellnessGap);
     }
 
     private void ShowSquadPrompt()
@@ -1603,8 +1612,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (marker == null || marker.isRemoving || marker.isContained || marker.resolutionPending || marker.infection == null)
             return;
-        if (marker.infection.correctResponder != InfectionCorrectResponder.WBC)
-            return;
+
 
         if (marker.infection.pathogenType == InfectionPathogenType.Bacterial)
         {
@@ -1884,6 +1892,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             return;
+
+        if (marker.isContained && marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
+            adaptiveResponsePopup?.Show(marker.infection.displayName);
 
         marker.isRemoving = true;
         marker.animationElapsed = 0f;
