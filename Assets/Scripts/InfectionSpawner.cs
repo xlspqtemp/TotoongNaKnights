@@ -33,7 +33,12 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float SquadPromptFadeDuration = 0.4f;
     private const float InfectionPopupFadeDuration = 0.3f;
     private const float InfectionPopupReferenceDistance = 5f;
-    private static readonly Vector2 InfectionPopupSize = new Vector2(280f, 96f);
+    [Header("Selected Infection Popup")]
+    [SerializeField, Min(1f)] private float popupFontSize = 26f;
+    [SerializeField] private Vector2 popupSize = new Vector2(440f, 140f);
+    [SerializeField, Min(0.001f)] private float popupScale = 0.005f;
+    [SerializeField, Min(0f)] private float popupMinVerticalOffset = 1.5f;
+    [SerializeField, Min(0f)] private float popupClusterRadiusMultiplier = 0.5f;
     private const string DefaultMarkerSpriteResourcePath = "HUDWhiteSwatch";
     private const string DefaultWbcAvatarResourcePath = "Manual/WBC";
     private const string OrderButtonSuffix = " Order";
@@ -2223,8 +2228,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         selectedInfectionPopupObject = new GameObject("Selected Infection Popup", typeof(RectTransform), typeof(Canvas), typeof(CanvasGroup));
         RectTransform popupRect = selectedInfectionPopupObject.GetComponent<RectTransform>();
-        popupRect.sizeDelta = InfectionPopupSize;
-        selectedInfectionPopupObject.transform.localScale = Vector3.one * 0.0035f;
+        popupRect.sizeDelta = popupSize;
+        selectedInfectionPopupObject.transform.localScale = Vector3.one * popupScale;
 
         Canvas popupCanvas = selectedInfectionPopupObject.GetComponent<Canvas>();
         popupCanvas.renderMode = RenderMode.WorldSpace;
@@ -2255,7 +2260,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         selectedInfectionDetailsLabel = CreateInfectionPopupText(
             "Pathogen Details", Vector2.zero, new Vector2(1f, 0.62f), new Vector2(12f, 5f), new Vector2(-12f, 0f),
-            15f, FontStyles.Normal, Color.white, TextAlignmentOptions.Left);
+            popupFontSize, FontStyles.Normal, Color.white, TextAlignmentOptions.Left);
         selectedInfectionDetailsLabel.transform.SetParent(selectedInfectionPopupObject.transform, false);
 
         selectedInfectionPopupObject.SetActive(false);
@@ -2377,19 +2382,19 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         Vector3 offset = popupCamera.transform.right * (0.55f + clusterRadius) +
-                         popupCamera.transform.up * (0.2f + clusterRadius * 0.25f);
+                         popupCamera.transform.up * (popupMinVerticalOffset + popupClusterRadiusMultiplier * clusterRadius);
         Transform popupTransform = selectedInfectionPopupObject.transform;
         popupTransform.position = anchor + offset;
         popupTransform.rotation = popupCamera.transform.rotation;
 
-        float popupScale = 0.0035f;
+        float scaledPopupScale = popupScale;
         if (!popupCamera.orthographic)
         {
             float distance = Vector3.Distance(popupCamera.transform.position, popupTransform.position);
-            popupScale *= Mathf.Clamp(distance / InfectionPopupReferenceDistance, 0.25f, 20f);
+            scaledPopupScale *= Mathf.Clamp(distance / InfectionPopupReferenceDistance, 0.25f, 20f);
         }
-        popupScale = Mathf.Abs(popupScale);
-        popupTransform.localScale = new Vector3(popupScale, popupScale, popupScale);
+        scaledPopupScale = Mathf.Abs(scaledPopupScale);
+        popupTransform.localScale = new Vector3(scaledPopupScale, scaledPopupScale, scaledPopupScale);
     }
 
     private void SelectMarker(InfectionMarker marker)
