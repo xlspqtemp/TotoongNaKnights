@@ -37,14 +37,12 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const string DefaultMarkerSpriteResourcePath = "HUDWhiteSwatch";
     private const string DefaultWbcAvatarResourcePath = "Manual/WBC";
     private const string OrderButtonSuffix = " Order";
+    private const float LeukocyteSupplyBarFlashDurationSeconds = 0.35f;
+    private const float LeukocyteSupplyBarPulseScale = 0.08f;
 
-    private static readonly Vector2 DefaultMarkerSize = new Vector2(18f, 18f);
-    private static readonly Vector2 DefaultMarkerOffset = new Vector2(88f, 36f);
     private static readonly Vector2 DefaultDispatchAvatarSize = new Vector2(38f, 38f);
-    private static readonly Vector2 DefaultDispatchAvatarOffset = new Vector2(0f, -44f);
     private static readonly Color DefaultBacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
     private static readonly Color DefaultViralColor = new Color(0.2f, 0.55f, 1f, 1f);
-    private static readonly Color DefaultSelectionOutlineColor = Color.white;
     private static readonly Color DefaultDispatchUnavailableColor = new Color(0.45f, 0.45f, 0.45f, 0.65f);
 
     [Header("Day Progression")]
@@ -70,11 +68,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private string wbcHeadshotResourcePath = "UI/WBC headshot";
     [SerializeField] private Vector2 headshotButtonSize = new Vector2(78f, 78f);
     [SerializeField] private Vector2 squadHudBottomRightOffset = new Vector2(-28f, 28f);
-    [SerializeField] private Vector2 infectionRowBottomRightOffset = new Vector2(-24f, 122f);
-    [SerializeField] private Vector2 infectionRowSize = new Vector2(320f, 96f);
     [SerializeField] private Color squadHudPanelColor = new Color(0.025f, 0.045f, 0.065f, 0.9f);
     [SerializeField] private Color squadCountColor = Color.white;
-    [SerializeField, Min(0f)] private float markerPopDuration = 0.18f;
     [SerializeField, Min(0f)] private float markerFadeDuration = 0.22f;
 
     [Header("Random Body-Part Placement")]
@@ -86,14 +81,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private string markerSpriteResourcePath = DefaultMarkerSpriteResourcePath;
     [SerializeField] private Color bacterialColor = DefaultBacterialColor;
     [SerializeField] private Color viralColor = DefaultViralColor;
-    [SerializeField] private Color selectionOutlineColor = DefaultSelectionOutlineColor;
-    [SerializeField, Min(0f)] private float selectionOutlineThickness = 3f;
-    [SerializeField] private Vector2 mildMarkerSize = DefaultMarkerSize;
-    [SerializeField] private Vector2 moderateMarkerSize = new Vector2(24f, 24f);
-    [SerializeField] private Vector2 severeMarkerSize = new Vector2(30f, 30f);
-    [SerializeField] private Vector2 markerOffset = DefaultMarkerOffset;
-    [SerializeField, Min(1f)] private float maximumMarkerRowWidth = 220f;
-    [SerializeField, Min(0f)] private float markerSpacing = 8f;
 
     [Header("WBC Dispatch")]
     [SerializeField] private bool enableWbcDispatch = true;
@@ -104,7 +91,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private Texture2D wbcAvatarTexture;
     [SerializeField] private string wbcAvatarResourcePath = DefaultWbcAvatarResourcePath;
     [SerializeField] private Vector2 dispatchAvatarSize = DefaultDispatchAvatarSize;
-    [SerializeField] private Vector2 dispatchAvatarOffset = DefaultDispatchAvatarOffset;
     [SerializeField] private Color dispatchUnavailableColor = DefaultDispatchUnavailableColor;
 
     [Header("Infection Resolution")]
@@ -114,6 +100,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private float moderateBacterialWellnessGain = 4f;
     [SerializeField] private float severeBacterialWellnessGain = 6f;
     [SerializeField, Min(0f)] private float wellnessGainOnResolve = 5f;
+    [Header("Leukocyte Supply")]
+    [SerializeField, Min(0)] private int clearBonus = 10;
+    [SerializeField, Min(0)] private int containmentBonus = 5;
     [Header("Daily Infection Wellness Costs")]
     [SerializeField, Min(0f)] private float mildDailyInfectionWellnessCost = 1f;
     [SerializeField, Min(0f)] private float moderateDailyInfectionWellnessCost = 2f;
@@ -162,15 +151,19 @@ public sealed class InfectionSpawner : MonoBehaviour
     private Sprite resolvedMarkerSprite;
     private Texture2D resolvedWbcAvatarTexture;
     private Texture2D resolvedHeadshotTexture;
-    private RectTransform infectionRowRect;
     private Button headshotButton;
     private TextMeshProUGUI squadCountLabel;
     private Image headshotCooldownFill;
     private TextMeshProUGUI headshotCooldownLabel;
+    private RectTransform leukocyteSupplyBarRect;
+    private Image leukocyteSupplyFill;
+    private TextMeshProUGUI leukocyteSupplyValueLabel;
+    private float leukocyteSupply;
+    private float leukocyteSupplyBarFlashRemaining;
+    private PendingInfectionsPanel pendingInfectionsPanel;
     private GameObject promptBannerObject;
     private TextMeshProUGUI promptBannerLabel;
     private CanvasGroup promptBannerCanvasGroup;
-    private TextMeshProUGUI excessInfectionLabel;
     private GameObject selectedInfectionPopupObject;
     private CanvasGroup selectedInfectionPopupCanvasGroup;
     private TextMeshProUGUI selectedInfectionCategoryLabel;
@@ -182,7 +175,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     private float promptAutoFadeRemaining;
     private float promptFadeElapsed;
     private float promptFadeStartAlpha;
-    private int nextInfectionSpawnOrder;
     private int idleSquadDeploymentIndex;
     private bool awaitingSquadDestination;
     private bool awaitingInfectionTargetSelection;
@@ -321,19 +313,12 @@ public sealed class InfectionSpawner : MonoBehaviour
         public InfectionBodyPartButtonReference bodyPartMapping;
         public string bodyPartName;
         public InfectionBodyPartGroup bodyPartGroup;
-        public Button markerButton;
-        public Image markerImage;
-        public Outline selectionOutline;
-        public RectTransform markerRect;
         public Button dispatchButton;
         public RawImage dispatchImage;
         public TextMeshProUGUI dispatchCountLabel;
         public Canvas canvas;
-        public Vector2 canvasLocalBodyPartPosition;
-        public Vector2 markerSize;
         public CanvasGroup canvasGroup;
         public float animationElapsed;
-        public int spawnOrder;
         public bool isRemoving;
         public bool isContained;
         public bool resolutionPending;
@@ -387,7 +372,9 @@ public sealed class InfectionSpawner : MonoBehaviour
                 bodyPartButtonsCanvasGroup = legacyButtonsObject.GetComponent<CanvasGroup>();
         }
 
-        eventsPerDay = Mathf.Clamp(DifficultySettings.CurrentStats.eventsPerDay, MinimumEventsPerDay, MaximumEventsPerDay);
+        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
+        eventsPerDay = Mathf.Clamp(difficultyStats.eventsPerDay, MinimumEventsPerDay, MaximumEventsPerDay);
+        leukocyteSupply = Mathf.Clamp(difficultyStats.startingSupply, 0, Mathf.Max(0, difficultyStats.maxSupply));
         maxActiveInfections = Mathf.Max(1, maxActiveInfections);
         maxActiveWbcs = Mathf.Max(1, maxActiveWbcs);
         squadMemberCount = Mathf.Max(1, squadMemberCount);
@@ -402,15 +389,18 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (dayCounter != null)
             dayCounter.OnDayAdvanced += HandleDayAdvanced;
+        EnsurePendingInfectionsPanelSubscription();
     }
 
     private void Start()
     {
         DifficultyStats stats = DifficultySettings.CurrentStats;
         Debug.Log($"Difficulty: {stats.difficultyName} | eventsPerDay={stats.eventsPerDay} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
+        Debug.Log($"Leukocyte supply: {leukocyteSupply:0.##}/{stats.maxSupply} | deployCost={stats.deployCost} | regenSecondsPerPoint={stats.regenSecondsPerPoint:0.##}", this);
         CreateWbcSquadHud();
         CreateSquadPromptBanner();
         RefreshWbcSquadHud();
+        EnsurePendingInfectionsPanelSubscription();
         if (dayCounter == null)
             Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; day-advance infection spawning is disabled.", this);
         if (hudCanvas == null)
@@ -435,7 +425,97 @@ public sealed class InfectionSpawner : MonoBehaviour
         HandleSquadPromptCancellation();
         UpdateSquadPrompt();
         HandleMapClick();
+        UpdateLeukocyteSupply();
+        EnsurePendingInfectionsPanelSubscription();
         RefreshWbcSquadHud();
+    }
+
+    private void UpdateLeukocyteSupply()
+    {
+        DifficultyStats stats = DifficultySettings.CurrentStats;
+        float maxSupply = Mathf.Max(0, stats.maxSupply);
+        float gameplayDeltaTime = GameplaySpeed.DeltaTime;
+        if (gameplayDeltaTime > 0f)
+        {
+            float regenSecondsPerPoint = Mathf.Max(0.01f, stats.regenSecondsPerPoint);
+            leukocyteSupply = Mathf.Min(maxSupply, leukocyteSupply + gameplayDeltaTime / regenSecondsPerPoint);
+        }
+        else
+        {
+            leukocyteSupply = Mathf.Min(maxSupply, leukocyteSupply);
+        }
+
+        if (leukocyteSupplyBarFlashRemaining > 0f)
+            leukocyteSupplyBarFlashRemaining = Mathf.Max(0f, leukocyteSupplyBarFlashRemaining - Time.unscaledDeltaTime);
+        UpdateLeukocyteSupplyBarPulse();
+    }
+
+    private void AddLeukocyteSupply(float amount)
+    {
+        if (amount <= 0f)
+            return;
+
+        float maxSupply = Mathf.Max(0, DifficultySettings.CurrentStats.maxSupply);
+        float previousSupply = leukocyteSupply;
+        leukocyteSupply = Mathf.Clamp(leukocyteSupply + amount, 0f, maxSupply);
+        if (leukocyteSupply > previousSupply)
+            leukocyteSupplyBarFlashRemaining = LeukocyteSupplyBarFlashDurationSeconds;
+        RefreshLeukocyteSupplyBar();
+    }
+
+    private void SpendLeukocyteSupply(int amount)
+    {
+        float previousSupply = leukocyteSupply;
+        leukocyteSupply = Mathf.Max(0f, leukocyteSupply - Mathf.Max(0, amount));
+        if (leukocyteSupply < previousSupply)
+            leukocyteSupplyBarFlashRemaining = LeukocyteSupplyBarFlashDurationSeconds;
+        RefreshLeukocyteSupplyBar();
+    }
+
+    private void RefreshLeukocyteSupplyBar()
+    {
+        if (leukocyteSupplyFill == null || leukocyteSupplyValueLabel == null)
+            return;
+
+        DifficultyStats stats = DifficultySettings.CurrentStats;
+        int maxSupply = Mathf.Max(0, stats.maxSupply);
+        leukocyteSupply = Mathf.Clamp(leukocyteSupply, 0f, maxSupply);
+        leukocyteSupplyFill.fillAmount = maxSupply > 0 ? Mathf.Clamp01(leukocyteSupply / maxSupply) : 0f;
+        leukocyteSupplyValueLabel.text = $"{Mathf.FloorToInt(leukocyteSupply + 0.0001f)} / {maxSupply}";
+    }
+
+    private void UpdateLeukocyteSupplyBarPulse()
+    {
+        if (leukocyteSupplyBarRect == null || leukocyteSupplyFill == null)
+            return;
+
+        float pulse = 0f;
+        if (leukocyteSupplyBarFlashRemaining > 0f)
+        {
+            float progress = 1f - leukocyteSupplyBarFlashRemaining / LeukocyteSupplyBarFlashDurationSeconds;
+            pulse = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
+        }
+
+        leukocyteSupplyBarRect.localScale = Vector3.one * (1f + pulse * LeukocyteSupplyBarPulseScale);
+        leukocyteSupplyFill.color = Color.Lerp(new Color(0.15f, 0.78f, 0.8f, 1f), Color.white, pulse * 0.55f);
+    }
+
+    private void EnsurePendingInfectionsPanelSubscription()
+    {
+        PendingInfectionsPanel panel = FindFirstObjectByType<PendingInfectionsPanel>();
+        if (panel == pendingInfectionsPanel)
+            return;
+
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.OnRowClickedPublic -= HandlePendingInfectionRowClicked;
+        pendingInfectionsPanel = panel;
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.OnRowClickedPublic += HandlePendingInfectionRowClicked;
+    }
+
+    private void HandlePendingInfectionRowClicked(InfectionMarker marker)
+    {
+        RequestDispatchToInfection(marker);
     }
 
     private void LateUpdate()
@@ -452,6 +532,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (dayCounter != null)
             dayCounter.OnDayAdvanced -= HandleDayAdvanced;
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.OnRowClickedPublic -= HandlePendingInfectionRowClicked;
+        pendingInfectionsPanel = null;
     }
 
     private void OnValidate()
@@ -470,9 +553,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         combatDetectionRange = Mathf.Max(0f, combatDetectionRange);
         combatMeleeRange = Mathf.Max(0f, combatMeleeRange);
         wbcCombatMoveSpeed = Mathf.Max(0f, wbcCombatMoveSpeed);
-        ClampMarkerSize(ref mildMarkerSize);
-        ClampMarkerSize(ref moderateMarkerSize);
-        ClampMarkerSize(ref severeMarkerSize);
         dispatchAvatarSize.x = Mathf.Max(1f, dispatchAvatarSize.x);
         dispatchAvatarSize.y = Mathf.Max(1f, dispatchAvatarSize.y);
         perWbcCooldownSeconds = Mathf.Max(0.1f, perWbcCooldownSeconds);
@@ -493,16 +573,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         containedDailyWellnessCost = Mathf.Max(0f, containedDailyWellnessCost);
         threatVisualSpawnCount = Mathf.Max(0, threatVisualSpawnCount);
         threatVisualClusterRadius = Mathf.Max(0f, threatVisualClusterRadius);
-        maximumMarkerRowWidth = Mathf.Max(severeMarkerSize.x, maximumMarkerRowWidth);
         promptAutoFadeSeconds = Mathf.Max(0f, promptAutoFadeSeconds);
         if (!Application.isPlaying)
             ApplyBodyPartButtonVisibility();
-    }
-
-    private static void ClampMarkerSize(ref Vector2 markerSize)
-    {
-        markerSize.x = Mathf.Max(1f, markerSize.x);
-        markerSize.y = Mathf.Max(1f, markerSize.y);
     }
 
     private void ApplyBodyPartButtonVisibility()
@@ -582,23 +655,70 @@ public sealed class InfectionSpawner : MonoBehaviour
         squadCountLabel.rectTransform.anchoredPosition = new Vector2(0f, 4f);
         squadCountLabel.rectTransform.sizeDelta = new Vector2(-8f, 28f);
         squadCountLabel.raycastTarget = false;
+        CreateLeukocyteSupplyBar(squadHudObject.transform);
+    }
 
-        GameObject rowObject = new GameObject("Active Infection Diamond Row", typeof(RectTransform));
-        rowObject.transform.SetParent(squadHudObject.transform, false);
-        rowObject.transform.SetAsLastSibling();
-        infectionRowRect = rowObject.GetComponent<RectTransform>();
-        infectionRowRect.anchorMin = new Vector2(0f, 1f);
-        infectionRowRect.anchorMax = new Vector2(1f, 1f);
-        infectionRowRect.pivot = new Vector2(0.5f, 1f);
-        infectionRowRect.anchoredPosition = Vector2.zero;
-        infectionRowRect.sizeDelta = new Vector2(0f, Mathf.Max(36f, severeMarkerSize.y + markerSpacing));
-        excessInfectionLabel = CreateSquadHudText("Additional Infection Count", infectionRowRect, string.Empty, 14f, FontStyles.Bold, Color.white);
-        excessInfectionLabel.rectTransform.anchorMin = new Vector2(1f, 0.5f);
-        excessInfectionLabel.rectTransform.anchorMax = new Vector2(1f, 0.5f);
-        excessInfectionLabel.rectTransform.pivot = new Vector2(1f, 0.5f);
-        excessInfectionLabel.rectTransform.sizeDelta = new Vector2(42f, 30f);
-        excessInfectionLabel.enabled = false;
-        rowObject.SetActive(false);
+    private void CreateLeukocyteSupplyBar(Transform parent)
+    {
+        GameObject barObject = new GameObject("Leukocyte Supply Bar", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        barObject.transform.SetParent(parent, false);
+        barObject.transform.SetAsLastSibling();
+        leukocyteSupplyBarRect = barObject.GetComponent<RectTransform>();
+        leukocyteSupplyBarRect.anchorMin = new Vector2(0f, 1f);
+        leukocyteSupplyBarRect.anchorMax = new Vector2(1f, 1f);
+        leukocyteSupplyBarRect.pivot = new Vector2(0.5f, 0f);
+        leukocyteSupplyBarRect.anchoredPosition = new Vector2(0f, 8f);
+        leukocyteSupplyBarRect.sizeDelta = new Vector2(-8f, 48f);
+
+        Image barBackground = barObject.GetComponent<Image>();
+        barBackground.sprite = ResolveMarkerSprite();
+        barBackground.color = new Color(0.025f, 0.045f, 0.065f, 0.96f);
+        barBackground.raycastTarget = false;
+
+        TextMeshProUGUI titleLabel = CreateSquadHudText("Leukocyte Supply Label", barObject.transform,
+            "LEUKOCYTE SUPPLY", 11f, FontStyles.Bold, Color.white);
+        titleLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
+        titleLabel.rectTransform.anchorMax = new Vector2(0f, 1f);
+        titleLabel.rectTransform.pivot = new Vector2(0f, 1f);
+        titleLabel.rectTransform.anchoredPosition = new Vector2(7f, -4f);
+        titleLabel.rectTransform.sizeDelta = new Vector2(135f, 17f);
+
+        leukocyteSupplyValueLabel = CreateSquadHudText("Leukocyte Supply Value", barObject.transform,
+            string.Empty, 11f, FontStyles.Bold, Color.white);
+        leukocyteSupplyValueLabel.rectTransform.anchorMin = new Vector2(1f, 1f);
+        leukocyteSupplyValueLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
+        leukocyteSupplyValueLabel.rectTransform.pivot = new Vector2(1f, 1f);
+        leukocyteSupplyValueLabel.rectTransform.anchoredPosition = new Vector2(-7f, -4f);
+        leukocyteSupplyValueLabel.rectTransform.sizeDelta = new Vector2(72f, 17f);
+
+        GameObject trackObject = new GameObject("Leukocyte Supply Track", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        trackObject.transform.SetParent(barObject.transform, false);
+        RectTransform trackRect = trackObject.GetComponent<RectTransform>();
+        trackRect.anchorMin = new Vector2(0f, 0f);
+        trackRect.anchorMax = new Vector2(1f, 0f);
+        trackRect.pivot = new Vector2(0.5f, 0f);
+        trackRect.anchoredPosition = new Vector2(0f, 4f);
+        trackRect.sizeDelta = new Vector2(-12f, 17f);
+        Image trackImage = trackObject.GetComponent<Image>();
+        trackImage.sprite = ResolveMarkerSprite();
+        trackImage.color = new Color(0.01f, 0.025f, 0.04f, 1f);
+        trackImage.raycastTarget = false;
+
+        GameObject fillObject = new GameObject("Leukocyte Supply Fill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        fillObject.transform.SetParent(trackObject.transform, false);
+        RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+        fillRect.anchorMin = Vector2.zero;
+        fillRect.anchorMax = Vector2.one;
+        fillRect.offsetMin = Vector2.zero;
+        fillRect.offsetMax = Vector2.zero;
+        leukocyteSupplyFill = fillObject.GetComponent<Image>();
+        leukocyteSupplyFill.sprite = ResolveMarkerSprite();
+        leukocyteSupplyFill.type = Image.Type.Filled;
+        leukocyteSupplyFill.fillMethod = Image.FillMethod.Horizontal;
+        leukocyteSupplyFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+        leukocyteSupplyFill.color = new Color(0.15f, 0.78f, 0.8f, 1f);
+        leukocyteSupplyFill.raycastTarget = false;
+        RefreshLeukocyteSupplyBar();
     }
 
 
@@ -745,25 +865,6 @@ public sealed class InfectionSpawner : MonoBehaviour
             };
             List<RaycastResult> raycastResults = new List<RaycastResult>();
             EventSystem.current.RaycastAll(pointerData, raycastResults);
-            foreach (RaycastResult result in raycastResults)
-            {
-                if (result.gameObject == null)
-                    continue;
-
-                foreach (InfectionMarker marker in activeInfectionMarkers)
-                {
-                    if (marker == null || marker.isRemoving || marker.markerButton == null)
-                        continue;
-
-                    if (result.gameObject == marker.markerButton.gameObject ||
-                        result.gameObject.transform.IsChildOf(marker.markerButton.transform))
-                    {
-                        infectionTarget = marker;
-                        return true;
-                    }
-                }
-            }
-
             foreach (RaycastResult result in raycastResults)
             {
                 if (result.module is GraphicRaycaster)
@@ -1108,7 +1209,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         {
             if (!useLegacySelectFirst && selectedMarker != null)
             {
-                selectedMarker.selectionOutline.enabled = false;
                 if (selectedMarker.dispatchButton != null)
                     selectedMarker.dispatchButton.gameObject.SetActive(false);
                 selectedMarker = null;
@@ -1136,6 +1236,14 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (idleSquad == null || idleSquad.Length == 0)
             return false;
+
+        DifficultyStats supplyStats = DifficultySettings.CurrentStats;
+        int deployCost = Mathf.Max(0, supplyStats.deployCost);
+        if (leukocyteSupply < deployCost)
+        {
+            LogWbcSquadMessage("Not enough leukocyte supply.", ConsoleLogUI.LogType.Warning);
+            return false;
+        }
 
         if (infectionTarget != null)
         {
@@ -1203,6 +1311,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             attackOnArrival = infectionTarget != null,
             infectionTarget = infectionTarget
         });
+        SpendLeukocyteSupply(deployCost);
         idleSquad = null;
         awaitingSquadDestination = false;
         FadeOutSquadPrompt();
@@ -1513,10 +1622,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         marker.infection.severityStage = (InfectionSeverityStage)reducedSeverity;
         marker.isContained = true;
         marker.containedResolveDay = (dayCounter != null ? dayCounter.CurrentDay : 0) + containedSelfResolveDays;
-        marker.markerImage.color = containedMarkerColor;
-        marker.markerSize = GetMarkerSize(marker.infection.severityStage);
-        marker.markerRect.sizeDelta = marker.markerSize;
-        RepositionInfectionDiamonds();
+        AddLeukocyteSupply(containmentBonus);
         LogWbcSquadMessage($"WBC contained {marker.infection.displayName}, but the virus is hiding inside cells. Adaptive response is building.", ConsoleLogUI.LogType.Warning);
         ApplyWellnessGainOnResolve(marker);
     }
@@ -1530,6 +1636,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         float wellnessGain = GetBacterialWellnessGain(marker.infection.severityStage);
         ApplyWellnessChange($"WBC cleared {marker.infection.displayName}", wellnessGain);
+        AddLeukocyteSupply(clearBonus);
 
         ApplyWellnessGainOnResolve(marker);
         LogWbcSquadMessage($"Phagocytosis: WBC engulfed {marker.infection.displayName}. Infection cleared.", ConsoleLogUI.LogType.Success);
@@ -1700,6 +1807,8 @@ public sealed class InfectionSpawner : MonoBehaviour
                 : string.Empty;
             headshotCooldownLabel.enabled = headshotCooldownRemaining > 0f;
         }
+
+        RefreshLeukocyteSupplyBar();
     }
 
     private void LogWbcSquadMessage(string message, ConsoleLogUI.LogType logType)
@@ -1736,108 +1845,26 @@ public sealed class InfectionSpawner : MonoBehaviour
         return text;
     }
 
-    private void RepositionInfectionDiamonds()
-    {
-        if (infectionRowRect == null)
-            return;
-
-        List<InfectionMarker> visibleMarkers = new List<InfectionMarker>();
-        foreach (InfectionMarker marker in activeInfectionMarkers)
-        {
-            if (marker != null && !marker.isRemoving)
-                visibleMarkers.Add(marker);
-        }
-
-        visibleMarkers.Sort((first, second) =>
-        {
-            int severityOrder = second.infection.severityStage.CompareTo(first.infection.severityStage);
-            return severityOrder != 0 ? severityOrder : first.spawnOrder.CompareTo(second.spawnOrder);
-        });
-
-        int visibleCount = Mathf.Min(visibleMarkers.Count, DefaultMaximumActiveInfections);
-        int hiddenCount = Mathf.Max(0, visibleMarkers.Count - visibleCount);
-        float totalWidth = hiddenCount > 0 ? 42f : 0f;
-        for (int index = 0; index < visibleCount; index++)
-        {
-            if (index > 0 || hiddenCount > 0)
-                totalWidth += markerSpacing;
-            totalWidth += visibleMarkers[index].markerSize.x;
-        }
-
-        float cursor = -totalWidth * 0.5f;
-        for (int index = 0; index < activeInfectionMarkers.Count; index++)
-        {
-            InfectionMarker marker = activeInfectionMarkers[index];
-            bool shouldShow = visibleMarkers.IndexOf(marker) < visibleCount;
-            if (!shouldShow)
-            {
-                marker.markerButton.gameObject.SetActive(false);
-                continue;
-            }
-
-            marker.markerButton.gameObject.SetActive(true);
-            marker.markerRect.anchorMin = new Vector2(0.5f, 0.5f);
-            marker.markerRect.anchorMax = new Vector2(0.5f, 0.5f);
-            marker.markerRect.pivot = new Vector2(0.5f, 0.5f);
-            marker.markerRect.anchoredPosition = new Vector2(cursor + marker.markerSize.x * 0.5f, 0f);
-            cursor += marker.markerSize.x + markerSpacing;
-        }
-
-        if (excessInfectionLabel != null)
-        {
-            excessInfectionLabel.text = hiddenCount > 0 ? $"+{hiddenCount}" : string.Empty;
-            excessInfectionLabel.enabled = hiddenCount > 0;
-            if (hiddenCount > 0)
-            {
-                excessInfectionLabel.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-                excessInfectionLabel.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-                excessInfectionLabel.rectTransform.anchoredPosition = new Vector2(cursor + 21f, 0f);
-            }
-        }
-
-        infectionRowRect.gameObject.SetActive(visibleCount > 0 || fadingInfectionMarkers.Count > 0);
-    }
-
     private void UpdateInfectionMarkerAnimations()
     {
         float gameplayDeltaTime = GameplaySpeed.DeltaTime;
-        foreach (InfectionMarker marker in activeInfectionMarkers)
-        {
-            if (marker.isRemoving)
-                continue;
-
-            if (markerPopDuration <= 0f)
-            {
-                marker.markerRect.localScale = Vector3.one;
-                continue;
-            }
-
-            marker.animationElapsed = Mathf.Min(markerPopDuration, marker.animationElapsed + gameplayDeltaTime);
-            float popProgress = marker.animationElapsed / markerPopDuration;
-            float popScale = Mathf.SmoothStep(0.25f, 1f, popProgress);
-            marker.markerRect.localScale = Vector3.one * popScale;
-        }
-
         for (int index = fadingInfectionMarkers.Count - 1; index >= 0; index--)
         {
             InfectionMarker marker = fadingInfectionMarkers[index];
             marker.animationElapsed += gameplayDeltaTime;
             float fadeProgress = markerFadeDuration > 0f ? Mathf.Clamp01(marker.animationElapsed / markerFadeDuration) : 1f;
-            marker.canvasGroup.alpha = 1f - fadeProgress;
+            if (marker.canvasGroup != null)
+                marker.canvasGroup.alpha = 1f - fadeProgress;
             if (fadeProgress >= 1f)
             {
-                marker.markerButton.gameObject.SetActive(false);
                 if (marker.dispatchButton != null)
                     marker.dispatchButton.gameObject.SetActive(false);
                 fadingInfectionMarkers.RemoveAt(index);
             }
         }
-
-        if (infectionRowRect != null && activeInfectionMarkers.Count == 0 && fadingInfectionMarkers.Count == 0)
-            infectionRowRect.gameObject.SetActive(false);
     }
 
-    /// <summary>Begins fading the first active matching infection diamond without deleting its GameObject.</summary>
+    /// <summary>Removes the first active matching infection marker.</summary>
     public bool RemoveInfectionAt(string displayName, InfectionBodyPartGroup bodyPartGroup)
     {
         for (int index = 0; index < activeInfectionMarkers.Count; index++)
@@ -1860,14 +1887,12 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         marker.isRemoving = true;
         marker.animationElapsed = 0f;
-        marker.markerButton.interactable = false;
-        marker.markerImage.raycastTarget = false;
-        marker.selectionOutline.enabled = false;
+        if (marker.dispatchButton != null)
+            marker.dispatchButton.interactable = false;
         activeInfectionMarkers.Remove(marker);
         fadingInfectionMarkers.Add(marker);
         if (selectedMarker == marker)
             selectedMarker = null;
-        RepositionInfectionDiamonds();
     }
 
 
@@ -2012,17 +2037,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void SpawnMarker(InfectionData infection, InfectionBodyPartButtonReference bodyPartButton)
     {
-        if (hudCanvas == null || infectionRowRect == null)
-        {
-            Debug.LogWarning("[InfectionSpawner] HUD Canvas or infection row is missing; infection diamond could not be created.", this);
-            return;
-        }
-
-        GameObject markerObject = new GameObject($"Infection Diamond - {infection.displayName}", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(Outline), typeof(CanvasGroup));
-        markerObject.transform.SetParent(infectionRowRect, false);
-        markerObject.transform.SetAsLastSibling();
         Vector3 infectionWorldPosition = ResolveInitialInfectionWorldPosition(bodyPartButton, out int vesselSpawnPointIndex);
-
         InfectionMarker marker = new InfectionMarker
         {
             infection = infection,
@@ -2031,37 +2046,9 @@ public sealed class InfectionSpawner : MonoBehaviour
             bodyPartGroup = bodyPartButton.bodyPartGroup,
             worldPosition = infectionWorldPosition,
             vesselSpawnPointIndex = vesselSpawnPointIndex,
-            markerButton = markerObject.GetComponent<Button>(),
-            markerImage = markerObject.GetComponent<Image>(),
-            selectionOutline = markerObject.GetComponent<Outline>(),
-            markerRect = markerObject.GetComponent<RectTransform>(),
             canvas = hudCanvas,
-            markerSize = GetMarkerSize(infection.severityStage),
-            canvasGroup = markerObject.GetComponent<CanvasGroup>(),
-            spawnOrder = nextInfectionSpawnOrder++,
             unresolvedDays = Mathf.Max(0, infection.daysUntreated)
         };
-
-        marker.markerRect.anchorMin = new Vector2(1f, 0f);
-        marker.markerRect.anchorMax = new Vector2(1f, 0f);
-        marker.markerRect.pivot = new Vector2(1f, 0f);
-        marker.markerRect.sizeDelta = marker.markerSize;
-        marker.markerRect.localRotation = Quaternion.Euler(0f, 0f, 45f);
-        marker.markerRect.localScale = Vector3.one * 0.25f;
-
-        marker.markerImage.sprite = ResolveMarkerSprite();
-        marker.markerImage.color = GetPathogenColor(infection.pathogenType);
-        marker.markerImage.raycastTarget = true;
-        marker.markerImage.preserveAspect = true;
-
-        marker.selectionOutline.effectColor = selectionOutlineColor;
-        marker.selectionOutline.effectDistance = new Vector2(selectionOutlineThickness, -selectionOutlineThickness);
-        marker.selectionOutline.useGraphicAlpha = true;
-        marker.selectionOutline.enabled = false;
-
-        marker.markerButton.targetGraphic = marker.markerImage;
-        marker.markerButton.transition = Selectable.Transition.None;
-        marker.markerButton.onClick.AddListener(() => ToggleSelectMarker(marker));
 
         activeInfectionMarkers.Add(marker);
         SpawnInfectionThreatVisuals(marker);
@@ -2077,8 +2064,6 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (enableLegacyAvatarClickDispatch)
             CreateDispatchAvatar(marker);
-        RepositionInfectionDiamonds();
-        infectionRowRect.gameObject.SetActive(true);
     }
     private void SpawnInfectionThreatVisuals(InfectionMarker marker)
     {
@@ -2158,7 +2143,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void CreateDispatchAvatar(InfectionMarker marker)
     {
-        GameObject avatarObject = new GameObject($"WBC Dispatch - {marker.infection.displayName}", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage), typeof(Button));
+        GameObject avatarObject = new GameObject($"WBC Dispatch - {marker.infection.displayName}", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage), typeof(Button), typeof(CanvasGroup));
         avatarObject.transform.SetParent(marker.canvas.transform, false);
         avatarObject.transform.SetAsLastSibling();
 
@@ -2168,6 +2153,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         avatarRect.pivot = new Vector2(0.5f, 0.5f);
         avatarRect.sizeDelta = dispatchAvatarSize;
 
+        marker.canvasGroup = avatarObject.GetComponent<CanvasGroup>();
+        marker.canvasGroup.alpha = 1f;
         marker.dispatchImage = avatarObject.GetComponent<RawImage>();
         marker.dispatchImage.texture = ResolveWbcAvatarTexture();
         marker.dispatchImage.color = Color.white;
@@ -2196,84 +2183,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         marker.dispatchCountLabel.textWrappingMode = TextWrappingModes.NoWrap;
         marker.dispatchCountLabel.raycastTarget = false;
         avatarObject.SetActive(false);
-    }
-
-    private void UpdateMarkerPositions()
-    {
-        foreach (KeyValuePair<Button, List<InfectionMarker>> entry in markersByBodyPartButton)
-        {
-            if (entry.Key == null || entry.Value.Count == 0 || entry.Value[0].canvas == null)
-                continue;
-
-            RectTransform targetRect = entry.Key.transform as RectTransform;
-            RectTransform canvasRect = entry.Value[0].canvas.transform as RectTransform;
-            if (targetRect == null || canvasRect == null)
-                continue;
-
-            Camera canvasCamera = entry.Value[0].canvas.renderMode == RenderMode.ScreenSpaceOverlay
-                ? null
-                : entry.Value[0].canvas.worldCamera;
-            Vector2 screenPosition = RectTransformUtility.WorldToScreenPoint(canvasCamera, targetRect.position);
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPosition, canvasCamera, out Vector2 localPosition))
-                continue;
-
-            foreach (InfectionMarker marker in entry.Value)
-                marker.canvasLocalBodyPartPosition = localPosition;
-
-            RepositionMarkers(entry.Value);
-        }
-    }
-
-
-    private void RepositionMarkers(List<InfectionMarker> markers)
-    {
-        int rowStart = 0;
-        float verticalRowOffset = 0f;
-        while (rowStart < markers.Count)
-        {
-            int rowEnd = rowStart;
-            float rowWidth = 0f;
-            float rowHeight = 0f;
-            while (rowEnd < markers.Count)
-            {
-                InfectionMarker candidate = markers[rowEnd];
-                float candidateWidth = rowWidth + (rowEnd > rowStart ? markerSpacing : 0f) + candidate.markerSize.x;
-                if (rowEnd > rowStart && candidateWidth > maximumMarkerRowWidth)
-                    break;
-
-                rowWidth = candidateWidth;
-                rowHeight = Mathf.Max(rowHeight, candidate.markerSize.y);
-                rowEnd++;
-            }
-
-            float cursor = -rowWidth * 0.5f;
-            for (int markerIndex = rowStart; markerIndex < rowEnd; markerIndex++)
-            {
-                InfectionMarker marker = markers[markerIndex];
-                float markerWidth = marker.markerSize.x;
-                marker.markerRect.anchoredPosition = marker.canvasLocalBodyPartPosition + markerOffset +
-                    new Vector2(cursor + markerWidth * 0.5f, -verticalRowOffset);
-                cursor += markerWidth + markerSpacing;
-                if (marker.dispatchButton != null && marker.dispatchButton.transform is RectTransform avatarRect)
-                    avatarRect.anchoredPosition = marker.markerRect.anchoredPosition + dispatchAvatarOffset;
-            }
-
-            verticalRowOffset += rowHeight + markerSpacing;
-            rowStart = rowEnd;
-        }
-    }
-
-    private Vector2 GetMarkerSize(InfectionSeverityStage severityStage)
-    {
-        switch (severityStage)
-        {
-            case InfectionSeverityStage.Moderate:
-                return moderateMarkerSize;
-            case InfectionSeverityStage.Severe:
-                return severeMarkerSize;
-            default:
-                return mildMarkerSize;
-        }
     }
 
     private Color GetPathogenColor(InfectionPathogenType pathogenType)
@@ -2472,39 +2381,15 @@ public sealed class InfectionSpawner : MonoBehaviour
         popupTransform.localScale = new Vector3(popupScale, popupScale, popupScale);
     }
 
-    private void ToggleSelectMarker(InfectionMarker marker)
-    {
-        if (marker == null || marker.isRemoving)
-            return;
-
-        if (selectedMarker == marker)
-        {
-            marker.selectionOutline.enabled = false;
-            if (marker.dispatchButton != null)
-                marker.dispatchButton.gameObject.SetActive(false);
-            selectedMarker = null;
-            return;
-        }
-
-        SelectMarker(marker);
-    }
-
     private void SelectMarker(InfectionMarker marker)
     {
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             return;
 
-        if (selectedMarker != null && selectedMarker != marker)
-        {
-            selectedMarker.selectionOutline.enabled = false;
-            if (selectedMarker.dispatchButton != null)
-                selectedMarker.dispatchButton.gameObject.SetActive(false);
-        }
+        if (selectedMarker != null && selectedMarker != marker && selectedMarker.dispatchButton != null)
+            selectedMarker.dispatchButton.gameObject.SetActive(false);
 
         selectedMarker = marker;
-        selectedMarker.selectionOutline.enabled = true;
-        selectedMarker.selectionOutline.effectColor = selectionOutlineColor;
-        selectedMarker.selectionOutline.effectDistance = new Vector2(selectionOutlineThickness, -selectionOutlineThickness);
         if (enableLegacyAvatarClickDispatch && selectedMarker.dispatchButton != null)
             selectedMarker.dispatchButton.gameObject.SetActive(true);
         LogSelectedInfection(marker);

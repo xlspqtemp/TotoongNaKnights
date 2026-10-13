@@ -17,6 +17,10 @@ public sealed class DifficultyStats
     public float attackIntervalSeconds;
     public float wbcDamageMultiplierVsBacteria;
     public float wbcDamageMultiplierVsVirus;
+    public int startingSupply;
+    public int maxSupply;
+    public int deployCost;
+    public float regenSecondsPerPoint;
 
     public DifficultyStats()
     {
@@ -86,10 +90,10 @@ public static class DifficultySettings
     {
         return new[]
         {
-            new DifficultyStats("Easy", 2, 150f, 15f, 80f, 100f, 3f, 3f, 1f, 1f, 0.5f) { maxActiveSquads = 3 },
-            new DifficultyStats("Normal", 3, 100f, 10f, 90f, 100f, 5f, 4f, 1f, 1f, 0.5f) { maxActiveSquads = 2 },
-            new DifficultyStats("Medium", 5, 100f, 10f, 120f, 150f, 6f, 5f, 1f, 1f, 0.5f) { maxActiveSquads = 2 },
-            new DifficultyStats("Hard", 5, 100f, 10f, 130f, 170f, 7f, 6f, 1f, 1f, 0.5f) { maxActiveSquads = 2 }
+            new DifficultyStats("Easy", 2, 150f, 15f, 80f, 100f, 3f, 3f, 1f, 1f, 0.5f) { maxActiveSquads = 3, startingSupply = 100, maxSupply = 100, deployCost = 15, regenSecondsPerPoint = 2.0f },
+            new DifficultyStats("Normal", 3, 100f, 10f, 90f, 100f, 5f, 4f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 20, regenSecondsPerPoint = 3.0f },
+            new DifficultyStats("Medium", 5, 100f, 10f, 120f, 150f, 6f, 5f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 25, regenSecondsPerPoint = 4.0f },
+            new DifficultyStats("Hard", 5, 100f, 10f, 130f, 170f, 7f, 6f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 30, regenSecondsPerPoint = 5.0f }
         };
     }
 
