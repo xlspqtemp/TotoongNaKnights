@@ -19,6 +19,12 @@ public class LeaderboardManager : MonoBehaviour
     private const string SavingScoreMessage = "Saving score...";
     private const string SavedScoreMessage = "Score saved!";
     private const string DisplayNameSuffix = "***";
+    private const string EasyDifficultyName = "Easy";
+    private const string NormalDifficultyName = "Normal";
+    private const string MediumDifficultyName = "Medium";
+    private const string HardDifficultyName = "Hard";
+    private const string MissingDifficultyLabel = "-";
+    private const string LegacyDifficultyLabel = "Legacy";
 
     [Serializable]
     private sealed class ScoreMetadata
@@ -251,10 +257,60 @@ public class LeaderboardManager : MonoBehaviour
 
     private static string CreateDifficultyMetadata()
     {
-        string difficulty = "Infection Severity " + DifficultySettings.EnemyLevel + "/5, " +
-                            "Immune System " + DifficultySettings.DefenseLevel + "/5, " +
-                            "Lifestyle " + DifficultySettings.RandomEventsLevel + "/5";
-        return "{\"difficulty\":\"" + difficulty + "\"}";
+        DifficultyStats selectedStats = DifficultySettings.CurrentStats;
+        string difficulty = NormalizeDifficultyName(selectedStats != null ? selectedStats.difficultyName : null);
+        if (string.IsNullOrEmpty(difficulty))
+        {
+            difficulty = GetDifficultyNameForSelectedIndex(DifficultySettings.SelectedDifficultyIndex);
+        }
+
+        return JsonUtility.ToJson(new ScoreMetadata { difficulty = difficulty });
+    }
+
+    private static string GetDifficultyNameForSelectedIndex(int selectedIndex)
+    {
+        switch (selectedIndex)
+        {
+            case 0:
+                return EasyDifficultyName;
+            case 1:
+                return NormalDifficultyName;
+            case 2:
+                return MediumDifficultyName;
+            default:
+                return HardDifficultyName;
+        }
+    }
+
+    private static string NormalizeDifficultyName(string difficulty)
+    {
+        if (string.IsNullOrWhiteSpace(difficulty))
+        {
+            return string.Empty;
+        }
+
+        string normalizedDifficulty = difficulty.Trim();
+        if (string.Equals(normalizedDifficulty, EasyDifficultyName, StringComparison.OrdinalIgnoreCase))
+        {
+            return EasyDifficultyName;
+        }
+
+        if (string.Equals(normalizedDifficulty, NormalDifficultyName, StringComparison.OrdinalIgnoreCase))
+        {
+            return NormalDifficultyName;
+        }
+
+        if (string.Equals(normalizedDifficulty, MediumDifficultyName, StringComparison.OrdinalIgnoreCase))
+        {
+            return MediumDifficultyName;
+        }
+
+        if (string.Equals(normalizedDifficulty, HardDifficultyName, StringComparison.OrdinalIgnoreCase))
+        {
+            return HardDifficultyName;
+        }
+
+        return string.Empty;
     }
 
     private static bool TryGetActivePlayer(out string playerUlid, out LootLockerPlayerData playerData)
@@ -362,19 +418,23 @@ public class LeaderboardManager : MonoBehaviour
     {
         if (string.IsNullOrWhiteSpace(metadata))
         {
-            return "—";
+            return MissingDifficultyLabel;
         }
 
         try
         {
             ScoreMetadata parsed = JsonUtility.FromJson<ScoreMetadata>(metadata);
-            return parsed != null && !string.IsNullOrWhiteSpace(parsed.difficulty)
-                ? parsed.difficulty
-                : "—";
+            if (parsed == null || string.IsNullOrWhiteSpace(parsed.difficulty))
+            {
+                return MissingDifficultyLabel;
+            }
+
+            string difficulty = NormalizeDifficultyName(parsed.difficulty);
+            return string.IsNullOrEmpty(difficulty) ? LegacyDifficultyLabel : difficulty;
         }
         catch (Exception)
         {
-            return "—";
+            return LegacyDifficultyLabel;
         }
     }
 
