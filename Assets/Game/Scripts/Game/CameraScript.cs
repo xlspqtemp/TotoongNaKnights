@@ -510,6 +510,12 @@ public class CameraScript : MonoBehaviour
 
         LayerSelectionHUD.SetSelectedLayer(selectedLayer);
 
+        InfectionSpawner infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+        if (infectionSpawner != null)
+        {
+            infectionSpawner.SetWbcHudVisibility(layerNumber == 2);
+        }
+
         if (playSwitchSound)
         {
             PlayLayerSwitchSound();

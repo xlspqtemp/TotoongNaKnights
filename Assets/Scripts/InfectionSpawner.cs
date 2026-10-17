@@ -156,6 +156,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private Sprite resolvedMarkerSprite;
     private Texture2D resolvedWbcAvatarTexture;
     private Texture2D resolvedHeadshotTexture;
+    private GameObject wbcHudRoot;
     private Button headshotButton;
     private TextMeshProUGUI squadCountLabel;
     private Image headshotCooldownFill;
@@ -596,12 +597,19 @@ public sealed class InfectionSpawner : MonoBehaviour
         bodyPartButtonsCanvasGroup.blocksRaycasts = showBodyPartButtons;
     }
 
+    public void SetWbcHudVisibility(bool isVisible)
+    {
+        if (wbcHudRoot != null)
+            wbcHudRoot.SetActive(isVisible);
+    }
+
     private void CreateWbcSquadHud()
     {
         if (hudCanvas == null || !(hudCanvas.transform is RectTransform canvasRect))
             return;
 
         GameObject squadHudObject = new GameObject("WBC Squad HUD", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+        wbcHudRoot = squadHudObject;
         squadHudObject.transform.SetParent(canvasRect, false);
         squadHudObject.transform.SetAsLastSibling();
         RectTransform squadHudRect = squadHudObject.GetComponent<RectTransform>();
