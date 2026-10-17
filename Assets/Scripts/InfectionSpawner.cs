@@ -622,7 +622,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         squadHudBackground.color = squadHudPanelColor;
         squadHudBackground.raycastTarget = false;
 
-        GameObject headshotObject = new GameObject("WBC Squad Headshot Button", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage), typeof(Button));
+        GameObject headshotObject = new GameObject("WBC Squad Headshot Button", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         headshotObject.transform.SetParent(squadHudObject.transform, false);
         RectTransform headshotRect = headshotObject.GetComponent<RectTransform>();
         headshotRect.anchorMin = Vector2.zero;
@@ -630,8 +630,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         headshotRect.offsetMin = Vector2.zero;
         headshotRect.offsetMax = Vector2.zero;
 
-        RawImage headshotImage = headshotObject.GetComponent<RawImage>();
-        headshotImage.texture = ResolveHeadshotTexture();
+        Image headshotImage = headshotObject.GetComponent<Image>();
+        headshotImage.sprite = Resources.Load<Sprite>("UI/WBC HEADSHOT ICON");
+        headshotImage.preserveAspect = true;
         headshotImage.raycastTarget = true;
         headshotButton = headshotObject.GetComponent<Button>();
         headshotButton.targetGraphic = headshotImage;
