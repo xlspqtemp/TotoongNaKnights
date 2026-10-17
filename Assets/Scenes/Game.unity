@@ -5231,6 +5231,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d75a7a8fc0f72844b9fd669863538c83, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InfectionSpawner
+  popupFontSize: 26
+  popupSize: {x: 440, y: 140}
+  popupScale: 0.005
+  popupMinVerticalOffset: 1.5
+  popupClusterRadiusMultiplier: 0.5
   dayCounter: {fileID: 53820468}
   spawnOnDayAdvance: 1
   eventsPerDay: 4
@@ -9002,6 +9007,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 356890854}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &362425538
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 362425539}
+  m_Layer: 0
+  m_Name: CameraAnchor - Digestive
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &362425539
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 362425538}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 4000, y: 5, z: -20}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &372905100 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 39bb7f6f3cad7ba409291a354e3cdebd, type: 3}
@@ -12043,6 +12079,29 @@ MonoBehaviour:
   valueLabel: {fileID: 1086863902}
   changeIndicator: {fileID: 1520046427}
   changeIndicatorCanvasGroup: {fileID: 1520046426}
+  segmentCount: 10
+  segmentGap: 2
+  segmentHeight: 9
+  segmentHorizontalInset: 8
+  frameThickness: 1.5
+  cornerBracketLength: 6
+  cornerBracketThickness: 1.5
+  healthyFillColor: {r: 0, g: 0.85, b: 1, a: 1}
+  warningFillColor: {r: 1, g: 0.72, b: 0.02, a: 1}
+  criticalFillColor: {r: 1, g: 0.2, b: 0.33, a: 1}
+  unlitSegmentColor: {r: 0.039, g: 0.098, b: 0.16, a: 1}
+  frameColor: {r: 0, g: 0.85, b: 1, a: 1}
+  gainFlashColor: {r: 0.85, g: 1, b: 1, a: 1}
+  lossFlashColor: {r: 1, g: 0.2, b: 0.33, a: 1}
+  labelColor: {r: 0.65, g: 0.86, b: 0.91, a: 1}
+  warningThreshold: 50
+  criticalThreshold: 25
+  fillTransitionDuration: 0.22
+  segmentStaggerDelay: 0.025
+  gainFlashDuration: 0.3
+  lossFlashDuration: 0.3
+  wellnessLabelFontSize: 13
+  valueLabelFontSize: 16
 --- !u!114 &496158870
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25299,6 +25358,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1055067318}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1057790688
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1057790689}
+  m_Layer: 0
+  m_Name: CameraAnchor - Respiratory
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1057790689
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1057790688}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 6000, y: 5, z: -20}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1060831431
 GameObject:
   m_ObjectHideFlags: 0
@@ -40575,6 +40665,37 @@ MonoBehaviour:
   m_hasFontAssetChanged: 0
   m_baseMaterial: {fileID: 0}
   m_maskOffset: {x: 0, y: 0, z: 0, w: 0}
+--- !u!1 &1669230762
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1669230763}
+  m_Layer: 0
+  m_Name: CameraAnchor - Circulatory
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1669230763
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1669230762}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2000, y: 5, z: -20}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1671087699
 GameObject:
   m_ObjectHideFlags: 0
@@ -41407,6 +41528,37 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1848440601}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1714588013
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1714588014}
+  m_Layer: 0
+  m_Name: CameraAnchor - Lymphatic
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1714588014
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1714588013}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 5, z: -20}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &1724811553
 PrefabInstance:
@@ -50200,19 +50352,19 @@ PrefabInstance:
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: floor1
       value: 
-      objectReference: {fileID: 690531295}
+      objectReference: {fileID: 1714588014}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: floor2
       value: 
-      objectReference: {fileID: 2007297925}
+      objectReference: {fileID: 1669230763}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: floor3
       value: 
-      objectReference: {fileID: 463781179}
+      objectReference: {fileID: 362425539}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: floor4
       value: 
-      objectReference: {fileID: 197305013}
+      objectReference: {fileID: 1057790689}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: movementSfx
       value: 
@@ -50229,6 +50381,10 @@ PrefabInstance:
       propertyPath: tacticalOrdersContainer
       value: 
       objectReference: {fileID: 745068359}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: defaultLayerFocusOffset.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: tacticalOrdersCanvasGroup
       value: 
@@ -50402,3 +50558,7 @@ SceneRoots:
   - {fileID: 647943731}
   - {fileID: 877941962}
   - {fileID: 243755320}
+  - {fileID: 1714588014}
+  - {fileID: 1669230763}
+  - {fileID: 362425539}
+  - {fileID: 1057790689}
