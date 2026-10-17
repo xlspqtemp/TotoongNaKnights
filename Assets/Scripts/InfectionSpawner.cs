@@ -353,6 +353,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         public bool arrivalMessageLogged;
         public bool pathFailureLogged;
         public bool combatStarted;
+        public bool holdingForContainment;
         public bool wipeWellnessPenaltyApplied;
         public readonly HashSet<GameObject> arrivedUnits = new HashSet<GameObject>();
     }
@@ -1322,7 +1323,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             units = idleSquad,
             deploymentIndex = idleSquadDeploymentIndex,
             lifetimeRemaining = squadLifetimeSeconds,
-            attackOnArrival = infectionTarget != null,
+            attackOnArrival = infectionTarget != null && infectionTarget.infection != null
+                && infectionTarget.infection.pathogenType != InfectionPathogenType.Viral,
             infectionTarget = infectionTarget
         });
         SpendLeukocyteSupply(deployCost);
@@ -1393,7 +1395,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 }
             }
 
-            if (!keepAliveUntilResolved)
+            if (!keepAliveUntilResolved && !squad.holdingForContainment)
                 squad.lifetimeRemaining -= gameplayDeltaTime;
             foreach (GameObject unit in squad.units)
             {
@@ -1423,18 +1425,24 @@ public sealed class InfectionSpawner : MonoBehaviour
                     squad.arrivalMessageLogged = true;
                     LogWbcSquadMessage($"WBC squad arrived at {squad.infectionTarget.infection.displayName}.", ConsoleLogUI.LogType.Success);
                     BeginInfectionResolution(squad.infectionTarget);
+                    if (squad.infectionTarget.isContained
+                        && squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Viral)
+                    {
+                        squad.holdingForContainment = true;
+                    }
                 }
                 if (squad.attackOnArrival)
                     squad.combatStarted = true;
             }
 
-            if (keepAliveUntilResolved && squad.infectionTarget != null && squad.infectionTarget.isRemoving)
+            if ((keepAliveUntilResolved || squad.holdingForContainment)
+                && squad.infectionTarget != null && squad.infectionTarget.isRemoving)
             {
                 DespawnWbcSquad(squadIndex);
                 continue;
             }
 
-            if (!keepAliveUntilResolved && squad.lifetimeRemaining <= 0f)
+            if (!keepAliveUntilResolved && !squad.holdingForContainment && squad.lifetimeRemaining <= 0f)
                 DespawnWbcSquad(squadIndex);
         }
     }
@@ -1451,6 +1459,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             InfectionMarker marker = squad.infectionTarget;
             if (!squad.combatStarted || marker == null || marker.isRemoving)
                 continue;
+            if (marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
+            {
+                if (marker.isContained)
+                    squad.holdingForContainment = true;
+                continue;
+            }
             if (marker.isContained)
             {
                 FadeOutAndDespawnWbcSquad(squadIndex);
@@ -2130,7 +2144,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         foreach (InfectionMarker marker in activeInfectionMarkers)
         {
-            if (marker != null && marker.isContained)
+            if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
                 DespawnInfectionThreatVisuals(marker);
         }
 

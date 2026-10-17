@@ -14,6 +14,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     {
         Pending,
         Ongoing,
+        Contained,
         Resolved,
         Failed
     }
@@ -297,7 +298,9 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             if (row == null || row.status == RowStatus.Resolved)
                 continue;
 
-            SetRowStatus(row, infectionSpawner.IsSquadDispatchedTo(marker) ? RowStatus.Ongoing : RowStatus.Pending);
+            SetRowStatus(row, marker.isContained
+                ? RowStatus.Contained
+                : infectionSpawner.IsSquadDispatchedTo(marker) ? RowStatus.Ongoing : RowStatus.Pending);
         }
 
         foreach (RowView row in rows)
@@ -633,6 +636,12 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         {
             case RowStatus.Ongoing:
                 row.statusLabel.text = "Ongoing";
+                row.backgroundImage.color = OngoingRowColor;
+                row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
+                row.statusLabel.color = AccentColor;
+                break;
+            case RowStatus.Contained:
+                row.statusLabel.text = "CONTAINED";
                 row.backgroundImage.color = OngoingRowColor;
                 row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
                 row.statusLabel.color = AccentColor;
