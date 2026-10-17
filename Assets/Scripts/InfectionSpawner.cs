@@ -158,6 +158,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private Texture2D resolvedHeadshotTexture;
     private GameObject wbcHudRoot;
     private Button headshotButton;
+    private Image wbcHeadshotImage;
     private TextMeshProUGUI squadCountLabel;
     private Image headshotCooldownFill;
     private TextMeshProUGUI headshotCooldownLabel;
@@ -630,12 +631,12 @@ public sealed class InfectionSpawner : MonoBehaviour
         headshotRect.offsetMin = Vector2.zero;
         headshotRect.offsetMax = Vector2.zero;
 
-        Image headshotImage = headshotObject.GetComponent<Image>();
-        headshotImage.sprite = Resources.Load<Sprite>("UI/WBC HEADSHOT ICON");
-        headshotImage.preserveAspect = true;
-        headshotImage.raycastTarget = true;
+        wbcHeadshotImage = headshotObject.GetComponent<Image>();
+        wbcHeadshotImage.sprite = Resources.Load<Sprite>("UI/WBC HEADSHOT ICON");
+        wbcHeadshotImage.preserveAspect = true;
+        wbcHeadshotImage.raycastTarget = true;
         headshotButton = headshotObject.GetComponent<Button>();
-        headshotButton.targetGraphic = headshotImage;
+        headshotButton.targetGraphic = wbcHeadshotImage;
         headshotButton.transition = Selectable.Transition.None;
         headshotButton.onClick.AddListener(SpawnWbcSquad);
 
@@ -1822,8 +1823,15 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void RefreshWbcSquadHud()
     {
+        int currentSquads = CountActiveSquads();
+        int maxSquads = Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads);
         if (squadCountLabel != null)
-            squadCountLabel.text = $"Squads {CountActiveSquads()}/{Mathf.Max(1, DifficultySettings.CurrentStats.maxActiveSquads)}";
+            squadCountLabel.text = $"Squads {currentSquads}/{maxSquads}";
+
+        if (wbcHeadshotImage != null)
+            wbcHeadshotImage.color = currentSquads >= maxSquads
+                ? new Color(1f, 0.4f, 0.4f, 1f)
+                : Color.white;
 
         if (headshotButton != null)
             headshotButton.interactable = enableWbcDispatch && idleSquad == null && headshotCooldownRemaining <= 0f;
