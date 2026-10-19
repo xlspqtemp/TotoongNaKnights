@@ -139,7 +139,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.anchoredPosition = Vector2.zero;
+        panelRect.anchoredPosition = new Vector2(0f, -250f);
 
         Image panelBackground = panelRect.GetComponent<Image>();
         if (panelBackground != null)
