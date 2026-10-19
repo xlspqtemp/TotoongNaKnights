@@ -28,6 +28,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float SquadSpawnOffsetRadius = 1.75f;
     private const float SquadStandingOffsetRadius = 2.8f;
     private const float SquadOffsetAngleStep = 2.39996323f;
+    private const string DendriticDestinationObjectName = "Dendritic Infection Destination";
     private const float MinimumPromptWellnessGap = 30f;
     private const float DefaultPromptWellnessGap = 36f;
     private const float SquadPromptFadeDuration = 0.4f;
@@ -138,6 +139,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField, Min(0.1f)] private float squadLifetimeSeconds = 20f;
     [SerializeField, Min(0.1f)] private float dispatchNavMeshSampleRadius = 25f;
     [SerializeField, Min(0.1f)] private float dispatchArrivalRadius = 0.5f;
+    [SerializeField] private GameObject dendriticPrefab;
+    [SerializeField] private Vector3 holdOffset = new Vector3(1.5f, 0f, 0f);
     [SerializeField, Min(0f)] private float combatDetectionRange = 8f;
     [SerializeField, Min(0f)] private float combatMeleeRange = 1.5f;
     [SerializeField, Min(0f)] private float wbcCombatMoveSpeed = 3.5f;
@@ -179,6 +182,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private InfectionMarker selectedInfectionPopupMarker;
     private GameObject[] idleSquad;
     private readonly List<DispatchedWbcSquad> dispatchedWbcSquads = new List<DispatchedWbcSquad>();
+    private readonly List<DispatchedDendriticCell> dispatchedDendriticCells = new List<DispatchedDendriticCell>();
     private float headshotCooldownRemaining;
     private float promptAutoFadeRemaining;
     private float promptFadeElapsed;
@@ -360,6 +364,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         public readonly HashSet<GameObject> arrivedUnits = new HashSet<GameObject>();
     }
 
+    private sealed class DispatchedDendriticCell
+    {
+        public InfectionMarker infectionTarget;
+        public GameObject cell;
+        public GameObject destination;
+    }
+
     private void Awake()
     {
         if (dayCounter == null)
@@ -431,6 +442,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         UpdateSelectedInfectionPopup();
         UpdateWbcCooldowns();
         UpdateIdleAndDispatchedSquads();
+        UpdateDendriticCells();
         UpdateInfectionCombat();
         HandleSquadPromptCancellation();
         UpdateSquadPrompt();
@@ -1259,6 +1271,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private bool DispatchIdleSquadTo(Vector3 destination, InfectionMarker infectionTarget, string moveLocation)
     {
+        Debug.Log("[Dispatch] Dispatch method started.");
         if (idleSquad == null || idleSquad.Length == 0)
             return false;
 
@@ -1328,6 +1341,18 @@ public sealed class InfectionSpawner : MonoBehaviour
                 highlight.SetHighlighted(false);
         }
 
+        Debug.Log("[Dispatch] Reached dendritic spawn code.");
+        GameObject dendriticCell = SpawnDendriticCell(infectionTarget, idleSquad[0].transform.position, out GameObject dendriticDestination);
+        if (dendriticCell != null)
+        {
+            dispatchedDendriticCells.Add(new DispatchedDendriticCell
+            {
+                infectionTarget = infectionTarget,
+                cell = dendriticCell,
+                destination = dendriticDestination
+            });
+        }
+
         dispatchedWbcSquads.Add(new DispatchedWbcSquad
         {
             units = idleSquad,
@@ -1351,6 +1376,144 @@ public sealed class InfectionSpawner : MonoBehaviour
         RefreshWbcSquadHud();
         return true;
     }
+
+    private GameObject SpawnDendriticCell(InfectionMarker infectionTarget, Vector3 spawnPosition, out GameObject destinationObject)
+    {
+        destinationObject = null;
+        if (dendriticPrefab == null || infectionTarget == null)
+            return null;
+
+        GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, Quaternion.identity);
+        NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
+        CirculatoryCellRoute route = dendriticCell.GetComponent<CirculatoryCellRoute>();
+        if (agent == null || route == null || !agent.enabled)
+        {
+            Debug.LogWarning("[InfectionSpawner] The Dendritic Cell prefab requires an enabled NavMeshAgent and CirculatoryCellRoute.", this);
+            Destroy(dendriticCell);
+            return null;
+        }
+
+        NavMeshQueryFilter filter = new NavMeshQueryFilter
+        {
+            agentTypeID = agent.agentTypeID,
+            areaMask = agent.areaMask
+        };
+        Vector3 requestedDestination = infectionTarget.worldPosition + holdOffset;
+        if (!NavMesh.SamplePosition(requestedDestination, out NavMeshHit destinationHit, dispatchNavMeshSampleRadius, filter))
+        {
+            Debug.LogWarning("[InfectionSpawner] The Dendritic Cell could not find a NavMesh position near the infection.", this);
+            Destroy(dendriticCell);
+            return null;
+        }
+
+        if (circulatorySystemController == null)
+            circulatorySystemController = FindFirstObjectByType<CirculatorySystemController>();
+
+        Transform heart = null;
+        List<Transform> lungPoints = new List<Transform>();
+        if (circulatorySystemController != null)
+        {
+            foreach (Transform waypoint in circulatorySystemController.GetComponentsInChildren<Transform>(true))
+            {
+                if (waypoint.name == "Heart")
+                    heart = waypoint;
+                else if (waypoint.name == "Point - Lung")
+                    lungPoints.Add(waypoint);
+            }
+        }
+
+        destinationObject = new GameObject(DendriticDestinationObjectName);
+        destinationObject.transform.position = destinationHit.position;
+        if (heart != null && lungPoints.Count > 0)
+            route.Configure(agent, heart, destinationObject.transform, lungPoints.ToArray());
+
+        route.PauseForThreat();
+        agent.isStopped = false;
+        if (!agent.SetDestination(destinationHit.position))
+        {
+            Destroy(destinationObject);
+            destinationObject = null;
+            Destroy(dendriticCell);
+            return null;
+        }
+
+        return dendriticCell;
+    }
+
+    private void UpdateDendriticCells()
+    {
+        for (int index = dispatchedDendriticCells.Count - 1; index >= 0; index--)
+        {
+            DispatchedDendriticCell dispatchedCell = dispatchedDendriticCells[index];
+            GameObject dendriticCell = dispatchedCell.cell;
+            if (dendriticCell == null)
+            {
+                if (dispatchedCell.destination != null)
+                    Destroy(dispatchedCell.destination);
+                dispatchedDendriticCells.RemoveAt(index);
+                continue;
+            }
+
+            NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
+            if (agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending || !agent.hasPath
+                || agent.pathStatus != NavMeshPathStatus.PathComplete)
+            {
+                continue;
+            }
+
+            if (agent.remainingDistance > Mathf.Max(agent.stoppingDistance, dispatchArrivalRadius))
+                continue;
+
+            agent.isStopped = true;
+            if (dispatchedCell.destination != null)
+            {
+                Destroy(dispatchedCell.destination);
+                dispatchedCell.destination = null;
+            }
+        }
+    }
+
+    private void DespawnDendriticCell(DispatchedDendriticCell dispatchedCell)
+    {
+        if (dispatchedCell == null)
+            return;
+
+        if (dispatchedCell.cell != null)
+        {
+            NavMeshAgent agent = dispatchedCell.cell.GetComponent<NavMeshAgent>();
+            if (agent != null && agent.enabled && agent.isOnNavMesh)
+            {
+                agent.ResetPath();
+                agent.isStopped = true;
+            }
+            Destroy(dispatchedCell.cell);
+            dispatchedCell.cell = null;
+        }
+
+        if (dispatchedCell.destination != null)
+        {
+            Destroy(dispatchedCell.destination);
+            dispatchedCell.destination = null;
+        }
+    }
+
+    private void DespawnDendriticCellsForInfection(InfectionMarker infectionTarget)
+    {
+        if (infectionTarget == null)
+            return;
+
+        for (int index = dispatchedDendriticCells.Count - 1; index >= 0; index--)
+        {
+            DispatchedDendriticCell dispatchedCell = dispatchedDendriticCells[index];
+            if (dispatchedCell.infectionTarget != infectionTarget)
+                continue;
+
+            DespawnDendriticCell(dispatchedCell);
+            dispatchedDendriticCells.RemoveAt(index);
+        }
+    }
+
+
     private void LogWbcDispatchPathFailure(InfectionMarker infectionTarget, string moveLocation)
     {
         string destinationName = infectionTarget != null && infectionTarget.infection != null
@@ -1929,6 +2092,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             return;
 
+        DespawnDendriticCellsForInfection(marker);
         if (marker.isContained && marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
             adaptiveResponsePopup?.Show(marker.infection.displayName);
 

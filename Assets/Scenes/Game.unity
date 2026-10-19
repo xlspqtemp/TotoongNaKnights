@@ -5358,6 +5358,8 @@ MonoBehaviour:
   squadLifetimeSeconds: 20
   dispatchNavMeshSampleRadius: 25
   dispatchArrivalRadius: 0.5
+  dendriticPrefab: {fileID: 5249289974316612906, guid: c1791b58c93492a459984e089ee53221, type: 3}
+  holdOffset: {x: 1.5, y: 0, z: 0}
   combatDetectionRange: 8
   combatMeleeRange: 1.5
   wbcCombatMoveSpeed: 3.5
@@ -27989,7 +27991,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 755701208}
   m_HandleRect: {fileID: 755701207}
   m_Direction: 2
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:

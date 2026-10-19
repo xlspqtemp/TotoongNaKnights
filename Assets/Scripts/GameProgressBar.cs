@@ -360,7 +360,8 @@ public class GameProgressBar : MonoBehaviour
 
         targetWellness = clampedValue;
         targetMaximum = safeMaximum;
-        currentFillColor = GetWellnessFillColor(clampedValue);
+        float wellnessPercentage = clampedValue / safeMaximum * 100f;
+        currentFillColor = GetWellnessFillColor(wellnessPercentage);
 
         if (valueLabel != null)
             valueLabel.text = $"{Mathf.RoundToInt(clampedValue)} / {Mathf.RoundToInt(safeMaximum)}";
