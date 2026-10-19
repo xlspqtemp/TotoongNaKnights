@@ -28,6 +28,14 @@ public class CameraScript : MonoBehaviour
     [SerializeField] private bool showTacticalOrdersOnCirculatoryLayer;
     [SerializeField] private Vector3 defaultLayerFocusOffset = new Vector3(0f, 1.5f, 0f);
 
+    [Header("Layer HUD Layout")]
+    [SerializeField] private GameObject consoleLogPanel;
+    [SerializeField] private GameObject pendingInfectionsPanel;
+    [SerializeField] private GameObject humanSnapshotPanel;
+    private RectTransform layersPanelRect;
+    [SerializeField] private Vector2 focusLayersPosition;
+    [SerializeField] private Vector2 defaultLayersPosition;
+
     [Header("Infection Focus")]
     [SerializeField, Min(MinimumInfectionFocusDuration)] private float infectionFocusDuration = DefaultInfectionFocusDuration;
     [SerializeField, Min(0f)] private float infectionFocusOrthographicSize = DefaultInfectionFocusOrthographicSize;
@@ -80,6 +88,20 @@ public class CameraScript : MonoBehaviour
 
     private void Start()
     {
+        GameObject layerButtonsObj = GameObject.Find("SystemLayerButtons");
+        if (layerButtonsObj != null)
+        {
+            layersPanelRect = layerButtonsObj.GetComponent<RectTransform>();
+            if (layersPanelRect == null)
+                layersPanelRect = layerButtonsObj.AddComponent<RectTransform>();
+
+            defaultLayersPosition = layersPanelRect.anchoredPosition;
+        }
+        else
+        {
+            Debug.LogWarning("[Camera] SystemLayerButtons not found for layer repositioning.");
+        }
+
         SetSelectedLayer(1, false);
     }
 
@@ -480,6 +502,16 @@ public class CameraScript : MonoBehaviour
         StopInfectionFocus();
         selectedLayer = layerNumber;
         HideAllSystemControls();
+
+        bool showLayerHud = layerNumber == 1 || layerNumber == 2;
+        if (consoleLogPanel != null)
+            consoleLogPanel.SetActive(showLayerHud);
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.SetActive(showLayerHud);
+        if (humanSnapshotPanel != null)
+            humanSnapshotPanel.SetActive(showLayerHud);
+        if (layersPanelRect != null)
+            layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
 
         Transform destination = null;
         switch (selectedLayer)

@@ -5358,7 +5358,7 @@ MonoBehaviour:
   squadLifetimeSeconds: 20
   dispatchNavMeshSampleRadius: 25
   dispatchArrivalRadius: 0.5
-  dendriticPrefab: {fileID: 5249289974316612906, guid: c1791b58c93492a459984e089ee53221, type: 3}
+  dendriticPrefab: {fileID: 2835067801688458349, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
   holdOffset: {x: 1.5, y: 0, z: 0}
   combatDetectionRange: 8
   combatMeleeRange: 1.5
@@ -50279,6 +50279,63 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2146095779}
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1001 &1998414484150101543
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2835067801688458349, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_Name
+      value: Dentritic cube test
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 70.60647
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -20.33717
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 4.78306
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6119545189861559113, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: af7fe7d757579904b96e1baee2f3b121, type: 3}
 --- !u!1001 &2766709378708606963
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -50376,9 +50433,25 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 8300000, guid: e86f915e00366724da13a81e5d932e10, type: 3}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: consoleLogPanel
+      value: 
+      objectReference: {fileID: 1764611192}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: humanSnapshotPanel
+      value: 
+      objectReference: {fileID: 28990743}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: movementAudioSource
       value: 
       objectReference: {fileID: 1898174450}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: focusLayersPosition.y
+      value: -150
+      objectReference: {fileID: 0}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: pendingInfectionsPanel
+      value: 
+      objectReference: {fileID: 3798134845115109744, guid: b87e88107b8bc5246a21f0a17d3f9fb8, type: 3}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: tacticalOrdersContainer
       value: 
@@ -50564,3 +50637,4 @@ SceneRoots:
   - {fileID: 1669230763}
   - {fileID: 362425539}
   - {fileID: 1057790689}
+  - {fileID: 1998414484150101543}

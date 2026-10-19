@@ -45,6 +45,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void Start()
     {
+        CenterQteButton(coughButton);
         SetButtonVisibility(coughButton, true);
         SetButtonVisibility(testContaminatedAirButton, showTestButtons);
 
@@ -77,6 +78,34 @@ public sealed class RespiratorySystemController : MonoBehaviour
         spawnRoutine = StartCoroutine(RunSpawnLoop());
         RefreshCoughButton();
     }
+    private static void CenterQteButton(Button button)
+    {
+        if (button == null)
+            return;
+
+        RectTransform buttonRect = button.GetComponent<RectTransform>();
+        if (buttonRect != null)
+        {
+            buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+            buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+            buttonRect.pivot = new Vector2(0.5f, 0.5f);
+            buttonRect.anchoredPosition = new Vector2(0f, -250f);
+        }
+
+        RectTransform panelRect = button.transform.parent as RectTransform;
+        if (panelRect == null)
+            return;
+
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.anchoredPosition = Vector2.zero;
+
+        Image panelBackground = panelRect.GetComponent<Image>();
+        if (panelBackground != null)
+            panelBackground.enabled = false;
+    }
+
 
     private static void SetButtonVisibility(Button button, bool isVisible)
     {

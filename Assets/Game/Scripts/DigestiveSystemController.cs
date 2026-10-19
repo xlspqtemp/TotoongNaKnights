@@ -96,6 +96,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
         GameObject ordersContainer = GameObject.Find(OrdersContainerPath);
         if (ordersContainer != null)
         {
+            CenterOrdersContainer(ordersContainer.GetComponent<RectTransform>());
             Transform eatTransform = ordersContainer.transform.Find("EatButton");
             Transform vomitTransform = ordersContainer.transform.Find("VomitButton");
             if (eatTransform != null)
@@ -128,6 +129,21 @@ public sealed class DigestiveSystemController : MonoBehaviour
             Debug.LogError("DigestiveSystemController could not find the DayCounterUI.", this);
 
         RefreshButtonStates();
+    }
+
+    private static void CenterOrdersContainer(RectTransform panelRect)
+    {
+        if (panelRect == null)
+            return;
+
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.anchoredPosition = Vector2.zero;
+
+        Image panelBackground = panelRect.GetComponent<Image>();
+        if (panelBackground != null)
+            panelBackground.enabled = false;
     }
 
     private void OnDisable()
