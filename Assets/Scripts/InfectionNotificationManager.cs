@@ -12,6 +12,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     private const string NotificationPrefabResourcePath = "InfectionNotification";
     private const string BacteriaSpriteResourcePath = "UI/Red bacteria icon";
     private const string VirusSpriteResourcePath = "UI/Blue virus icon";
+    private const string FungalSpriteResourcePath = "UI/Neon_Circuit_Mushroom_Emblem-removebg-preview";
     private const string CategoryCanvasObjectName = "NotificationCategoryCanvas";
     private const string CategoryLabelObjectName = "CategoryLabel";
     private const int MaximumNotifications = 5;
@@ -22,6 +23,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     [SerializeField] private CameraScript cameraScript;
     [SerializeField] private Camera gameplayCamera;
     [SerializeField] private GameObject notificationPrefab;
+    public Sprite fungalIcon;
     [SerializeField, HideInInspector] private Texture2D bacteriaSprite;
     [SerializeField, HideInInspector] private Texture2D virusSprite;
     [Header("Pathogen Icon Textures")]
@@ -207,6 +209,12 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             viralIconTexture = Resources.Load<Texture2D>(VirusSpriteResourcePath);
         if (viralIconTexture == null)
             viralIconTexture = virusSprite;
+        if (fungalIcon == null)
+        {
+            Texture2D fungalIconTexture = Resources.Load<Texture2D>(FungalSpriteResourcePath);
+            if (fungalIconTexture != null)
+                fungalIcon = CreateNotificationSprite(fungalIconTexture, "Fungal Infection Notification");
+        }
 
         if (cachedBacteriaTexture != bacterialIconTexture)
         {
@@ -348,8 +356,8 @@ public sealed class InfectionNotificationManager : MonoBehaviour
                 spriteRenderer.color = Color.white;
                 break;
             case InfectionPathogenType.Fungal:
-                spriteRenderer.sprite = bacteriaNotificationIcon;
-                spriteRenderer.color = fungalTextColor;
+                spriteRenderer.sprite = fungalIcon;
+                spriteRenderer.color = Color.white;
                 break;
             default:
                 spriteRenderer.sprite = bacteriaNotificationIcon;

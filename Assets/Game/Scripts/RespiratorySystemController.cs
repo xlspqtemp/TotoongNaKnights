@@ -89,7 +89,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
             buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
             buttonRect.pivot = new Vector2(0.5f, 0.5f);
-            buttonRect.anchoredPosition = new Vector2(0f, -250f);
+            buttonRect.anchoredPosition = new Vector2(0f, -350f);
         }
 
         RectTransform panelRect = button.transform.parent as RectTransform;

@@ -11,6 +11,7 @@ public class CameraScript : MonoBehaviour
     private const float DefaultInfectionFocusDuration = 0.4f;
     private const float DefaultInfectionFocusOrthographicSize = 10f;
     private const float MinimumInfectionFocusDuration = 0.01f;
+    private const float FocusLayersVerticalOffset = 100f;
     private static readonly FieldInfo ZoomControllerCurrentZoomField =
         typeof(CameraScript_Zoom).GetField("_currentZoom", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -96,6 +97,7 @@ public class CameraScript : MonoBehaviour
                 layersPanelRect = layerButtonsObj.AddComponent<RectTransform>();
 
             defaultLayersPosition = layersPanelRect.anchoredPosition;
+            focusLayersPosition = new Vector2(focusLayersPosition.x, focusLayersPosition.y - FocusLayersVerticalOffset);
         }
         else
         {

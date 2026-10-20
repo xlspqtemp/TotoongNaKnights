@@ -5237,51 +5237,7 @@ MonoBehaviour:
   popupMinVerticalOffset: 1.5
   popupClusterRadiusMultiplier: 0.5
   dayCounter: {fileID: 53820468}
-  spawnOnDayAdvance: 1
-  eventsPerDay: 4
-  infectionEntries:
-  - displayName: Staph
-    pathogenType: 0
-    severityStage: 0
-    entryCause: scraped knee
-    correctResponder: 0
-    preferredBodyParts: 0000000001000000
-    daysUntreated: 0
-  - displayName: E. coli/Salmonella
-    pathogenType: 0
-    severityStage: 1
-    entryCause: spoiled food
-    correctResponder: 0
-    preferredBodyParts: 02000000
-    daysUntreated: 0
-  - displayName: Strep
-    pathogenType: 0
-    severityStage: 0
-    entryCause: sore throat
-    correctResponder: 0
-    preferredBodyParts: 02000000
-    daysUntreated: 0
-  - displayName: Common cold
-    pathogenType: 1
-    severityStage: 0
-    entryCause: crowded commute
-    correctResponder: 1
-    preferredBodyParts: 02000000
-    daysUntreated: 0
-  - displayName: Flu
-    pathogenType: 1
-    severityStage: 1
-    entryCause: crowded commute
-    correctResponder: 1
-    preferredBodyParts: 02000000
-    daysUntreated: 0
-  - displayName: Stomach flu
-    pathogenType: 1
-    severityStage: 0
-    entryCause: unwashed hands
-    correctResponder: 1
-    preferredBodyParts: 01000000
-    daysUntreated: 0
+  maxActiveInfections: 5
   bodyPartButtons:
   - bodyPartGroup: 0
     button: {fileID: 911858978}
@@ -5298,7 +5254,6 @@ MonoBehaviour:
   - bodyPartGroup: 2
     button: {fileID: 1961894821}
     worldAnchor: {fileID: 106749845}
-  maxActiveInfections: 5
   showBodyPartButtons: 0
   bodyPartButtonsCanvasGroup: {fileID: 745068365}
   enableLegacyAvatarClickDispatch: 0
@@ -5316,6 +5271,7 @@ MonoBehaviour:
   markerSpriteResourcePath: HUDWhiteSwatch
   bacterialColor: {r: 0.95, g: 0.2, b: 0.18, a: 1}
   viralColor: {r: 0.2, g: 0.55, b: 1, a: 1}
+  fungalColor: {r: 0.2, g: 0.8, b: 0.28, a: 1}
   enableWbcDispatch: 1
   useLegacySelectFirst: 0
   maxActiveWbcs: 5
@@ -6992,6 +6948,7 @@ MonoBehaviour:
   cameraScript: {fileID: 2766709378708606964}
   gameplayCamera: {fileID: 1854060992}
   notificationPrefab: {fileID: 6365439209916026991, guid: 6f9bd81d737644f4fa5a00bd12c82dd0, type: 3}
+  fungalIcon: {fileID: 0}
   bacteriaSprite: {fileID: 2800000, guid: 651f7db2c5358b44695933d18a52f87d, type: 3}
   virusSprite: {fileID: 2800000, guid: 5788b5658dcfe85469372f3d8afda0c9, type: 3}
   bacterialIconTexture: {fileID: 0}
@@ -7005,6 +6962,7 @@ MonoBehaviour:
   containerBackgroundColor: {r: 0.012, g: 0.028, b: 0.038, a: 0.96}
   bacterialTextColor: {r: 1, g: 0.2, b: 0.23, a: 1}
   viralTextColor: {r: 0.25, g: 0.66, b: 1, a: 1}
+  fungalTextColor: {r: 0.3, g: 0.85, b: 0.35, a: 1}
   containerPadding: {x: 9, y: 4}
 --- !u!1 &244042435
 GameObject:
@@ -27991,7 +27949,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 755701208}
   m_HandleRect: {fileID: 755701207}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -50445,8 +50403,12 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 1898174450}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: focusLayersPosition.x
+      value: 28
+      objectReference: {fileID: 0}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: focusLayersPosition.y
-      value: -150
+      value: -106
       objectReference: {fileID: 0}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: pendingInfectionsPanel
