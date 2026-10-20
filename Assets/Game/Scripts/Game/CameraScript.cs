@@ -72,6 +72,7 @@ public class CameraScript : MonoBehaviour
     private bool mousePanStartedOverWorld;
     private Vector3 previousMousePosition;
     private Camera sceneCamera;
+    private LayerTransitionUI layerTransitionUI;
     private int selectedLayer = 1;
     private Coroutine infectionFocusCoroutine;
     private Coroutine frameCoroutine;
@@ -85,6 +86,9 @@ public class CameraScript : MonoBehaviour
     private void Awake()
     {
         sceneCamera = GetComponentInChildren<Camera>();
+        layerTransitionUI = GetComponent<LayerTransitionUI>();
+        if (layerTransitionUI == null)
+            layerTransitionUI = gameObject.AddComponent<LayerTransitionUI>();
     }
 
     private void Start()
@@ -498,6 +502,16 @@ public class CameraScript : MonoBehaviour
     {
         if (layerNumber < 1 || layerNumber > LayerCount)
         {
+            return;
+        }
+
+        if (playSwitchSound && layerTransitionUI != null)
+        {
+            layerTransitionUI.PlayTransition(() =>
+            {
+                SetSelectedLayer(layerNumber, false);
+                PlayLayerSwitchSound();
+            });
             return;
         }
 

@@ -25,6 +25,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const int PathogenPoolDifficultyCount = 4;
     private const int GenericInfectionChancePercent = 60;
     private const float FungalHealthMultiplier = 1.25f;
+    private const float BreachedBarrierPathogenMultiplier = 1.5f;
     private const int DefaultMaximumActiveWbcs = 5;
     private const int DefaultMaximumActiveInfections = 5;
     private const float SquadSpawnOffsetRadius = 1.75f;
@@ -263,13 +264,15 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        InfectionData infection = validEntries[UnityEngine.Random.Range(0, validEntries.Count)];
+        InfectionData selectedProfile = validEntries[UnityEngine.Random.Range(0, validEntries.Count)];
+        InfectionData infection = CloneInfectionData(selectedProfile);
         InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
         if (bodyPartButton == null)
             return;
 
+        bool wasBarrierMutated = ApplyBarrierMutation(infection);
         int infectionCountBeforeSpawn = activeInfectionMarkers.Count;
-        SpawnMarker(infection, bodyPartButton);
+        SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         if (activeInfectionMarkers.Count == infectionCountBeforeSpawn + 1)
             LogInfection(infection, bodyPartButton);
     }
@@ -317,10 +320,12 @@ public sealed class InfectionSpawner : MonoBehaviour
         InfectionData selectedInfection = validBacterialEntries[entryIndex];
         List<InfectionBodyPartButtonReference> preferredBodyPartMappings = preferredMappingsByEntry[entryIndex];
         InfectionBodyPartButtonReference selectedBodyPart = preferredBodyPartMappings[UnityEngine.Random.Range(0, preferredBodyPartMappings.Count)];
+        InfectionData infectionToSpawn = CloneInfectionData(selectedInfection);
+        bool wasBarrierMutated = ApplyBarrierMutation(infectionToSpawn);
         int infectionCountBeforeSpawn = activeInfectionMarkers.Count;
-        SpawnMarker(selectedInfection, selectedBodyPart);
+        SpawnMarker(infectionToSpawn, selectedBodyPart, wasBarrierMutated);
         if (activeInfectionMarkers.Count == infectionCountBeforeSpawn + 1)
-            LogInfection(selectedInfection, selectedBodyPart);
+            LogInfection(infectionToSpawn, selectedBodyPart);
     }
 
     public sealed class InfectionMarker
@@ -340,6 +345,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         public bool resolutionPending;
         public int containedResolveDay;
         public int unresolvedDays;
+        public bool wasBarrierMutated;
         public bool wellnessGainAwardedOnResolve;
         public Vector3 worldPosition;
         public int vesselSpawnPointIndex;
@@ -1931,7 +1937,10 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (marker == null || !marker.isContained || marker.isRemoving)
                 continue;
 
-            ApplyWellnessChange($"Contained infection {marker.infection.displayName}", -containedDailyWellnessCost);
+            float containedWellnessCost = containedDailyWellnessCost;
+            if (marker.wasBarrierMutated)
+                containedWellnessCost *= BreachedBarrierPathogenMultiplier;
+            ApplyWellnessChange($"Contained infection {marker.infection.displayName}", -containedWellnessCost);
 
             if (currentDay < marker.containedResolveDay)
                 continue;
@@ -1954,10 +1963,17 @@ public sealed class InfectionSpawner : MonoBehaviour
             float dailyCost = marker.infection.neglectLoss > 0
                 ? marker.infection.neglectLoss
                 : GetDailyInfectionWellnessCost(marker.infection.severityStage);
+            if (marker.wasBarrierMutated)
+                dailyCost *= BreachedBarrierPathogenMultiplier;
             ApplyWellnessChange($"{marker.infection.displayName} unresolved", -dailyCost);
 
             if (marker.unresolvedDays >= 2 && marker.infection.neglectLoss <= 0)
-                ApplyWellnessChange($"{marker.infection.displayName} unresolved 2+ days", -additionalUnresolvedDailyWellnessCost);
+            {
+                float additionalCost = additionalUnresolvedDailyWellnessCost;
+                if (marker.wasBarrierMutated)
+                    additionalCost *= BreachedBarrierPathogenMultiplier;
+                ApplyWellnessChange($"{marker.infection.displayName} unresolved 2+ days", -additionalCost);
+            }
         }
     }
 
@@ -2160,6 +2176,37 @@ public sealed class InfectionSpawner : MonoBehaviour
         infectionSpawnTimerInitialized = true;
     }
 
+    private bool ApplyBarrierMutation(InfectionData infection)
+    {
+        if (infection == null || !IsAnyActiveBarrierBreached())
+            return false;
+
+        switch (infection.severityStage)
+        {
+            case InfectionSeverityStage.Mild:
+                infection.severityStage = InfectionSeverityStage.Moderate;
+                break;
+            case InfectionSeverityStage.Moderate:
+                infection.severityStage = InfectionSeverityStage.Severe;
+                break;
+        }
+
+        Debug.Log("[InfectionSpawner] Pathogen mutated by breached barrier!", this);
+        return true;
+    }
+
+    private static bool IsAnyActiveBarrierBreached()
+    {
+        BarrierHealth[] barriers = FindObjectsByType<BarrierHealth>(FindObjectsSortMode.None);
+        foreach (BarrierHealth barrier in barriers)
+        {
+            if (barrier != null && barrier.isActiveAndEnabled && barrier.IsBreached)
+                return true;
+        }
+
+        return false;
+    }
+
     private void SpawnTimedInfection(int currentDay, int currentHour)
     {
         if (activeInfectionMarkers.Count >= maxActiveInfections)
@@ -2195,7 +2242,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        SpawnMarker(infection, bodyPartButton);
+        bool wasBarrierMutated = ApplyBarrierMutation(infection);
+        SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         LogInfection(infection, bodyPartButton);
         Debug.Log($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Difficulty={DifficultySettings.CurrentStats.difficultyName}; Day={currentDay}; Hour={currentHour:00}.", this);
     }
@@ -2393,7 +2441,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     }
 
 
-    private void SpawnMarker(InfectionData infection, InfectionBodyPartButtonReference bodyPartButton)
+    private void SpawnMarker(InfectionData infection, InfectionBodyPartButtonReference bodyPartButton, bool wasBarrierMutated = false)
     {
         Vector3 infectionWorldPosition = ResolveInitialInfectionWorldPosition(bodyPartButton, out int vesselSpawnPointIndex);
         InfectionMarker marker = new InfectionMarker
@@ -2405,7 +2453,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             worldPosition = infectionWorldPosition,
             vesselSpawnPointIndex = vesselSpawnPointIndex,
             canvas = hudCanvas,
-            unresolvedDays = Mathf.Max(0, infection.daysUntreated)
+            unresolvedDays = Mathf.Max(0, infection.daysUntreated),
+            wasBarrierMutated = wasBarrierMutated
         };
 
         activeInfectionMarkers.Add(marker);
@@ -2464,6 +2513,8 @@ public sealed class InfectionSpawner : MonoBehaviour
                 InfectionPathogenType.Fungal => stats.bacteriaHp * FungalHealthMultiplier,
                 _ => stats.bacteriaHp
             };
+            if (marker.wasBarrierMutated)
+                pathogenMaxHp *= BreachedBarrierPathogenMultiplier;
             health.SetMaxHp(pathogenMaxHp);
             health.SetPathogenType(marker.infection.pathogenType);
 
