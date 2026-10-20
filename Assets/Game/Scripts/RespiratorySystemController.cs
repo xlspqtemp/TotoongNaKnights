@@ -17,6 +17,19 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const string SmokedCigaretteEventName = "Smoked cigarette";
     private const float NavMeshSampleRadius = 50f;
     private const float ArrivalDistance = 1f;
+    private const float BarrierDamagePerRandomEvent = 20f;
+    private const float BarrierRestorePerAction = 20f;
+    private const float BarrierMaximum = 100f;
+    private const string BarrierGaugeObjectName = "RespiratoryBarrierGauge";
+    private const float BarrierGaugeWidth = 600f;
+    private const float BarrierGaugeHeight = 600f;
+    private const float BarrierGaugeVerticalOffset = -338f;
+    private const float RespiratoryQteVerticalOffset = -357f;
+    private static Sprite barrierGaugeSprite;
+
+    [SerializeField] private Image barrierGaugeImage;
+    [SerializeField] private TextMeshProUGUI barrierTitleLabel;
+    [SerializeField] private TextMeshProUGUI barrierPercentLabel;
 
     [SerializeField] private Transform airwaySpawnPoint;
     [SerializeField] private Transform leftLung;
@@ -37,6 +50,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private readonly List<ContaminationWindow> contaminationWindows = new List<ContaminationWindow>();
     private float coughCooldownRemaining;
     private Coroutine spawnRoutine;
+    private BarrierHealth barrierHealth;
 
     private void OnEnable()
     {
@@ -47,7 +61,9 @@ public sealed class RespiratorySystemController : MonoBehaviour
     {
         CenterQteButton(coughButton);
         SetButtonVisibility(coughButton, true);
-        SetButtonVisibility(testContaminatedAirButton, showTestButtons);
+        SetButtonVisibility(testContaminatedAirButton, false);
+        InitializeBarrierHealth();
+        InitializeBarrierGauge(coughButton != null ? coughButton.transform.parent as RectTransform : null);
 
         if (coughButton != null)
         {
@@ -78,6 +94,127 @@ public sealed class RespiratorySystemController : MonoBehaviour
         spawnRoutine = StartCoroutine(RunSpawnLoop());
         RefreshCoughButton();
     }
+    private void InitializeBarrierHealth()
+    {
+        GameObject respiratoryRoot = GameObject.Find("/Respiratory");
+        if (respiratoryRoot == null)
+        {
+            Debug.LogError("RespiratorySystemController could not find the Respiratory layer root for BarrierHealth.", this);
+            return;
+        }
+
+        barrierHealth = respiratoryRoot.GetComponent<BarrierHealth>();
+        if (barrierHealth == null)
+            barrierHealth = respiratoryRoot.AddComponent<BarrierHealth>();
+    }
+
+    private void InitializeBarrierGauge(RectTransform panelRect)
+    {
+        if (panelRect == null)
+            return;
+
+        Transform existingGauge = panelRect.Find(BarrierGaugeObjectName);
+        if (barrierGaugeImage == null && existingGauge != null)
+            barrierGaugeImage = existingGauge.GetComponent<Image>();
+
+        if (barrierGaugeImage == null)
+        {
+            GameObject gaugeObject = new GameObject(BarrierGaugeObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            gaugeObject.transform.SetParent(panelRect, false);
+            barrierGaugeImage = gaugeObject.GetComponent<Image>();
+        }
+
+        RectTransform gaugeRect = barrierGaugeImage.rectTransform;
+        gaugeRect.anchorMin = new Vector2(0.5f, 0.5f);
+        gaugeRect.anchorMax = new Vector2(0.5f, 0.5f);
+        gaugeRect.pivot = new Vector2(0.5f, 0.5f);
+        gaugeRect.sizeDelta = new Vector2(BarrierGaugeWidth, BarrierGaugeHeight);
+        gaugeRect.anchoredPosition = new Vector2(0f, BarrierGaugeVerticalOffset);
+        barrierGaugeImage.transform.SetAsFirstSibling();
+        barrierGaugeImage.sprite = LoadBarrierGaugeSprite();
+        barrierGaugeImage.type = Image.Type.Filled;
+        barrierGaugeImage.fillMethod = Image.FillMethod.Radial360;
+        barrierGaugeImage.fillOrigin = (int)Image.Origin360.Bottom;
+        barrierGaugeImage.preserveAspect = true;
+        barrierGaugeImage.raycastTarget = false;
+
+        if (barrierTitleLabel == null)
+            barrierTitleLabel = FindOrCreateGaugeLabel(barrierGaugeImage.transform, "BarrierTitle", "BARRIER", 18f, 22f);
+        if (barrierPercentLabel == null)
+            barrierPercentLabel = FindOrCreateGaugeLabel(barrierGaugeImage.transform, "BarrierPercent", "100%", -18f, 26f);
+        barrierTitleLabel.gameObject.SetActive(false);
+        barrierPercentLabel.gameObject.SetActive(false);
+
+        RefreshBarrierGauge();
+    }
+
+    private static TextMeshProUGUI FindOrCreateGaugeLabel(Transform parent, string labelName, string initialText, float verticalPosition, float fontSize)
+    {
+        Transform existingLabel = parent.Find(labelName);
+        TextMeshProUGUI label = existingLabel != null ? existingLabel.GetComponent<TextMeshProUGUI>() : null;
+        if (label == null)
+        {
+            GameObject labelObject = new GameObject(labelName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(parent, false);
+            label = labelObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        RectTransform labelRect = label.rectTransform;
+        labelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        labelRect.pivot = new Vector2(0.5f, 0.5f);
+        labelRect.sizeDelta = new Vector2(200f, 38f);
+        labelRect.anchoredPosition = new Vector2(0f, verticalPosition);
+        label.text = initialText;
+        label.fontSize = fontSize;
+        label.fontStyle = FontStyles.Bold;
+        label.color = Color.white;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+        return label;
+    }
+
+    private static Sprite LoadBarrierGaugeSprite()
+    {
+        if (barrierGaugeSprite != null)
+            return barrierGaugeSprite;
+
+        barrierGaugeSprite = Resources.Load<Sprite>("UI/Barrier meter");
+        if (barrierGaugeSprite != null)
+            return barrierGaugeSprite;
+
+        Texture2D gaugeTexture = Resources.Load<Texture2D>("UI/Barrier meter");
+        if (gaugeTexture != null)
+        {
+            barrierGaugeSprite = Sprite.Create(
+                gaugeTexture,
+                new Rect(0f, 0f, gaugeTexture.width, gaugeTexture.height),
+                new Vector2(0.5f, 0.5f),
+                100f);
+        }
+        else
+        {
+            Debug.LogWarning("Barrier meter texture could not be loaded from Resources/UI/Barrier meter.png.");
+        }
+
+        return barrierGaugeSprite;
+    }
+
+    private void RefreshBarrierGauge()
+    {
+        if (barrierHealth == null || barrierGaugeImage == null)
+            return;
+
+        float barrierValue = Mathf.Clamp(barrierHealth.CurrentBarrier, 0f, BarrierMaximum);
+        barrierGaugeImage.fillAmount = barrierValue / BarrierMaximum;
+        barrierGaugeImage.color = barrierValue >= 50f
+            ? Color.cyan
+            : barrierValue >= 25f ? Color.yellow : Color.red;
+
+        if (barrierPercentLabel != null)
+            barrierPercentLabel.text = $"{Mathf.RoundToInt(barrierValue)}%";
+    }
+
     private static void CenterQteButton(Button button)
     {
         if (button == null)
@@ -89,7 +226,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
             buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
             buttonRect.pivot = new Vector2(0.5f, 0.5f);
-            buttonRect.anchoredPosition = new Vector2(0f, -350f);
+            buttonRect.anchoredPosition = new Vector2(0f, RespiratoryQteVerticalOffset);
         }
 
         RectTransform panelRect = button.transform.parent as RectTransform;
@@ -152,6 +289,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     {
         coughCooldownRemaining = Mathf.Max(0f, coughCooldownRemaining - GameplaySpeed.DeltaTime);
         RefreshCoughButton();
+        RefreshBarrierGauge();
     }
 
     private void HandleRandomEventTriggered(RandomEventData eventData)
@@ -174,6 +312,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             return;
 
         string eventKey = WellnessManager.BuildEventKey(eventId, eventData.day, eventData.hour);
+        barrierHealth?.TakeDamage(BarrierDamagePerRandomEvent);
         contaminationWindows.Add(new ContaminationWindow
         {
             eventKey = eventKey,
@@ -304,6 +443,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
         }
 
         coughCooldownRemaining = CoughCooldownSeconds;
+        barrierHealth?.RestoreBarrier(BarrierRestorePerAction);
         HashSet<string> eventKeys = new HashSet<string>();
         foreach (ContaminationWindow window in contaminationWindows)
         {

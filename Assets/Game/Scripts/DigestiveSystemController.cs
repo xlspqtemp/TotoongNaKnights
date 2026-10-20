@@ -21,6 +21,19 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private const string JunkFoodEventName = "Junk food binge";
     private const string AccidentallyAteSpoiledFoodEventName = "Accidentally Ate Spoiled Food";
     private const string ContaminatedWaterEventName = "Accidentally Drank Contaminated Water";
+    private const float BarrierDamagePerRandomEvent = 20f;
+    private const float BarrierRestorePerAction = 20f;
+    private const float BarrierMaximum = 100f;
+    private const string BarrierGaugeObjectName = "DigestiveBarrierGauge";
+    private const float BarrierGaugeWidth = 600f;
+    private const float BarrierGaugeHeight = 600f;
+    private const float BarrierGaugeVerticalOffset = -338f;
+    private const float DigestiveQteVerticalOffset = -357f;
+    private static Sprite barrierGaugeSprite;
+
+    [SerializeField] private Image barrierGaugeImage;
+    [SerializeField] private TextMeshProUGUI barrierTitleLabel;
+    [SerializeField] private TextMeshProUGUI barrierPercentLabel;
 
     private static readonly string[] DefaultPathwayObjectPaths =
     {
@@ -58,6 +71,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private int lastContaminatedFoodEventHour = -1;
     private int lastContaminatedWaterEventDay = int.MinValue;
     private int lastContaminatedWaterEventHour = -1;
+    private BarrierHealth barrierHealth;
 
     private bool IsSleeping => routineSystem != null && routineSystem.CurrentActivity == RoutineActivity.Sleeping;
     private bool IsBatchRunning => batchQueueRoutine != null || pendingBatches.Count > 0;
@@ -92,11 +106,13 @@ public sealed class DigestiveSystemController : MonoBehaviour
         if (dayCounter == null)
             dayCounter = FindFirstObjectByType<DayCounterUI>();
         routineSystem = RoutineSystem.Instance;
+        InitializeBarrierHealth();
 
         GameObject ordersContainer = GameObject.Find(OrdersContainerPath);
         if (ordersContainer != null)
         {
             CenterOrdersContainer(ordersContainer.GetComponent<RectTransform>());
+            InitializeBarrierGauge(ordersContainer.GetComponent<RectTransform>());
             Transform eatTransform = ordersContainer.transform.Find("EatButton");
             Transform vomitTransform = ordersContainer.transform.Find("VomitButton");
             if (eatTransform != null)
@@ -108,13 +124,12 @@ public sealed class DigestiveSystemController : MonoBehaviour
             {
                 vomitButton = vomitTransform.GetComponent<Button>();
                 vomitLabel = vomitTransform.GetComponentInChildren<TextMeshProUGUI>(true);
+                CenterQteButton(vomitButton);
             }
         }
 
         if (eatButton != null)
-            eatButton.onClick.AddListener(HandleEatPressed);
-        else
-            Debug.LogError("DigestiveOrdersContainer is missing its EatButton.", this);
+            eatButton.gameObject.SetActive(false);
 
         if (vomitButton != null)
             vomitButton.onClick.AddListener(HandleVomitPressed);
@@ -131,6 +146,142 @@ public sealed class DigestiveSystemController : MonoBehaviour
         RefreshButtonStates();
     }
 
+    private void InitializeBarrierHealth()
+    {
+        GameObject digestiveRoot = GameObject.Find("/Digestive");
+        if (digestiveRoot == null)
+        {
+            Debug.LogError("DigestiveSystemController could not find the Digestive layer root for BarrierHealth.", this);
+            return;
+        }
+
+        barrierHealth = digestiveRoot.GetComponent<BarrierHealth>();
+        if (barrierHealth == null)
+            barrierHealth = digestiveRoot.AddComponent<BarrierHealth>();
+    }
+
+    private void InitializeBarrierGauge(RectTransform panelRect)
+    {
+        if (panelRect == null)
+            return;
+
+        Transform existingGauge = panelRect.Find(BarrierGaugeObjectName);
+        if (barrierGaugeImage == null && existingGauge != null)
+            barrierGaugeImage = existingGauge.GetComponent<Image>();
+
+        if (barrierGaugeImage == null)
+        {
+            GameObject gaugeObject = new GameObject(BarrierGaugeObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            gaugeObject.transform.SetParent(panelRect, false);
+            barrierGaugeImage = gaugeObject.GetComponent<Image>();
+        }
+
+        RectTransform gaugeRect = barrierGaugeImage.rectTransform;
+        gaugeRect.anchorMin = new Vector2(0.5f, 0.5f);
+        gaugeRect.anchorMax = new Vector2(0.5f, 0.5f);
+        gaugeRect.pivot = new Vector2(0.5f, 0.5f);
+        gaugeRect.sizeDelta = new Vector2(BarrierGaugeWidth, BarrierGaugeHeight);
+        gaugeRect.anchoredPosition = new Vector2(0f, BarrierGaugeVerticalOffset);
+        barrierGaugeImage.transform.SetAsFirstSibling();
+        barrierGaugeImage.sprite = LoadBarrierGaugeSprite();
+        barrierGaugeImage.type = Image.Type.Filled;
+        barrierGaugeImage.fillMethod = Image.FillMethod.Radial360;
+        barrierGaugeImage.fillOrigin = (int)Image.Origin360.Bottom;
+        barrierGaugeImage.preserveAspect = true;
+        barrierGaugeImage.raycastTarget = false;
+
+        if (barrierTitleLabel == null)
+            barrierTitleLabel = FindOrCreateGaugeLabel(barrierGaugeImage.transform, "BarrierTitle", "BARRIER", 18f, 22f);
+        if (barrierPercentLabel == null)
+            barrierPercentLabel = FindOrCreateGaugeLabel(barrierGaugeImage.transform, "BarrierPercent", "100%", -18f, 26f);
+        barrierTitleLabel.gameObject.SetActive(false);
+        barrierPercentLabel.gameObject.SetActive(false);
+
+        RefreshBarrierGauge();
+    }
+
+    private static TextMeshProUGUI FindOrCreateGaugeLabel(Transform parent, string labelName, string initialText, float verticalPosition, float fontSize)
+    {
+        Transform existingLabel = parent.Find(labelName);
+        TextMeshProUGUI label = existingLabel != null ? existingLabel.GetComponent<TextMeshProUGUI>() : null;
+        if (label == null)
+        {
+            GameObject labelObject = new GameObject(labelName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(parent, false);
+            label = labelObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        RectTransform labelRect = label.rectTransform;
+        labelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        labelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        labelRect.pivot = new Vector2(0.5f, 0.5f);
+        labelRect.sizeDelta = new Vector2(200f, 38f);
+        labelRect.anchoredPosition = new Vector2(0f, verticalPosition);
+        label.text = initialText;
+        label.fontSize = fontSize;
+        label.fontStyle = FontStyles.Bold;
+        label.color = Color.white;
+        label.alignment = TextAlignmentOptions.Center;
+        label.raycastTarget = false;
+        return label;
+    }
+
+    private static Sprite LoadBarrierGaugeSprite()
+    {
+        if (barrierGaugeSprite != null)
+            return barrierGaugeSprite;
+
+        barrierGaugeSprite = Resources.Load<Sprite>("UI/Barrier meter");
+        if (barrierGaugeSprite != null)
+            return barrierGaugeSprite;
+
+        Texture2D gaugeTexture = Resources.Load<Texture2D>("UI/Barrier meter");
+        if (gaugeTexture != null)
+        {
+            barrierGaugeSprite = Sprite.Create(
+                gaugeTexture,
+                new Rect(0f, 0f, gaugeTexture.width, gaugeTexture.height),
+                new Vector2(0.5f, 0.5f),
+                100f);
+        }
+        else
+        {
+            Debug.LogWarning("Barrier meter texture could not be loaded from Resources/UI/Barrier meter.png.");
+        }
+
+        return barrierGaugeSprite;
+    }
+
+    private void RefreshBarrierGauge()
+    {
+        if (barrierHealth == null || barrierGaugeImage == null)
+            return;
+
+        float barrierValue = Mathf.Clamp(barrierHealth.CurrentBarrier, 0f, BarrierMaximum);
+        barrierGaugeImage.fillAmount = barrierValue / BarrierMaximum;
+        barrierGaugeImage.color = barrierValue >= 50f
+            ? Color.cyan
+            : barrierValue >= 25f ? Color.yellow : Color.red;
+
+        if (barrierPercentLabel != null)
+            barrierPercentLabel.text = $"{Mathf.RoundToInt(barrierValue)}%";
+    }
+
+    private static void CenterQteButton(Button button)
+    {
+        if (button == null)
+            return;
+
+        RectTransform buttonRect = button.GetComponent<RectTransform>();
+        if (buttonRect == null)
+            return;
+
+        buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+        buttonRect.pivot = new Vector2(0.5f, 0.5f);
+        buttonRect.anchoredPosition = new Vector2(0f, DigestiveQteVerticalOffset);
+    }
+
     private static void CenterOrdersContainer(RectTransform panelRect)
     {
         if (panelRect == null)
@@ -139,7 +290,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.anchoredPosition = new Vector2(0f, -350f);
+        panelRect.anchoredPosition = Vector2.zero;
 
         Image panelBackground = panelRect.GetComponent<Image>();
         if (panelBackground != null)
@@ -169,6 +320,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
         eatCooldownRemaining = Mathf.Max(0f, eatCooldownRemaining - gameplayDelta);
         vomitCooldownRemaining = Mathf.Max(0f, vomitCooldownRemaining - gameplayDelta);
         RefreshButtonStates();
+        RefreshBarrierGauge();
     }
 
     private void HandleRoutineActivityChanged(RoutineActivity activity)
@@ -217,6 +369,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void HandleContaminatedFoodEvent(RandomEventData eventData)
     {
+        barrierHealth?.TakeDamage(BarrierDamagePerRandomEvent);
         lastContaminatedFoodEventDay = eventData.day;
         lastContaminatedFoodEventHour = eventData.hour;
         string eventId = eventData.eventName == ExpiredFoodEventName
@@ -240,6 +393,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void HandleContaminatedWaterEvent(RandomEventData eventData)
     {
+        barrierHealth?.TakeDamage(BarrierDamagePerRandomEvent);
         lastContaminatedWaterEventDay = eventData.day;
         lastContaminatedWaterEventHour = eventData.hour;
         string eventKey = WellnessManager.BuildEventKey("ContaminatedWater", eventData.day, eventData.hour);
@@ -272,6 +426,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
             return;
 
         eatCooldownRemaining = ManualCooldownSeconds;
+        barrierHealth?.RestoreBarrier(BarrierRestorePerAction);
         QueueBatch(foodPrefab, false, false, dayCounter != null ? dayCounter.CurrentDay : -1,
             dayCounter != null ? dayCounter.CurrentHour : -1);
         RefreshButtonStates();
@@ -283,6 +438,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
             return;
 
         vomitCooldownRemaining = ManualCooldownSeconds;
+        barrierHealth?.RestoreBarrier(BarrierRestorePerAction);
         HashSet<string> eventKeys = FindActiveContaminationEventKeys();
         GameplaySpeed.ResolveQTE(SpoiledFoodQTEId);
         StopPendingBatches();
