@@ -11343,6 +11343,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 590c65fdec4430d4f9cca4b0ec7bd476, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RespiratorySystemController
+  barrierGaugeImage: {fileID: 0}
+  barrierTitleLabel: {fileID: 0}
+  barrierPercentLabel: {fileID: 0}
   airwaySpawnPoint: {fileID: 454519208}
   leftLung: {fileID: 1947778463}
   rightLung: {fileID: 692991315}
@@ -11709,7 +11712,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &484955018
 RectTransform:
   m_ObjectHideFlags: 0
@@ -20825,6 +20828,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 258b9ffc3c11700428bbf17940d90234, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DigestiveSystemController
+  barrierGaugeImage: {fileID: 0}
+  barrierTitleLabel: {fileID: 0}
+  barrierPercentLabel: {fileID: 0}
   foodPrefab: {fileID: 5459330808142471693, guid: 9c50e0e66d043914d8c37d4968c72d3d, type: 3}
   contaminatedFoodPrefab: {fileID: 8914407728640336047, guid: e13f312a12af9bd42affe2bbb21b8a7d, type: 3}
   fluidPrefab: {fileID: 7938256834102878679, guid: f270dcefb31cf9745a979d8929852802, type: 3}
@@ -25393,6 +25399,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 590c65fdec4430d4f9cca4b0ec7bd476, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RespiratorySystemController
+  barrierGaugeImage: {fileID: 0}
+  barrierTitleLabel: {fileID: 0}
+  barrierPercentLabel: {fileID: 0}
   airwaySpawnPoint: {fileID: 784711881}
   leftLung: {fileID: 1266561479}
   rightLung: {fileID: 1541220}
@@ -25832,6 +25841,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 258b9ffc3c11700428bbf17940d90234, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DigestiveSystemController
+  barrierGaugeImage: {fileID: 0}
+  barrierTitleLabel: {fileID: 0}
+  barrierPercentLabel: {fileID: 0}
   foodPrefab: {fileID: 5459330808142471693, guid: 9c50e0e66d043914d8c37d4968c72d3d, type: 3}
   contaminatedFoodPrefab: {fileID: 8914407728640336047, guid: e13f312a12af9bd42affe2bbb21b8a7d, type: 3}
   fluidPrefab: {fileID: 7938256834102878679, guid: f270dcefb31cf9745a979d8929852802, type: 3}

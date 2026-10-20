@@ -137,7 +137,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private CameraScript cameraScript;
     [SerializeField] private Transform squadSpawnAnchor;
     [SerializeField, Min(1)] private int squadMemberCount = DefaultMaximumActiveWbcs;
-    [SerializeField] private bool switchToCirculatoryOnSquadSpawn = true;
+    // WBC deployment does not change the selected body-system layer.
     [SerializeField] private Color idleSquadHighlightColor = new Color(0f, 1f, 1f, 1f);
     [SerializeField, Min(0f)] private float headshotCooldownSeconds = 5f;
     [SerializeField] private bool keepAliveUntilResolved = true;
@@ -1246,14 +1246,6 @@ public sealed class InfectionSpawner : MonoBehaviour
             NavMeshAgent agent = unit.GetComponent<NavMeshAgent>();
             if (agent != null && agent.enabled && agent.isOnNavMesh)
                 agent.isStopped = true;
-        }
-
-        if (switchToCirculatoryOnSquadSpawn)
-        {
-            if (cameraScript == null)
-                cameraScript = FindFirstObjectByType<CameraScript>();
-            if (cameraScript != null)
-                cameraScript.SelectLayerWithoutCameraMove(2);
         }
 
         if (useLegacySelectFirst && selectedMarker != null && !selectedMarker.isRemoving && activeInfectionMarkers.Contains(selectedMarker))

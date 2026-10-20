@@ -108,6 +108,10 @@ public class CameraScript : MonoBehaviour
             Debug.LogWarning("[Camera] SystemLayerButtons not found for layer repositioning.");
         }
 
+        PendingInfectionsPanel livePendingInfectionsPanel = FindFirstObjectByType<PendingInfectionsPanel>();
+        if (livePendingInfectionsPanel != null)
+            pendingInfectionsPanel = livePendingInfectionsPanel.gameObject;
+
         SetSelectedLayer(1, false);
     }
 
@@ -520,12 +524,24 @@ public class CameraScript : MonoBehaviour
         HideAllSystemControls();
 
         bool showLayerHud = layerNumber == 1 || layerNumber == 2;
-        if (consoleLogPanel != null)
-            consoleLogPanel.SetActive(showLayerHud);
-        if (pendingInfectionsPanel != null)
-            pendingInfectionsPanel.SetActive(showLayerHud);
-        if (humanSnapshotPanel != null)
-            humanSnapshotPanel.SetActive(showLayerHud);
+        if (showLayerHud)
+        {
+            if (consoleLogPanel != null)
+                consoleLogPanel.SetActive(true);
+            if (pendingInfectionsPanel != null)
+                pendingInfectionsPanel.SetActive(true);
+            if (humanSnapshotPanel != null)
+                humanSnapshotPanel.SetActive(true);
+        }
+        else
+        {
+            if (consoleLogPanel != null)
+                consoleLogPanel.SetActive(false);
+            if (pendingInfectionsPanel != null)
+                pendingInfectionsPanel.SetActive(false);
+            if (humanSnapshotPanel != null)
+                humanSnapshotPanel.SetActive(false);
+        }
         if (layersPanelRect != null)
             layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
 
