@@ -44,6 +44,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private static readonly Color AccentColor = new Color(0.18f, 0.83f, 0.78f, 1f);
     private static readonly Color BacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
     private static readonly Color ViralColor = new Color(0.2f, 0.55f, 1f, 1f);
+    private static readonly Color FungalColor = new Color(0.3f, 0.85f, 0.35f, 1f);
     private static readonly Color ResolvedColor = new Color(0.18f, 0.85f, 0.42f, 1f);
 
     [SerializeField] private GameObject rowPrefab;
@@ -59,7 +60,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     {
         public InfectionSpawner.InfectionMarker marker;
         public string displayName;
-        public bool isBacterial;
+        public InfectionPathogenType pathogenType;
         public RowStatus status;
         public GameObject rootObject;
         public CanvasGroup canvasGroup;
@@ -188,7 +189,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     /// <summary>Adds a standalone row; live infection rows are synchronized from InfectionSpawner.</summary>
     public void AddRow(string displayName, bool isBacterial)
     {
-        CreateRow(null, displayName, isBacterial);
+        CreateRow(null, displayName, isBacterial ? InfectionPathogenType.Bacterial : InfectionPathogenType.Viral);
     }
 
     private void AddLiveRow(InfectionSpawner.InfectionMarker marker)
@@ -196,10 +197,10 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         if (marker == null || marker.infection == null)
             return;
 
-        CreateRow(marker, marker.infection.displayName, marker.infection.pathogenType == InfectionPathogenType.Bacterial);
+        CreateRow(marker, marker.infection.displayName, marker.infection.pathogenType);
     }
 
-    private void CreateRow(InfectionSpawner.InfectionMarker marker, string displayName, bool isBacterial)
+    private void CreateRow(InfectionSpawner.InfectionMarker marker, string displayName, InfectionPathogenType pathogenType)
     {
         if (string.IsNullOrWhiteSpace(displayName) || rows.Count >= MaximumRows)
             return;
@@ -222,7 +223,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         {
             marker = marker,
             displayName = displayName,
-            isBacterial = isBacterial,
+            pathogenType = pathogenType,
             status = RowStatus.Pending,
             rootObject = rowObject,
             canvasGroup = canvasGroup
@@ -627,6 +628,19 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         return label;
     }
 
+    private static Color GetPathogenColor(InfectionPathogenType pathogenType)
+    {
+        switch (pathogenType)
+        {
+            case InfectionPathogenType.Viral:
+                return ViralColor;
+            case InfectionPathogenType.Fungal:
+                return FungalColor;
+            default:
+                return BacterialColor;
+        }
+    }
+
     private void ApplyRowStatusVisuals(RowView row)
     {
         if (row == null || row.backgroundImage == null || row.swatchImage == null || row.statusLabel == null)
@@ -637,13 +651,13 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             case RowStatus.Ongoing:
                 row.statusLabel.text = "Ongoing";
                 row.backgroundImage.color = OngoingRowColor;
-                row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
+                row.swatchImage.color = GetPathogenColor(row.pathogenType);
                 row.statusLabel.color = AccentColor;
                 break;
             case RowStatus.Contained:
                 row.statusLabel.text = "CONTAINED";
                 row.backgroundImage.color = OngoingRowColor;
-                row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
+                row.swatchImage.color = GetPathogenColor(row.pathogenType);
                 row.statusLabel.color = AccentColor;
                 break;
             case RowStatus.Resolved:
@@ -655,13 +669,13 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             case RowStatus.Failed:
                 row.statusLabel.text = "Failed";
                 row.backgroundImage.color = failedColor;
-                row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
+                row.swatchImage.color = GetPathogenColor(row.pathogenType);
                 row.statusLabel.color = Color.white;
                 break;
             default:
                 row.statusLabel.text = "Pending";
                 row.backgroundImage.color = DefaultRowColor;
-                row.swatchImage.color = row.isBacterial ? BacterialColor : ViralColor;
+                row.swatchImage.color = GetPathogenColor(row.pathogenType);
                 row.statusLabel.color = Color.white;
                 break;
         }

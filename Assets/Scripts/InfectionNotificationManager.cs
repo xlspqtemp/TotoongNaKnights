@@ -36,6 +36,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     [SerializeField] private Color containerBackgroundColor = new Color(0.012f, 0.028f, 0.038f, 0.96f);
     [SerializeField] private Color bacterialTextColor = new Color(1f, 0.2f, 0.23f, 1f);
     [SerializeField] private Color viralTextColor = new Color(0.25f, 0.66f, 1f, 1f);
+    [SerializeField] private Color fungalTextColor = new Color(0.3f, 0.85f, 0.35f, 1f);
     [SerializeField] private Vector2 containerPadding = new Vector2(9f, 4f);
 
     private sealed class NotificationState
@@ -313,7 +314,8 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             return Color.white;
 
         bool isViral = marker.infection.pathogenType == InfectionPathogenType.Viral;
-        label.text = isViral ? "VIRAL" : "BACTERIAL";
+        bool isFungal = marker.infection.pathogenType == InfectionPathogenType.Fungal;
+        label.text = isFungal ? "FUNGAL" : isViral ? "VIRAL" : "BACTERIAL";
         label.fontSize = CategoryContainerFontSize;
         label.alignment = TextAlignmentOptions.Center;
         label.textWrappingMode = TextWrappingModes.NoWrap;
@@ -331,7 +333,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             label.preferredWidth + containerPadding.x * 2f,
             label.preferredHeight + containerPadding.y * 2f);
 
-        return isViral ? viralTextColor : bacterialTextColor;
+        return isFungal ? fungalTextColor : isViral ? viralTextColor : bacterialTextColor;
     }
 
     private void AssignNotificationSprite(SpriteRenderer spriteRenderer, InfectionSpawner.InfectionMarker marker)
@@ -339,10 +341,21 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         if (spriteRenderer == null || marker == null || marker.infection == null)
             return;
 
-        spriteRenderer.sprite = marker.infection.pathogenType == InfectionPathogenType.Viral
-            ? virusNotificationIcon
-            : bacteriaNotificationIcon;
-        spriteRenderer.color = Color.white;
+        switch (marker.infection.pathogenType)
+        {
+            case InfectionPathogenType.Viral:
+                spriteRenderer.sprite = virusNotificationIcon;
+                spriteRenderer.color = Color.white;
+                break;
+            case InfectionPathogenType.Fungal:
+                spriteRenderer.sprite = bacteriaNotificationIcon;
+                spriteRenderer.color = fungalTextColor;
+                break;
+            default:
+                spriteRenderer.sprite = bacteriaNotificationIcon;
+                spriteRenderer.color = Color.white;
+                break;
+        }
     }
 
     private void UpdateNotification(NotificationState state, bool circulatoryActive, float gameplayDeltaTime)
@@ -358,8 +371,11 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         bool pickerActive = infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection;
         state.spriteRenderer.enabled = circulatoryActive;
         state.boxCollider.enabled = circulatoryActive && pickerActive && !state.fadingOut;
-        Color displayColor = Color.white;
-        displayColor.a = state.alpha;
+        Color displayColor = state.marker != null && state.marker.infection != null &&
+            state.marker.infection.pathogenType == InfectionPathogenType.Fungal
+            ? fungalTextColor
+            : Color.white;
+        displayColor.a *= state.alpha;
         state.spriteRenderer.color = displayColor;
 
         if (state.categoryCanvas != null)

@@ -20,9 +20,11 @@ public sealed class InfectionBodyPartButtonReference
 [DisallowMultipleComponent]
 public sealed class InfectionSpawner : MonoBehaviour
 {
-    private const int MinimumEventsPerDay = 2;
-    private const int MaximumEventsPerDay = 5;
-    private const int DefaultEventsPerDay = 4;
+    private const int MinimumHoursBetweenInfectionSpawns = 2;
+    private const int MaximumHoursBetweenInfectionSpawns = 3;
+    private const int PathogenPoolDifficultyCount = 4;
+    private const int GenericInfectionChancePercent = 60;
+    private const float FungalHealthMultiplier = 1.25f;
     private const int DefaultMaximumActiveWbcs = 5;
     private const int DefaultMaximumActiveInfections = 5;
     private const float SquadSpawnOffsetRadius = 1.75f;
@@ -49,19 +51,20 @@ public sealed class InfectionSpawner : MonoBehaviour
     private static readonly Vector2 DefaultDispatchAvatarSize = new Vector2(38f, 38f);
     private static readonly Color DefaultBacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
     private static readonly Color DefaultViralColor = new Color(0.2f, 0.55f, 1f, 1f);
+    private static readonly Color DefaultFungalColor = new Color(0.2f, 0.8f, 0.28f, 1f);
     private static readonly Color DefaultDispatchUnavailableColor = new Color(0.45f, 0.45f, 0.45f, 0.65f);
 
     [Header("Day Progression")]
     [SerializeField] private DayCounterUI dayCounter;
-    [SerializeField] private bool spawnOnDayAdvance = true;
-    [SerializeField, Range(MinimumEventsPerDay, MaximumEventsPerDay)] private int eventsPerDay = DefaultEventsPerDay;
+    [SerializeField, Min(1)] private int maxActiveInfections = DefaultMaximumActiveInfections;
 
-    [Header("Infection Entries")]
-    [SerializeField] private List<InfectionData> infectionEntries = CreateDefaultInfectionEntries();
+    [Header("Pathogen Database")]
+    private List<InfectionData> infectionEntries;
+    private int hoursUntilNextInfectionSpawn;
+    private bool infectionSpawnTimerInitialized;
 
     [Header("Body-Part Button Mapping")]
     [SerializeField] private List<InfectionBodyPartButtonReference> bodyPartButtons = CreateDefaultBodyPartButtons();
-    [SerializeField, Min(1)] private int maxActiveInfections = DefaultMaximumActiveInfections;
 
     [Header("Legacy UI Toggles")]
     [SerializeField] private bool showBodyPartButtons;
@@ -87,6 +90,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private string markerSpriteResourcePath = DefaultMarkerSpriteResourcePath;
     [SerializeField] private Color bacterialColor = DefaultBacterialColor;
     [SerializeField] private Color viralColor = DefaultViralColor;
+    [SerializeField] private Color fungalColor = DefaultFungalColor;
 
     [Header("WBC Dispatch")]
     [SerializeField] private bool enableWbcDispatch = true;
@@ -373,6 +377,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void Awake()
     {
+        infectionEntries = CreateDefaultInfectionEntries();
         if (dayCounter == null)
             dayCounter = FindFirstObjectByType<DayCounterUI>();
         if (hudCanvas == null)
@@ -393,7 +398,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
-        eventsPerDay = Mathf.Clamp(difficultyStats.eventsPerDay, MinimumEventsPerDay, MaximumEventsPerDay);
         leukocyteSupply = Mathf.Clamp(difficultyStats.startingSupply, 0, Mathf.Max(0, difficultyStats.maxSupply));
         maxActiveInfections = Mathf.Max(1, maxActiveInfections);
         maxActiveWbcs = Mathf.Max(1, maxActiveWbcs);
@@ -408,14 +412,21 @@ public sealed class InfectionSpawner : MonoBehaviour
     private void OnEnable()
     {
         if (dayCounter != null)
+        {
             dayCounter.OnDayAdvanced += HandleDayAdvanced;
+            dayCounter.OnHourAdvanced += HandleHourAdvanced;
+        }
+
+        if (!infectionSpawnTimerInitialized)
+            ResetInfectionSpawnTimer();
+
         EnsurePendingInfectionsPanelSubscription();
     }
 
     private void Start()
     {
         DifficultyStats stats = DifficultySettings.CurrentStats;
-        Debug.Log($"Difficulty: {stats.difficultyName} | eventsPerDay={stats.eventsPerDay} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
+        Debug.Log($"Difficulty: {stats.difficultyName} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
         Debug.Log($"Leukocyte supply: {leukocyteSupply:0.##}/{stats.maxSupply} | deployCost={stats.deployCost} | regenSecondsPerPoint={stats.regenSecondsPerPoint:0.##}", this);
         CreateWbcSquadHud();
         CreateSquadPromptBanner();
@@ -423,7 +434,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         RefreshWbcSquadHud();
         EnsurePendingInfectionsPanelSubscription();
         if (dayCounter == null)
-            Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; day-advance infection spawning is disabled.", this);
+            Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; timed infection spawning is disabled.", this);
+        else
+            Debug.Log($"[InfectionSpawner] Timed infection spawning initialized; next spawn in {hoursUntilNextInfectionSpawn} in-game hours.", this);
         if (hudCanvas == null)
             Debug.LogWarning("[InfectionSpawner] HUD Canvas is missing; the WBC HUD and infection row are disabled.", this);
         if (circulatorySystemController == null)
@@ -553,7 +566,10 @@ public sealed class InfectionSpawner : MonoBehaviour
     private void OnDisable()
     {
         if (dayCounter != null)
+        {
             dayCounter.OnDayAdvanced -= HandleDayAdvanced;
+            dayCounter.OnHourAdvanced -= HandleHourAdvanced;
+        }
         if (pendingInfectionsPanel != null)
             pendingInfectionsPanel.OnRowClickedPublic -= HandlePendingInfectionRowClicked;
         pendingInfectionsPanel = null;
@@ -561,7 +577,6 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void OnValidate()
     {
-        eventsPerDay = Mathf.Clamp(eventsPerDay, MinimumEventsPerDay, MaximumEventsPerDay);
         maxActiveInfections = Mathf.Max(1, maxActiveInfections);
         maxActiveWbcs = Mathf.Max(1, maxActiveWbcs);
         squadMemberCount = Mathf.Max(1, squadMemberCount);
@@ -1806,15 +1821,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
 
 
-        if (marker.infection.pathogenType == InfectionPathogenType.Bacterial)
+        if (marker.infection.pathogenType != InfectionPathogenType.Viral)
         {
             marker.resolutionPending = true;
             StartCoroutine(ResolveBacterialInfection(marker));
             return;
         }
-
-        if (marker.infection.pathogenType != InfectionPathogenType.Viral)
-            return;
 
         marker.infection = CloneInfectionData(marker.infection);
         int reducedSeverity = Mathf.Max((int)InfectionSeverityStage.Mild,
@@ -1834,8 +1846,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             yield break;
 
-        float wellnessGain = GetBacterialWellnessGain(marker.infection.severityStage);
-        ApplyWellnessChange($"WBC cleared {marker.infection.displayName}", wellnessGain);
         AddLeukocyteSupply(clearBonus);
 
         ApplyWellnessGainOnResolve(marker);
@@ -1849,7 +1859,10 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
 
         marker.wellnessGainAwardedOnResolve = true;
-        ApplyWellnessChange($"{marker.infection.displayName} cleared", wellnessGainOnResolve);
+        float resolveGain = marker.infection.resolveGain > 0
+            ? marker.infection.resolveGain
+            : GetBacterialWellnessGain(marker.infection.severityStage);
+        ApplyWellnessChange($"{marker.infection.displayName} resolved", resolveGain);
     }
 
     private float ApplyWellnessChange(string reason, float requestedDelta)
@@ -1890,8 +1903,17 @@ public sealed class InfectionSpawner : MonoBehaviour
         return new InfectionData
         {
             displayName = source.displayName,
+            pathogenDatabaseName = source.pathogenDatabaseName,
             pathogenType = source.pathogenType,
+            rarity = source.rarity,
             severityStage = source.severityStage,
+            resolveGain = source.resolveGain,
+            neglectLoss = source.neglectLoss,
+            easySpawnWeight = source.easySpawnWeight,
+            normalSpawnWeight = source.normalSpawnWeight,
+            mediumSpawnWeight = source.mediumSpawnWeight,
+            hardSpawnWeight = source.hardSpawnWeight,
+            isGeneric = source.isGeneric,
             entryCause = source.entryCause,
             correctResponder = source.correctResponder,
             preferredBodyParts = source.preferredBodyParts != null
@@ -1929,10 +1951,12 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             marker.unresolvedDays++;
-            float dailyCost = GetDailyInfectionWellnessCost(marker.infection.severityStage);
+            float dailyCost = marker.infection.neglectLoss > 0
+                ? marker.infection.neglectLoss
+                : GetDailyInfectionWellnessCost(marker.infection.severityStage);
             ApplyWellnessChange($"{marker.infection.displayName} unresolved", -dailyCost);
 
-            if (marker.unresolvedDays >= 2)
+            if (marker.unresolvedDays >= 2 && marker.infection.neglectLoss <= 0)
                 ApplyWellnessChange($"{marker.infection.displayName} unresolved 2+ days", -additionalUnresolvedDailyWellnessCost);
         }
     }
@@ -2112,27 +2136,150 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         UpdateContainedInfections(currentDay);
         ApplyDailyUnresolvedInfectionCosts();
-        if (!spawnOnDayAdvance)
+    }
+
+    private void HandleHourAdvanced(int currentDay, int currentHour)
+    {
+        if (!infectionSpawnTimerInitialized)
+            ResetInfectionSpawnTimer();
+
+        hoursUntilNextInfectionSpawn--;
+        if (hoursUntilNextInfectionSpawn > 0)
             return;
 
-        List<InfectionData> validEntries = BuildValidInfectionEntries();
-        if (validEntries.Count == 0 || GetValidBodyPartButtonCount() == 0)
+        SpawnTimedInfection(currentDay, currentHour);
+        ResetInfectionSpawnTimer();
+        Debug.Log($"[InfectionSpawner] Next infection spawn scheduled in {hoursUntilNextInfectionSpawn} in-game hours.", this);
+    }
+
+    private void ResetInfectionSpawnTimer()
+    {
+        hoursUntilNextInfectionSpawn = UnityEngine.Random.Range(
+            MinimumHoursBetweenInfectionSpawns,
+            MaximumHoursBetweenInfectionSpawns + 1);
+        infectionSpawnTimerInitialized = true;
+    }
+
+    private void SpawnTimedInfection(int currentDay, int currentHour)
+    {
+        if (activeInfectionMarkers.Count >= maxActiveInfections)
         {
-            Debug.LogWarning("[InfectionSpawner] No valid infection entries or body-part button mappings are configured.", this);
+            Debug.LogWarning($"[InfectionSpawner] Skipped scheduled infection at Day {currentDay}, Hour {currentHour:00}: active infection cap reached ({maxActiveInfections}).", this);
             return;
         }
 
-        int availableInfectionSlots = Mathf.Max(0, maxActiveInfections - activeInfectionMarkers.Count);
-        int spawnCount = Mathf.Min(Mathf.Clamp(eventsPerDay, MinimumEventsPerDay, MaximumEventsPerDay), availableInfectionSlots);
-        for (int eventIndex = 0; eventIndex < spawnCount && activeInfectionMarkers.Count < maxActiveInfections; eventIndex++)
+        if (GetValidBodyPartButtonCount() == 0)
         {
-            InfectionData infection = validEntries[UnityEngine.Random.Range(0, validEntries.Count)];
-            InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
-            if (bodyPartButton == null)
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn a timed infection because no body-part button mappings are configured.", this);
+            return;
+        }
+
+        int genericRoll = UnityEngine.Random.Range(0, 100);
+        bool isGeneric = genericRoll < GenericInfectionChancePercent;
+        InfectionData selectedProfile = SelectWeightedPathogenProfile(isGeneric);
+        if (selectedProfile == null)
+        {
+            Debug.LogWarning($"[InfectionSpawner] Cannot spawn a timed infection because the {(isGeneric ? "generic" : "named")} pathogen pool has no positive weights for the current difficulty.", this);
+            return;
+        }
+
+        InfectionData infection = CloneInfectionData(selectedProfile);
+        infection.isGeneric = isGeneric;
+        if (isGeneric)
+            infection.displayName = GetGenericInfectionDisplayName(infection.pathogenType);
+
+        InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
+        if (bodyPartButton == null)
+        {
+            Debug.LogWarning($"[InfectionSpawner] Cannot place {infection.displayName}; no valid body-part mapping was selected.", this);
+            return;
+        }
+
+        SpawnMarker(infection, bodyPartButton);
+        LogInfection(infection, bodyPartButton);
+        Debug.Log($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Difficulty={DifficultySettings.CurrentStats.difficultyName}; Day={currentDay}; Hour={currentHour:00}.", this);
+    }
+
+    private InfectionData SelectWeightedPathogenProfile(bool selectGenericPool)
+    {
+        List<InfectionData> validEntries = BuildValidInfectionEntries();
+        int difficultyIndex = Mathf.Clamp(DifficultySettings.SelectedDifficultyIndex, 0, PathogenPoolDifficultyCount - 1);
+        List<InfectionData> candidates = new List<InfectionData>();
+        List<float> candidateWeights = new List<float>();
+        float totalWeight = 0f;
+
+        foreach (InfectionData entry in validEntries)
+        {
+            bool isCommonPoolEntry = entry.rarity == InfectionRarity.Common || entry.rarity == InfectionRarity.Uncommon;
+            bool isNamedPoolEntry = entry.rarity == InfectionRarity.Rare || entry.rarity == InfectionRarity.VeryRare;
+            if (selectGenericPool ? !isCommonPoolEntry : !isNamedPoolEntry)
                 continue;
 
-            SpawnMarker(infection, bodyPartButton);
-            LogInfection(infection, bodyPartButton);
+            float weight = GetPathogenSpawnWeight(entry, difficultyIndex);
+            if (weight <= 0f)
+                continue;
+
+            candidates.Add(entry);
+            candidateWeights.Add(weight);
+            totalWeight += weight;
+        }
+
+        if (candidates.Count == 0 && !selectGenericPool)
+        {
+            foreach (InfectionData entry in validEntries)
+            {
+                bool isNamedPoolEntry = entry.rarity == InfectionRarity.Rare || entry.rarity == InfectionRarity.VeryRare;
+                if (!isNamedPoolEntry)
+                    continue;
+
+                candidates.Add(entry);
+                candidateWeights.Add(1f);
+                totalWeight += 1f;
+            }
+
+            if (candidates.Count > 0)
+                Debug.LogWarning("[InfectionSpawner] Named pathogen weights are zero at this difficulty; selected uniformly from the named pool to preserve the 60/40 split.", this);
+        }
+
+        if (candidates.Count == 0 || totalWeight <= 0f)
+            return null;
+
+        float roll = UnityEngine.Random.value * totalWeight;
+        for (int index = 0; index < candidates.Count; index++)
+        {
+            roll -= candidateWeights[index];
+            if (roll < 0f)
+                return candidates[index];
+        }
+
+        return candidates[candidates.Count - 1];
+    }
+
+    private static float GetPathogenSpawnWeight(InfectionData infection, int difficultyIndex)
+    {
+        switch (difficultyIndex)
+        {
+            case 0:
+                return Mathf.Max(0f, infection.easySpawnWeight);
+            case 1:
+                return Mathf.Max(0f, infection.normalSpawnWeight);
+            case 2:
+                return Mathf.Max(0f, infection.mediumSpawnWeight);
+            default:
+                return Mathf.Max(0f, infection.hardSpawnWeight);
+        }
+    }
+
+    private static string GetGenericInfectionDisplayName(InfectionPathogenType pathogenType)
+    {
+        switch (pathogenType)
+        {
+            case InfectionPathogenType.Bacterial:
+                return "Unidentified Bacteria";
+            case InfectionPathogenType.Viral:
+                return "Unidentified Virus";
+            default:
+                return "Unidentified Fungus";
         }
     }
 
@@ -2311,9 +2458,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (health == null)
                 health = visual.AddComponent<Health>();
             DifficultyStats stats = DifficultySettings.CurrentStats;
-            float pathogenMaxHp = marker.infection.pathogenType == InfectionPathogenType.Viral
-                ? stats.virusHp
-                : stats.bacteriaHp;
+            float pathogenMaxHp = marker.infection.pathogenType switch
+            {
+                InfectionPathogenType.Viral => stats.virusHp,
+                InfectionPathogenType.Fungal => stats.bacteriaHp * FungalHealthMultiplier,
+                _ => stats.bacteriaHp
+            };
             health.SetMaxHp(pathogenMaxHp);
             health.SetPathogenType(marker.infection.pathogenType);
 
@@ -2398,7 +2548,28 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private Color GetPathogenColor(InfectionPathogenType pathogenType)
     {
-        return pathogenType == InfectionPathogenType.Viral ? viralColor : bacterialColor;
+        switch (pathogenType)
+        {
+            case InfectionPathogenType.Viral:
+                return viralColor;
+            case InfectionPathogenType.Fungal:
+                return fungalColor;
+            default:
+                return bacterialColor;
+        }
+    }
+
+    private static string GetPathogenCategoryLabel(InfectionPathogenType pathogenType)
+    {
+        switch (pathogenType)
+        {
+            case InfectionPathogenType.Viral:
+                return "Viral infection";
+            case InfectionPathogenType.Fungal:
+                return "Fungal infection";
+            default:
+                return "Bacterial infection";
+        }
     }
 
     private Sprite ResolveMarkerSprite()
@@ -2504,9 +2675,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (selectedInfectionPopupMarker != null)
             {
                 selectedInfectionPopupObject.SetActive(true);
-                selectedInfectionCategoryLabel.text = selectedInfectionPopupMarker.infection.pathogenType == InfectionPathogenType.Viral
-                    ? "Viral infection"
-                    : "Bacterial infection";
+                selectedInfectionCategoryLabel.text = GetPathogenCategoryLabel(selectedInfectionPopupMarker.infection.pathogenType);
                 selectedInfectionCategoryLabel.color = GetPathogenColor(selectedInfectionPopupMarker.infection.pathogenType);
             }
         }
@@ -2813,7 +2982,10 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void LogInfection(InfectionData infection, InfectionBodyPartButtonReference bodyPartButton)
     {
-        string message = $"{infection.displayName} at {GetBodyPartDisplayName(bodyPartButton.button)}: {infection.entryCause}";
+        string infectionName = infection.isGeneric
+            ? $"Generic {infection.pathogenType} ({infection.displayName})"
+            : $"Named {infection.pathogenType} ({infection.displayName})";
+        string message = $"[InfectionSpawner] {infectionName} at {GetBodyPartDisplayName(bodyPartButton)}; profile={infection.pathogenDatabaseName}; rarity={infection.rarity}; severity={infection.severityStage}; resolve=+{infection.resolveGain}; neglect=-{infection.neglectLoss}.";
         Debug.Log(message);
         if (ConsoleLogUI.Instance != null)
             ConsoleLogUI.Instance.Log(message, ConsoleLogUI.LogType.Warning);
@@ -2838,66 +3010,62 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         return new List<InfectionData>
         {
-            new InfectionData
+            CreatePathogenEntry("Staph", InfectionPathogenType.Bacterial, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 50f, 40f, 30f, 20f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Strep", InfectionPathogenType.Bacterial, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 30f, 30f, 30f, 20f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("E. coli", InfectionPathogenType.Bacterial, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 15f, 20f, 20f, 25f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Salmonella", InfectionPathogenType.Bacterial, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 5f, 10f, 20f, 20f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Listeria", InfectionPathogenType.Bacterial, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 0f, 10f, 15f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Bordetella", InfectionPathogenType.Bacterial, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Pneumococcus", InfectionPathogenType.Bacterial, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Clostridium", InfectionPathogenType.Bacterial, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC),
+
+            CreatePathogenEntry("Common Cold", InfectionPathogenType.Viral, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 50f, 40f, 30f, 20f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Stomach Flu", InfectionPathogenType.Viral, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 30f, 30f, 30f, 20f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Hand, Foot, Mouth", InfectionPathogenType.Viral, InfectionRarity.Uncommon, InfectionSeverityStage.Mild, 2, 2, 20f, 15f, 15f, 10f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Influenza (Flu)", InfectionPathogenType.Viral, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 0f, 15f, 15f, 20f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Chickenpox", InfectionPathogenType.Viral, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 0f, 10f, 15f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Measles", InfectionPathogenType.Viral, InfectionRarity.Rare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("COVID-19", InfectionPathogenType.Viral, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 0f, 5f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Dengue", InfectionPathogenType.Viral, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 0f, 5f, InfectionCorrectResponder.KillerT),
+
+            CreatePathogenEntry("Ringworm", InfectionPathogenType.Fungal, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 50f, 30f, 20f, 15f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Athlete's Foot", InfectionPathogenType.Fungal, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 30f, 30f, 20f, 15f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Candida", InfectionPathogenType.Fungal, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 20f, 20f, 20f, 20f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Aspergillus", InfectionPathogenType.Fungal, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 0f, 10f, 20f, 20f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Histoplasmosis", InfectionPathogenType.Fungal, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Sporotrichosis", InfectionPathogenType.Fungal, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Cryptococcus", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC),
+            CreatePathogenEntry("Mucormycosis", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC)
+        };
+    }
+
+    private static InfectionData CreatePathogenEntry(string pathogenName, InfectionPathogenType pathogenType,
+        InfectionRarity rarity, InfectionSeverityStage severityStage, int resolveGain, int neglectLoss,
+        float easyWeight, float normalWeight, float mediumWeight, float hardWeight,
+        InfectionCorrectResponder correctResponder)
+    {
+        return new InfectionData
+        {
+            displayName = pathogenName,
+            pathogenDatabaseName = pathogenName,
+            pathogenType = pathogenType,
+            rarity = rarity,
+            severityStage = severityStage,
+            resolveGain = resolveGain,
+            neglectLoss = neglectLoss,
+            easySpawnWeight = easyWeight,
+            normalSpawnWeight = normalWeight,
+            mediumSpawnWeight = mediumWeight,
+            hardSpawnWeight = hardWeight,
+            entryCause = "Unknown exposure",
+            correctResponder = correctResponder,
+            preferredBodyParts = new List<InfectionBodyPartGroup>
             {
-                displayName = "Staph",
-                pathogenType = InfectionPathogenType.Bacterial,
-                severityStage = InfectionSeverityStage.Mild,
-                entryCause = "scraped knee",
-                correctResponder = InfectionCorrectResponder.WBC,
-                preferredBodyParts = new List<InfectionBodyPartGroup> { InfectionBodyPartGroup.Feet, InfectionBodyPartGroup.Hands },
-                daysUntreated = 0
+                InfectionBodyPartGroup.Feet,
+                InfectionBodyPartGroup.Hands,
+                InfectionBodyPartGroup.Head
             },
-            new InfectionData
-            {
-                displayName = "E. coli/Salmonella",
-                pathogenType = InfectionPathogenType.Bacterial,
-                severityStage = InfectionSeverityStage.Moderate,
-                entryCause = "spoiled food",
-                correctResponder = InfectionCorrectResponder.WBC,
-                preferredBodyParts = new List<InfectionBodyPartGroup> { InfectionBodyPartGroup.Head },
-                daysUntreated = 0
-            },
-            new InfectionData
-            {
-                displayName = "Strep",
-                pathogenType = InfectionPathogenType.Bacterial,
-                severityStage = InfectionSeverityStage.Mild,
-                entryCause = "sore throat",
-                correctResponder = InfectionCorrectResponder.WBC,
-                preferredBodyParts = new List<InfectionBodyPartGroup> { InfectionBodyPartGroup.Head },
-                daysUntreated = 0
-            },
-            new InfectionData
-            {
-                displayName = "Common cold",
-                pathogenType = InfectionPathogenType.Viral,
-                severityStage = InfectionSeverityStage.Mild,
-                entryCause = "crowded commute",
-                correctResponder = InfectionCorrectResponder.KillerT,
-                preferredBodyParts = new List<InfectionBodyPartGroup> { InfectionBodyPartGroup.Head },
-                daysUntreated = 0
-            },
-            new InfectionData
-            {
-                displayName = "Flu",
-                pathogenType = InfectionPathogenType.Viral,
-                severityStage = InfectionSeverityStage.Moderate,
-                entryCause = "crowded commute",
-                correctResponder = InfectionCorrectResponder.KillerT,
-                preferredBodyParts = new List<InfectionBodyPartGroup> { InfectionBodyPartGroup.Head },
-                daysUntreated = 0
-            },
-            new InfectionData
-            {
-                displayName = "Stomach flu",
-                pathogenType = InfectionPathogenType.Viral,
-                severityStage = InfectionSeverityStage.Mild,
-                entryCause = "unwashed hands",
-                correctResponder = InfectionCorrectResponder.KillerT,
-                preferredBodyParts = new List<InfectionBodyPartGroup> { InfectionBodyPartGroup.Hands },
-                daysUntreated = 0
-            }
+            daysUntreated = 0
         };
     }
 

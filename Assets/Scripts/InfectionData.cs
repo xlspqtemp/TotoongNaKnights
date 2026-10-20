@@ -6,7 +6,17 @@ using UnityEngine;
 public enum InfectionPathogenType
 {
     Bacterial,
-    Viral
+    Viral,
+    Fungal
+}
+
+/// <summary>Spawn-pool frequency category for one pathogen profile.</summary>
+public enum InfectionRarity
+{
+    Common,
+    Uncommon,
+    Rare,
+    VeryRare
 }
 
 /// <summary>Untreated infection severity stages.</summary>
@@ -33,13 +43,22 @@ public enum InfectionBodyPartGroup
     Head
 }
 
-/// <summary>Inspector-authored infection data used by the dispatch-style spawner.</summary>
+/// <summary>Pathogen profile data used by the timed infection pool.</summary>
 [Serializable]
 public sealed class InfectionData
 {
     public string displayName;
+    public string pathogenDatabaseName;
     public InfectionPathogenType pathogenType;
+    public InfectionRarity rarity;
     public InfectionSeverityStage severityStage;
+    public int resolveGain;
+    [Min(0)] public int neglectLoss;
+    public float easySpawnWeight;
+    public float normalSpawnWeight;
+    public float mediumSpawnWeight;
+    public float hardSpawnWeight;
+    public bool isGeneric;
     public string entryCause;
     public InfectionCorrectResponder correctResponder;
     public List<InfectionBodyPartGroup> preferredBodyParts = new List<InfectionBodyPartGroup>();
