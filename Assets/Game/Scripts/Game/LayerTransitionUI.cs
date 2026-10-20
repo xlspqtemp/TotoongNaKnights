@@ -12,7 +12,7 @@ public sealed class LayerTransitionUI : MonoBehaviour
     private const int RenderTextureWidth = 1920;
     private const int RenderTextureHeight = 1080;
     private const int OverlaySortingOrder = 32767;
-    private const double TransitionVideoDurationSeconds = 5.0;
+    private const double TransitionVideoDurationSeconds = 3.0;
     private const float FadeInDurationSeconds = 0.15f;
     private const float FadeOutDurationSeconds = 0.2f;
     private const float PreparationTimeoutSeconds = 5f;
@@ -29,7 +29,7 @@ public sealed class LayerTransitionUI : MonoBehaviour
         CreateOverlay();
     }
 
-    /// <summary>Plays the layer-transition video, limited to five seconds with short fades.</summary>
+    /// <summary>Plays the layer-transition video, limited to three seconds with short fades.</summary>
     public void PlayTransition()
     {
         PlayTransition(null);
@@ -163,6 +163,7 @@ public sealed class LayerTransitionUI : MonoBehaviour
             yield return null;
         }
 
+        videoPlayer.SetDirectAudioMute(0, true);
         videoPlayer.Stop();
         yield return FadeCanvasGroup(1f, 0f, FadeOutDurationSeconds);
 
