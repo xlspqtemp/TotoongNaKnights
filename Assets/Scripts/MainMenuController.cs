@@ -28,7 +28,7 @@ public class MainMenuController : MonoBehaviour
     private const int DifficultyInfoPanelHeight = 196;
     private const int DifficultyInfoPanelY = -138;
     private const int DifficultyInfoHeaderFontSize = 19;
-    private const int DifficultyInfoBodyFontSize = 21;
+    private const int DifficultyInfoBodyFontSize = 18;
     private const int RowHeight = 112;
     private const int SliderWidth = 480;
     private const int SliderHeight = 30;
@@ -45,6 +45,14 @@ public class MainMenuController : MonoBehaviour
     private static readonly Color ButtonColor = new Color(0.075f, 0.37f, 0.39f, 1f);
     private static readonly Color TextColor = new Color(0.92f, 0.97f, 0.97f, 1f);
     private static readonly Color MutedTextColor = new Color(0.65f, 0.77f, 0.79f, 1f);
+    private static readonly string[] DifficultyDescriptions =
+    {
+        "Infections per day: 2\nMostly Mild/Moderate pathogens.\nNamed/Rare threats are extremely rare.\nPerfect for learning the core loop.",
+        "Infections per day: 3\nBalanced mix of Generic and Named pathogens.\nExpect moderate threats and occasional Severe infections.",
+        "Infections per day: 5\nFrequent infections with higher chances of Named pathogens.\nBarrier management is critical.",
+        "Infections per day: 5\nLethal mix of Rare and Very Rare pathogens.\nSevere infections (Dengue, Mucormycosis) are common.\nOnly for those who master the immune system."
+    };
+
 
     private Canvas menuCanvas;
     private GameObject overlay;
@@ -52,7 +60,8 @@ public class MainMenuController : MonoBehaviour
     private Button[] difficultyOptionButtons;
     private Image[] difficultyOptionBackgrounds;
     private Outline[] difficultyOptionOutlines;
-    private TextMeshProUGUI difficultyInfoText;
+    private TextMeshProUGUI descriptionText;
+    private ScrollRect difficultyInfoScrollRect;
     private TMP_FontAsset difficultyInfoFont;
     [SerializeField] private bool showManualButton = false;
     [SerializeField] private DifficultyStats[] difficultyStats = DifficultySettings.CreateDefaultStats();
@@ -268,9 +277,81 @@ public class MainMenuController : MonoBehaviour
         CreateDifficultyInfoLabel(panel.transform, "DifficultyInfoHeader", "SELECTED DIFFICULTY",
             DifficultyInfoHeaderFontSize, AccentColor, TextAlignmentOptions.Center,
             new Vector2(0f, 70f), new Vector2(DifficultyInfoPanelWidth - 48f, 30f));
-        difficultyInfoText = CreateDifficultyInfoLabel(panel.transform, "DifficultyInfoStats", string.Empty,
-            DifficultyInfoBodyFontSize, TextColor, TextAlignmentOptions.MidlineLeft,
-            new Vector2(0f, -12f), new Vector2(DifficultyInfoPanelWidth - 72f, 126f));
+        CreateDifficultyInfoScrollView(panel.transform);
+    }
+
+    private void CreateDifficultyInfoScrollView(Transform parent)
+    {
+        GameObject scrollViewObject = new GameObject("DifficultyInfoScrollView", typeof(RectTransform), typeof(ScrollRect));
+        scrollViewObject.transform.SetParent(parent, false);
+        RectTransform scrollViewRect = scrollViewObject.GetComponent<RectTransform>();
+        SetRect(scrollViewRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -12f),
+            new Vector2(DifficultyInfoPanelWidth - 72f, 126f));
+
+        GameObject viewportObject = new GameObject("DifficultyInfoViewport", typeof(RectTransform),
+            typeof(CanvasRenderer), typeof(Image), typeof(Mask));
+        viewportObject.transform.SetParent(scrollViewObject.transform, false);
+        RectTransform viewportRect = viewportObject.GetComponent<RectTransform>();
+        SetRect(viewportRect, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f),
+            Vector2.zero, new Vector2(-18f, 0f));
+        Image viewportImage = viewportObject.GetComponent<Image>();
+        viewportImage.color = Color.white;
+        viewportImage.raycastTarget = true;
+        viewportObject.GetComponent<Mask>().showMaskGraphic = false;
+
+        GameObject contentObject = new GameObject("DifficultyInfoStats", typeof(RectTransform),
+            typeof(CanvasRenderer), typeof(TextMeshProUGUI), typeof(ContentSizeFitter));
+        contentObject.transform.SetParent(viewportObject.transform, false);
+        RectTransform contentRect = contentObject.GetComponent<RectTransform>();
+        SetRect(contentRect, new Vector2(0f, 1f), Vector2.one, new Vector2(0.5f, 1f),
+            Vector2.zero, Vector2.zero);
+        TextMeshProUGUI contentText = contentObject.GetComponent<TextMeshProUGUI>();
+        contentText.font = difficultyInfoFont;
+        contentText.fontSize = DifficultyInfoBodyFontSize;
+        contentText.fontStyle = FontStyles.Bold;
+        contentText.color = Color.white;
+        contentText.alpha = 1f;
+        contentText.alignment = TextAlignmentOptions.TopLeft;
+        contentText.textWrappingMode = TextWrappingModes.Normal;
+        contentText.overflowMode = TextOverflowModes.Overflow;
+        contentText.raycastTarget = false;
+        ContentSizeFitter contentSizeFitter = contentObject.GetComponent<ContentSizeFitter>();
+        contentSizeFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        contentSizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        GameObject scrollbarObject = new GameObject("DifficultyInfoVerticalScrollbar", typeof(RectTransform),
+            typeof(CanvasRenderer), typeof(Image), typeof(Scrollbar));
+        scrollbarObject.transform.SetParent(scrollViewObject.transform, false);
+        RectTransform scrollbarRect = scrollbarObject.GetComponent<RectTransform>();
+        SetRect(scrollbarRect, new Vector2(1f, 0f), Vector2.one, new Vector2(1f, 0.5f),
+            new Vector2(-2f, 0f), new Vector2(10f, 0f));
+        Image scrollbarBackground = scrollbarObject.GetComponent<Image>();
+        scrollbarBackground.color = RowColor;
+        scrollbarBackground.raycastTarget = true;
+
+        Image scrollbarHandle = CreateImage(scrollbarObject.transform, "Handle", AccentColor,
+            Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(-4f, -8f));
+        scrollbarHandle.raycastTarget = true;
+        Scrollbar scrollbar = scrollbarObject.GetComponent<Scrollbar>();
+        scrollbar.handleRect = scrollbarHandle.rectTransform;
+        scrollbar.targetGraphic = scrollbarHandle;
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+        ScrollRect scrollRect = scrollViewObject.GetComponent<ScrollRect>();
+        difficultyInfoScrollRect = scrollRect;
+        scrollRect.content = contentRect;
+        scrollRect.viewport = viewportRect;
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.inertia = false;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.scrollSensitivity = DifficultyInfoBodyFontSize;
+        scrollRect.horizontalScrollbar = null;
+        scrollRect.verticalScrollbar = scrollbar;
+        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+        scrollRect.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+        descriptionText = contentText;
     }
 
     private TextMeshProUGUI CreateDifficultyInfoLabel(Transform parent, string objectName, string content,
@@ -289,11 +370,12 @@ public class MainMenuController : MonoBehaviour
         label.fontStyle = FontStyles.Bold;
         label.color = color;
         label.alignment = alignment;
-        label.textWrappingMode = TextWrappingModes.NoWrap;
+        label.textWrappingMode = TextWrappingModes.Normal;
         label.text = content;
         label.raycastTarget = false;
         return label;
     }
+
 
     private void SetSelectedDifficulty(int optionIndex)
     {
@@ -316,19 +398,17 @@ public class MainMenuController : MonoBehaviour
 
     private void RefreshDifficultyInfoPanel()
     {
-        if (difficultyInfoText == null)
+        if (descriptionText == null)
             return;
 
-        DifficultyStats stats = DifficultySettings.CurrentStats;
-        if (stats == null)
-            return;
-
-        difficultyInfoText.text =
-            $"INFECTIONS PER DAY: {stats.eventsPerDay}\n" +
-            $"YOUR WBCs: {FormatDifficultyValue(stats.wbcHp)} HP, {FormatDifficultyValue(stats.wbcAttack)} ATTACK\n" +
-            $"BACTERIA: {FormatDifficultyValue(stats.bacteriaHp)} HP\n" +
-            $"VIRUSES: {FormatDifficultyValue(stats.virusHp)} HP\n" +
-            $"MAX SQUADS AT ONCE: {stats.displayMaxActiveSquads}";
+        int descriptionIndex = Mathf.Clamp(selectedDifficultyIndex, 0, DifficultyDescriptions.Length - 1);
+        descriptionText.text = DifficultyDescriptions[descriptionIndex];
+        descriptionText.color = Color.white;
+        descriptionText.alpha = 1f;
+        LayoutRebuilder.ForceRebuildLayoutImmediate(descriptionText.rectTransform);
+        Canvas.ForceUpdateCanvases();
+        if (difficultyInfoScrollRect != null)
+            difficultyInfoScrollRect.verticalNormalizedPosition = 1f;
     }
 
     private static string FormatDifficultyValue(float value)
