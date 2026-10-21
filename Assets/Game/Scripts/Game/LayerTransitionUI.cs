@@ -19,6 +19,7 @@ public sealed class LayerTransitionUI : MonoBehaviour
 
     private Canvas overlayCanvas;
     private CanvasGroup overlayCanvasGroup;
+    private RawImage transitionRawImage;
     private VideoPlayer videoPlayer;
     private RenderTexture renderTexture;
     private Coroutine transitionCoroutine;
@@ -52,6 +53,7 @@ public sealed class LayerTransitionUI : MonoBehaviour
         }
 
         onScreenCovered = screenCoveredCallback;
+        transitionRawImage.color = Color.white;
         overlayCanvas.enabled = true;
         overlayCanvasGroup.alpha = 0f;
         transitionCoroutine = StartCoroutine(RunTransition());
@@ -90,9 +92,9 @@ public sealed class LayerTransitionUI : MonoBehaviour
         imageRect.offsetMin = Vector2.zero;
         imageRect.offsetMax = Vector2.zero;
 
-        RawImage rawImage = imageObject.GetComponent<RawImage>();
-        rawImage.color = Color.white;
-        rawImage.raycastTarget = false;
+        transitionRawImage = imageObject.GetComponent<RawImage>();
+        transitionRawImage.color = Color.clear;
+        transitionRawImage.raycastTarget = false;
 
         renderTexture = new RenderTexture(RenderTextureWidth, RenderTextureHeight, 0, RenderTextureFormat.ARGB32)
         {
@@ -101,9 +103,10 @@ public sealed class LayerTransitionUI : MonoBehaviour
             wrapMode = TextureWrapMode.Clamp
         };
         renderTexture.Create();
-        rawImage.texture = renderTexture;
+        transitionRawImage.texture = renderTexture;
 
         videoPlayer = imageObject.GetComponent<VideoPlayer>();
+        videoPlayer.playOnAwake = false;
         videoPlayer.source = VideoSource.VideoClip;
         videoPlayer.clip = videoClip;
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
@@ -112,8 +115,10 @@ public sealed class LayerTransitionUI : MonoBehaviour
         videoPlayer.timeUpdateMode = VideoTimeUpdateMode.UnscaledGameTime;
         videoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
         for (ushort trackIndex = 0; trackIndex < videoClip.audioTrackCount; trackIndex++)
+        {
             videoPlayer.EnableAudioTrack(trackIndex, true);
-        videoPlayer.playOnAwake = false;
+            videoPlayer.SetDirectAudioMute(trackIndex, true);
+        }
         videoPlayer.waitForFirstFrame = true;
         videoPlayer.isLooping = false;
         videoPlayer.skipOnDrop = true;
@@ -139,10 +144,14 @@ public sealed class LayerTransitionUI : MonoBehaviour
             onScreenCovered?.Invoke();
             onScreenCovered = null;
             overlayCanvasGroup.alpha = 0f;
+            transitionRawImage.color = Color.clear;
             overlayCanvas.enabled = false;
             transitionCoroutine = null;
             yield break;
         }
+
+        for (ushort trackIndex = 0; trackIndex < videoPlayer.clip.audioTrackCount; trackIndex++)
+            videoPlayer.SetDirectAudioMute(trackIndex, false);
 
         videoPlayer.time = 0.0;
         videoPlayer.Play();
@@ -163,11 +172,13 @@ public sealed class LayerTransitionUI : MonoBehaviour
             yield return null;
         }
 
-        videoPlayer.SetDirectAudioMute(0, true);
+        for (ushort trackIndex = 0; trackIndex < videoPlayer.clip.audioTrackCount; trackIndex++)
+            videoPlayer.SetDirectAudioMute(trackIndex, true);
         videoPlayer.Stop();
         yield return FadeCanvasGroup(1f, 0f, FadeOutDurationSeconds);
 
         overlayCanvasGroup.alpha = 0f;
+        transitionRawImage.color = Color.clear;
         overlayCanvas.enabled = false;
         transitionCoroutine = null;
     }

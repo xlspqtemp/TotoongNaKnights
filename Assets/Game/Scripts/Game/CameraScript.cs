@@ -5,6 +5,8 @@ using UnityEngine.EventSystems;
 
 public class CameraScript : MonoBehaviour
 {
+    private const string LayerTransitionOverlayObjectName = "Layer Transition Overlay";
+
     private const int LayerCount = 4;
     private const int MousePanButton = 1;
     private const float DefaultPanSpeed = 5f;
@@ -81,6 +83,7 @@ public class CameraScript : MonoBehaviour
     private bool focusZoomControllerWasEnabled;
     private bool frameZoomControllerWasEnabled;
     private bool suppressCameraPositionOnLayerSelection;
+    private bool layerHudVisibilityDeferred;
     private int nextDeployedSquadFocusIndex;
 
     private void Awake()
@@ -511,10 +514,13 @@ public class CameraScript : MonoBehaviour
 
         if (playSwitchSound && layerTransitionUI != null)
         {
+            layerHudVisibilityDeferred = true;
+            SetLayerHudPanelsVisible(false);
             layerTransitionUI.PlayTransition(() =>
             {
                 SetSelectedLayer(layerNumber, false);
                 PlayLayerSwitchSound();
+                StartCoroutine(ShowLayerHudAfterTransition(layerNumber));
             });
             return;
         }
@@ -524,24 +530,7 @@ public class CameraScript : MonoBehaviour
         HideAllSystemControls();
 
         bool showLayerHud = layerNumber == 1 || layerNumber == 2;
-        if (showLayerHud)
-        {
-            if (consoleLogPanel != null)
-                consoleLogPanel.SetActive(true);
-            if (pendingInfectionsPanel != null)
-                pendingInfectionsPanel.SetActive(true);
-            if (humanSnapshotPanel != null)
-                humanSnapshotPanel.SetActive(true);
-        }
-        else
-        {
-            if (consoleLogPanel != null)
-                consoleLogPanel.SetActive(false);
-            if (pendingInfectionsPanel != null)
-                pendingInfectionsPanel.SetActive(false);
-            if (humanSnapshotPanel != null)
-                humanSnapshotPanel.SetActive(false);
-        }
+        SetLayerHudPanelsVisible(showLayerHud && !layerHudVisibilityDeferred);
         if (layersPanelRect != null)
             layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
 
@@ -592,6 +581,30 @@ public class CameraScript : MonoBehaviour
         SetTacticalOrdersVisible(false);
         SetDigestiveOrdersVisible(false);
         SetRespiratoryOrdersVisible(false);
+    }
+
+    private IEnumerator ShowLayerHudAfterTransition(int layerNumber)
+    {
+        GameObject overlayObject = GameObject.Find(LayerTransitionOverlayObjectName);
+        Canvas overlayCanvas = overlayObject != null ? overlayObject.GetComponent<Canvas>() : null;
+        while (overlayCanvas != null && overlayCanvas.enabled)
+            yield return null;
+
+        if (selectedLayer != layerNumber)
+            yield break;
+
+        layerHudVisibilityDeferred = false;
+        SetLayerHudPanelsVisible(layerNumber == 1 || layerNumber == 2);
+    }
+
+    private void SetLayerHudPanelsVisible(bool isVisible)
+    {
+        if (consoleLogPanel != null)
+            consoleLogPanel.SetActive(isVisible);
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.SetActive(isVisible);
+        if (humanSnapshotPanel != null)
+            humanSnapshotPanel.SetActive(isVisible);
     }
 
     private void SetLymphaticOrdersVisible(bool isVisible)
