@@ -21,6 +21,10 @@ public sealed class DifficultyStats
     public int maxSupply;
     public int deployCost;
     public float regenSecondsPerPoint;
+    [Range(0f, 100f)] public float commonPathogenWeightPercent;
+    [Range(0f, 100f)] public float uncommonPathogenWeightPercent;
+    [Range(0f, 100f)] public float rarePathogenWeightPercent;
+    [Range(0f, 100f)] public float veryRarePathogenWeightPercent;
 
     public DifficultyStats()
     {
@@ -41,6 +45,24 @@ public sealed class DifficultyStats
         attackIntervalSeconds = attackInterval;
         wbcDamageMultiplierVsBacteria = damageVsBacteria;
         wbcDamageMultiplierVsVirus = damageVsVirus;
+    }
+
+    /// <summary>Returns this preset's configured weight percentage for a pathogen rarity tier.</summary>
+    public float GetPathogenTierWeightPercent(InfectionRarity rarity)
+    {
+        switch (rarity)
+        {
+            case InfectionRarity.Common:
+                return Mathf.Max(0f, commonPathogenWeightPercent);
+            case InfectionRarity.Uncommon:
+                return Mathf.Max(0f, uncommonPathogenWeightPercent);
+            case InfectionRarity.Rare:
+                return Mathf.Max(0f, rarePathogenWeightPercent);
+            case InfectionRarity.VeryRare:
+                return Mathf.Max(0f, veryRarePathogenWeightPercent);
+            default:
+                return 0f;
+        }
     }
 }
 
@@ -90,10 +112,10 @@ public static class DifficultySettings
     {
         return new[]
         {
-            new DifficultyStats("Easy", 2, 150f, 15f, 80f, 100f, 3f, 3f, 1f, 1f, 0.5f) { maxActiveSquads = 3, startingSupply = 100, maxSupply = 100, deployCost = 15, regenSecondsPerPoint = 2.0f },
-            new DifficultyStats("Normal", 3, 100f, 10f, 90f, 100f, 5f, 4f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 20, regenSecondsPerPoint = 3.0f },
-            new DifficultyStats("Medium", 5, 100f, 10f, 120f, 150f, 6f, 5f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 25, regenSecondsPerPoint = 4.0f },
-            new DifficultyStats("Hard", 5, 100f, 10f, 130f, 170f, 7f, 6f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 30, regenSecondsPerPoint = 5.0f }
+            new DifficultyStats("Easy", 2, 150f, 15f, 80f, 100f, 3f, 3f, 1f, 1f, 0.5f) { maxActiveSquads = 3, startingSupply = 100, maxSupply = 100, deployCost = 15, regenSecondsPerPoint = 2.0f, commonPathogenWeightPercent = 80f, uncommonPathogenWeightPercent = 20f, rarePathogenWeightPercent = 0f, veryRarePathogenWeightPercent = 0f },
+            new DifficultyStats("Normal", 3, 100f, 10f, 90f, 100f, 5f, 4f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 20, regenSecondsPerPoint = 3.0f, commonPathogenWeightPercent = 50f, uncommonPathogenWeightPercent = 30f, rarePathogenWeightPercent = 20f, veryRarePathogenWeightPercent = 0f },
+            new DifficultyStats("Medium", 5, 100f, 10f, 120f, 150f, 6f, 5f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 25, regenSecondsPerPoint = 4.0f, commonPathogenWeightPercent = 30f, uncommonPathogenWeightPercent = 40f, rarePathogenWeightPercent = 30f, veryRarePathogenWeightPercent = 0f },
+            new DifficultyStats("Hard", 5, 100f, 10f, 130f, 170f, 7f, 6f, 1f, 1f, 0.5f) { maxActiveSquads = 2, startingSupply = 100, maxSupply = 100, deployCost = 30, regenSecondsPerPoint = 5.0f, commonPathogenWeightPercent = 10f, uncommonPathogenWeightPercent = 40f, rarePathogenWeightPercent = 35f, veryRarePathogenWeightPercent = 15f }
         };
     }
 

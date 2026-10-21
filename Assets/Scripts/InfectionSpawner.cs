@@ -2237,62 +2237,75 @@ public sealed class InfectionSpawner : MonoBehaviour
         bool wasBarrierMutated = ApplyBarrierMutation(infection);
         SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         LogInfection(infection, bodyPartButton);
-        Debug.Log($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Difficulty={DifficultySettings.CurrentStats.difficultyName}; Day={currentDay}; Hour={currentHour:00}.", this);
+        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
+        Debug.Log($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", this);
     }
 
     private InfectionData SelectWeightedPathogenProfile(bool selectGenericPool)
     {
         List<InfectionData> validEntries = BuildValidInfectionEntries();
         int difficultyIndex = Mathf.Clamp(DifficultySettings.SelectedDifficultyIndex, 0, PathogenPoolDifficultyCount - 1);
-        List<InfectionData> candidates = new List<InfectionData>();
-        List<float> candidateWeights = new List<float>();
-        float totalWeight = 0f;
-
-        foreach (InfectionData entry in validEntries)
-        {
-            bool isCommonPoolEntry = entry.rarity == InfectionRarity.Common || entry.rarity == InfectionRarity.Uncommon;
-            bool isNamedPoolEntry = entry.rarity == InfectionRarity.Rare || entry.rarity == InfectionRarity.VeryRare;
-            if (selectGenericPool ? !isCommonPoolEntry : !isNamedPoolEntry)
-                continue;
-
-            float weight = GetPathogenSpawnWeight(entry, difficultyIndex);
-            if (weight <= 0f)
-                continue;
-
-            candidates.Add(entry);
-            candidateWeights.Add(weight);
-            totalWeight += weight;
-        }
-
-        if (candidates.Count == 0 && !selectGenericPool)
-        {
-            foreach (InfectionData entry in validEntries)
-            {
-                bool isNamedPoolEntry = entry.rarity == InfectionRarity.Rare || entry.rarity == InfectionRarity.VeryRare;
-                if (!isNamedPoolEntry)
-                    continue;
-
-                candidates.Add(entry);
-                candidateWeights.Add(1f);
-                totalWeight += 1f;
-            }
-
-            if (candidates.Count > 0)
-                Debug.LogWarning("[InfectionSpawner] Named pathogen weights are zero at this difficulty; selected uniformly from the named pool to preserve the 60/40 split.", this);
-        }
-
-        if (candidates.Count == 0 || totalWeight <= 0f)
+        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
+        if (difficultyStats == null)
             return null;
 
-        float roll = UnityEngine.Random.value * totalWeight;
+        InfectionRarity firstRarity = selectGenericPool ? InfectionRarity.Common : InfectionRarity.Rare;
+        InfectionRarity secondRarity = selectGenericPool ? InfectionRarity.Uncommon : InfectionRarity.VeryRare;
+        float firstRarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, firstRarity, difficultyIndex);
+        float secondRarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, secondRarity, difficultyIndex);
+        float totalRarityWeight = firstRarityWeight + secondRarityWeight;
+        if (totalRarityWeight <= 0f)
+            return null;
+
+        float rarityRoll = UnityEngine.Random.value * totalRarityWeight;
+        InfectionRarity selectedRarity = rarityRoll < firstRarityWeight || secondRarityWeight <= 0f
+            ? firstRarity
+            : secondRarity;
+
+        List<InfectionData> candidates = new List<InfectionData>();
+        List<float> candidateWeights = new List<float>();
+        float totalProfileWeight = 0f;
+        foreach (InfectionData entry in validEntries)
+        {
+            if (entry.rarity != selectedRarity)
+                continue;
+
+            float profileWeight = GetPathogenSpawnWeight(entry, difficultyIndex);
+            candidates.Add(entry);
+            candidateWeights.Add(profileWeight);
+            totalProfileWeight += profileWeight;
+        }
+
+        if (candidates.Count == 0)
+            return null;
+
+        if (totalProfileWeight <= 0f)
+            return candidates[UnityEngine.Random.Range(0, candidates.Count)];
+
+        float profileRoll = UnityEngine.Random.value * totalProfileWeight;
         for (int index = 0; index < candidates.Count; index++)
         {
-            roll -= candidateWeights[index];
-            if (roll < 0f)
+            profileRoll -= candidateWeights[index];
+            if (profileRoll < 0f)
                 return candidates[index];
         }
 
         return candidates[candidates.Count - 1];
+    }
+
+    private static float GetAvailableRarityWeight(List<InfectionData> validEntries, DifficultyStats difficultyStats, InfectionRarity rarity, int difficultyIndex)
+    {
+        float tierWeight = difficultyStats.GetPathogenTierWeightPercent(rarity);
+        if (tierWeight <= 0f)
+            return 0f;
+
+        foreach (InfectionData entry in validEntries)
+        {
+            if (entry.rarity == rarity && GetPathogenSpawnWeight(entry, difficultyIndex) > 0f)
+                return tierWeight;
+        }
+
+        return 0f;
     }
 
     private static float GetPathogenSpawnWeight(InfectionData infection, int difficultyIndex)
