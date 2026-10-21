@@ -1292,6 +1292,14 @@ public sealed class TutorialManager : MonoBehaviour
             if (targetState.Key != null)
                 targetState.Key.SetActive(targetState.Value);
         }
+        if (tutorialIsOpen)
+        {
+            SetTutorialTargetsActive("consoleLog", true);
+            SetTutorialTargetsActive("humanSnapshot", true);
+            if (pendingInfectionsPanel != null)
+                pendingInfectionsPanel.gameObject.SetActive(true);
+        }
+
         originalTargetStates.Clear();
         revealedTargets.Clear();
         tutorialNotificationObjects.Clear();
@@ -1304,5 +1312,17 @@ public sealed class TutorialManager : MonoBehaviour
 
         tutorialIsOpen = false;
         Time.timeScale = timeScaleBeforeTutorial;
+    }
+
+    private void SetTutorialTargetsActive(string targetKey, bool isActive)
+    {
+        if (!targetsByKey.TryGetValue(targetKey, out List<GameObject> targets))
+            return;
+
+        foreach (GameObject target in targets)
+        {
+            if (target != null)
+                target.SetActive(isActive);
+        }
     }
 }

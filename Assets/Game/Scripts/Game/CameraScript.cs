@@ -114,6 +114,7 @@ public class CameraScript : MonoBehaviour
         PendingInfectionsPanel livePendingInfectionsPanel = FindFirstObjectByType<PendingInfectionsPanel>();
         if (livePendingInfectionsPanel != null)
             pendingInfectionsPanel = livePendingInfectionsPanel.gameObject;
+        SetPendingInfectionsPanelVisible(true);
 
         SetSelectedLayer(1, false);
     }
@@ -516,11 +517,12 @@ public class CameraScript : MonoBehaviour
         {
             layerHudVisibilityDeferred = true;
             SetLayerHudPanelsVisible(false);
+            SetPendingInfectionsPanelVisible(false);
             layerTransitionUI.PlayTransition(() =>
             {
                 SetSelectedLayer(layerNumber, false);
                 PlayLayerSwitchSound();
-                StartCoroutine(ShowLayerHudAfterTransition(layerNumber));
+                StartCoroutine(ShowLayerHudAfterTransition());
             });
             return;
         }
@@ -583,28 +585,30 @@ public class CameraScript : MonoBehaviour
         SetRespiratoryOrdersVisible(false);
     }
 
-    private IEnumerator ShowLayerHudAfterTransition(int layerNumber)
+    private IEnumerator ShowLayerHudAfterTransition()
     {
         GameObject overlayObject = GameObject.Find(LayerTransitionOverlayObjectName);
         Canvas overlayCanvas = overlayObject != null ? overlayObject.GetComponent<Canvas>() : null;
         while (overlayCanvas != null && overlayCanvas.enabled)
             yield return null;
 
-        if (selectedLayer != layerNumber)
-            yield break;
-
         layerHudVisibilityDeferred = false;
-        SetLayerHudPanelsVisible(layerNumber == 1 || layerNumber == 2);
+        SetLayerHudPanelsVisible(selectedLayer == 1 || selectedLayer == 2);
+        SetPendingInfectionsPanelVisible(true);
     }
 
     private void SetLayerHudPanelsVisible(bool isVisible)
     {
         if (consoleLogPanel != null)
             consoleLogPanel.SetActive(isVisible);
-        if (pendingInfectionsPanel != null)
-            pendingInfectionsPanel.SetActive(isVisible);
         if (humanSnapshotPanel != null)
             humanSnapshotPanel.SetActive(isVisible);
+    }
+
+    private void SetPendingInfectionsPanelVisible(bool isVisible)
+    {
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.SetActive(isVisible);
     }
 
     private void SetLymphaticOrdersVisible(bool isVisible)
