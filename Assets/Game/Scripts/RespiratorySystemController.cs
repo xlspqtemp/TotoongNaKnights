@@ -21,9 +21,12 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const float BarrierRestorePerAction = 20f;
     private const float BarrierMaximum = 100f;
     private const string BarrierGaugeObjectName = "RespiratoryBarrierGauge";
+    private const string OrdersContainerPath = "HUDCanvas/RespiratoryOrdersContainer";
     private const string BreachOverlayObjectName = "RespiratoryBarrierBreachOverlay";
     private const string BreachWarningObjectName = "RespiratoryBarrierBreachWarning";
     private const string BreachWarningMessage = "BARRIER BREACHED";
+    private const string BreachRepairMessage = "BARRIER RESTORING...";
+    private const string BreachWarningFontResourcePath = "BankGothicMediumSDF";
     private const float BreachWarningBlinkDuration = 0.6f;
     private const float BarrierGaugeWidth = 600f;
     private const float BarrierGaugeHeight = 600f;
@@ -58,6 +61,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private float coughCooldownRemaining;
     private Coroutine spawnRoutine;
     private BarrierHealth barrierHealth;
+    private bool isBarrierRepairing;
 
     private void OnEnable()
     {
@@ -276,6 +280,10 @@ public sealed class RespiratorySystemController : MonoBehaviour
             }
         }
 
+        TMP_FontAsset breachWarningFont = Resources.Load<TMP_FontAsset>(BreachWarningFontResourcePath);
+        if (breachWarningText != null && breachWarningFont != null)
+            breachWarningText.font = breachWarningFont;
+
         if (breachOverlay != null)
             breachOverlay.enabled = false;
         if (breachWarningText != null)
@@ -284,11 +292,20 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void RefreshBreachVisuals()
     {
+        bool layerVisible = IsBreachLayerVisible();
         bool isBreached = barrierHealth != null && barrierHealth.IsBreached;
+        float barrierValue = barrierHealth != null ? barrierHealth.CurrentBarrier : BarrierMaximum;
+        if (isBreached || barrierValue >= BarrierMaximum)
+            isBarrierRepairing = false;
+
+        bool isRepairing = isBarrierRepairing && barrierValue > 0f && barrierValue < BarrierMaximum;
+        bool showBreach = layerVisible && isBreached;
+        bool showRepair = layerVisible && !isBreached && isRepairing;
+
         if (breachOverlay != null)
         {
-            breachOverlay.enabled = isBreached;
-            if (isBreached)
+            breachOverlay.enabled = showBreach;
+            if (showBreach)
             {
                 Color overlayColor = Color.red;
                 overlayColor.a = Mathf.PingPong(Time.time, 0.3f) + 0.1f;
@@ -296,8 +313,32 @@ public sealed class RespiratorySystemController : MonoBehaviour
             }
         }
 
-        if (breachWarningText != null)
-            breachWarningText.enabled = isBreached && Mathf.PingPong(Time.time, BreachWarningBlinkDuration) < BreachWarningBlinkDuration * 0.5f;
+        if (breachWarningText == null)
+            return;
+
+        if (showRepair)
+        {
+            breachWarningText.text = BreachRepairMessage;
+            breachWarningText.color = Color.yellow;
+            breachWarningText.enabled = true;
+        }
+        else if (showBreach)
+        {
+            breachWarningText.text = BreachWarningMessage;
+            breachWarningText.color = Color.red;
+            breachWarningText.enabled = Mathf.PingPong(Time.time, BreachWarningBlinkDuration) < BreachWarningBlinkDuration * 0.5f;
+        }
+        else
+        {
+            breachWarningText.enabled = false;
+        }
+    }
+
+    private static bool IsBreachLayerVisible()
+    {
+        GameObject ordersContainer = GameObject.Find(OrdersContainerPath);
+        CanvasGroup ordersCanvasGroup = ordersContainer != null ? ordersContainer.GetComponent<CanvasGroup>() : null;
+        return ordersCanvasGroup != null && ordersCanvasGroup.alpha > 0.5f;
     }
 
     private static Sprite LoadBreachOverlaySprite()
@@ -600,6 +641,8 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
         coughCooldownRemaining = CoughCooldownSeconds;
         barrierHealth?.RestoreBarrier(BarrierRestorePerAction);
+        isBarrierRepairing = barrierHealth != null && barrierHealth.CurrentBarrier > 0f && barrierHealth.CurrentBarrier < BarrierMaximum;
+        RefreshBreachVisuals();
         HashSet<string> eventKeys = new HashSet<string>();
         foreach (ContaminationWindow window in contaminationWindows)
         {

@@ -2,10 +2,15 @@ using System.Collections;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 
 public class CameraScript : MonoBehaviour
 {
     private const string LayerTransitionOverlayObjectName = "Layer Transition Overlay";
+    private const string DigestiveBreachIconObjectName = "DigestiveBreachIcon";
+    private const string RespiratoryBreachIconObjectName = "RespiratoryBreachIcon";
+    private const string BreachIconResourcePath = "UI/Breach icon";
+    private static Sprite breachIconSprite;
 
     private const int LayerCount = 4;
     private const int MousePanButton = 1;
@@ -46,6 +51,8 @@ public class CameraScript : MonoBehaviour
     [Header("System Controls")]
     [SerializeField] private CanvasGroup digestiveOrdersCanvasGroup;
     [SerializeField] private CanvasGroup respiratoryOrdersCanvasGroup;
+    [SerializeField] private Image digestiveBreachIcon;
+    [SerializeField] private Image respiratoryBreachIcon;
 
     [Header("Tutorial Framing")]
     [SerializeField] private Vector3 fullBodyFramePosition = new Vector3(3000f, 0f, -1000f);
@@ -85,6 +92,8 @@ public class CameraScript : MonoBehaviour
     private bool suppressCameraPositionOnLayerSelection;
     private bool layerHudVisibilityDeferred;
     private int nextDeployedSquadFocusIndex;
+    private BarrierHealth digestiveBarrierHealth;
+    private BarrierHealth respiratoryBarrierHealth;
 
     private void Awake()
     {
@@ -117,10 +126,13 @@ public class CameraScript : MonoBehaviour
         SetPendingInfectionsPanelVisible(true);
 
         SetSelectedLayer(1, false);
+        InitializeBreachIcons();
+        RefreshBreachIcons();
     }
 
     private void Update()
     {
+        RefreshBreachIcons();
         HandleDeployedSquadFocusInput();
 
         if (infectionFocusCoroutine != null && Time.timeScale > 0f && Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f)
@@ -166,6 +178,98 @@ public class CameraScript : MonoBehaviour
         // World panning uses right-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
         UpdateMovementAudio(cameraMoved);
     }
+
+    private void InitializeBreachIcons()
+    {
+        GameObject digestiveRow = GameObject.Find("/HUDCanvas/SystemLayerButtons/LayerSelectionRows/LayerButtonRow_Digestive");
+        GameObject respiratoryRow = GameObject.Find("/HUDCanvas/SystemLayerButtons/LayerSelectionRows/LayerButtonRow_Respiratory");
+        digestiveBreachIcon = GetOrCreateBreachIcon(digestiveRow, DigestiveBreachIconObjectName, digestiveBreachIcon);
+        respiratoryBreachIcon = GetOrCreateBreachIcon(respiratoryRow, RespiratoryBreachIconObjectName, respiratoryBreachIcon);
+        digestiveBarrierHealth = GameObject.Find("/Digestive")?.GetComponent<BarrierHealth>();
+        respiratoryBarrierHealth = GameObject.Find("/Respiratory")?.GetComponent<BarrierHealth>();
+    }
+
+    private static Image GetOrCreateBreachIcon(GameObject layerRow, string iconObjectName, Image breachIcon)
+    {
+        if (layerRow == null)
+            return breachIcon;
+
+        if (breachIcon == null)
+        {
+            Transform existingIcon = layerRow.transform.Find(iconObjectName);
+            breachIcon = existingIcon != null ? existingIcon.GetComponent<Image>() : null;
+        }
+
+        if (breachIcon == null)
+        {
+            GameObject iconObject = new GameObject(iconObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            iconObject.transform.SetParent(layerRow.transform, false);
+            RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(1f, 0.5f);
+            iconRect.anchorMax = new Vector2(1f, 0.5f);
+            iconRect.pivot = new Vector2(1f, 0.5f);
+            iconRect.anchoredPosition = new Vector2(-101f, 0f);
+            iconRect.sizeDelta = new Vector2(20f, 20f);
+            breachIcon = iconObject.GetComponent<Image>();
+        }
+
+        if (breachIcon.sprite == null)
+            breachIcon.sprite = LoadBreachIconSprite();
+        breachIcon.preserveAspect = true;
+        breachIcon.raycastTarget = false;
+        breachIcon.gameObject.SetActive(false);
+        return breachIcon;
+    }
+
+    private static Sprite LoadBreachIconSprite()
+    {
+        if (breachIconSprite != null)
+            return breachIconSprite;
+
+        Texture2D breachTexture = Resources.Load<Texture2D>(BreachIconResourcePath);
+        if (breachTexture == null)
+        {
+            Debug.LogWarning($"Breach icon texture could not be loaded from Resources/{BreachIconResourcePath}.");
+            return null;
+        }
+
+        breachIconSprite = Sprite.Create(
+            breachTexture,
+            new Rect(0f, 0f, breachTexture.width, breachTexture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
+        return breachIconSprite;
+    }
+
+    private void RefreshBreachIcons()
+    {
+        if (digestiveBreachIcon == null || respiratoryBreachIcon == null)
+            InitializeBreachIcons();
+
+        if (digestiveBarrierHealth == null)
+            digestiveBarrierHealth = GameObject.Find("/Digestive")?.GetComponent<BarrierHealth>();
+        if (respiratoryBarrierHealth == null)
+            respiratoryBarrierHealth = GameObject.Find("/Respiratory")?.GetComponent<BarrierHealth>();
+
+        UpdateBreachIcon(digestiveBreachIcon, digestiveBarrierHealth);
+        UpdateBreachIcon(respiratoryBreachIcon, respiratoryBarrierHealth);
+    }
+
+    private static void UpdateBreachIcon(Image breachIcon, BarrierHealth barrierHealth)
+    {
+        if (breachIcon == null)
+            return;
+
+        bool isBreached = barrierHealth != null && barrierHealth.IsBreached;
+        breachIcon.gameObject.SetActive(isBreached);
+        if (!isBreached)
+            return;
+
+        Color iconColor = breachIcon.color;
+        iconColor.a = Mathf.PingPong(Time.time, 1f);
+        breachIcon.color = iconColor;
+    }
+
 
     private void HandleDeployedSquadFocusInput()
     {
