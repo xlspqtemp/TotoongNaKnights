@@ -13,6 +13,11 @@ public class MainMenuController : MonoBehaviour
     private const string MainMenuSceneName = "MainMenu";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
     private const string BankGothicFontResourceName = "BankGothicMediumSDF";
+    private const string EasyDifficultyIconResourcePath = "UI/Easy difficulty";
+    private const string NormalDifficultyIconResourcePath = "UI/Normal Difficulty";
+    private const string MediumDifficultyIconResourcePath = "UI/Medium Difficulty";
+    private const string HardDifficultyIconResourcePath = "UI/Hard difficulty";
+    private const int DifficultyIconSize = 46;
     private const int OverlayWidth = 920;
     private const int OverlayHeight = 720;
     private const int SubtitleFontSize = 22;
@@ -59,6 +64,7 @@ public class MainMenuController : MonoBehaviour
     private GameObject difficultyPanel;
     private Button[] difficultyOptionButtons;
     private Image[] difficultyOptionBackgrounds;
+    private Image[] difficultyOptionIcons;
     private Outline[] difficultyOptionOutlines;
     private TextMeshProUGUI descriptionText;
     private ScrollRect difficultyInfoScrollRect;
@@ -211,7 +217,15 @@ public class MainMenuController : MonoBehaviour
         string[] optionLabels = { "Easy", "Normal", "Medium", "Hard" };
         difficultyOptionButtons = new Button[optionLabels.Length];
         difficultyOptionBackgrounds = new Image[optionLabels.Length];
+        difficultyOptionIcons = new Image[optionLabels.Length];
         difficultyOptionOutlines = new Outline[optionLabels.Length];
+        Sprite[] difficultyIcons =
+        {
+            LoadDifficultyIcon(EasyDifficultyIconResourcePath),
+            LoadDifficultyIcon(NormalDifficultyIconResourcePath),
+            LoadDifficultyIcon(MediumDifficultyIconResourcePath),
+            LoadDifficultyIcon(HardDifficultyIconResourcePath)
+        };
         const int horizontalSpacing = 18;
         int totalWidth = optionLabels.Length * DifficultyOptionWidth + (optionLabels.Length - 1) * horizontalSpacing;
         int leftEdge = -totalWidth / 2 + DifficultyOptionWidth / 2;
@@ -224,6 +238,22 @@ public class MainMenuController : MonoBehaviour
                 optionLabels[index], DifficultyOptionWidth, DifficultyOptionHeight, position,
                 () => SetSelectedDifficulty(optionIndex));
             HideDifficultyOptionExtraText(button);
+            Image difficultyIcon = CreateImage(button.transform, "DifficultyIcon", Color.white,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, 25f), new Vector2(DifficultyIconSize, DifficultyIconSize));
+            difficultyIcon.sprite = difficultyIcons[index];
+            difficultyIcon.preserveAspect = true;
+            difficultyIcon.raycastTarget = false;
+            difficultyOptionIcons[index] = difficultyIcon;
+
+            Transform buttonLabelTransform = button.transform.Find("Label");
+            if (buttonLabelTransform != null)
+            {
+                RectTransform buttonLabelRect = buttonLabelTransform.GetComponent<RectTransform>();
+                SetRect(buttonLabelRect, new Vector2(0f, 0f), new Vector2(1f, 0f),
+                    new Vector2(0.5f, 0f), new Vector2(0f, 6f), new Vector2(-12f, 32f));
+            }
+
             Outline outline = button.gameObject.AddComponent<Outline>();
             outline.effectColor = AccentColor;
             outline.effectDistance = new Vector2(3f, -3f);
@@ -390,6 +420,12 @@ public class MainMenuController : MonoBehaviour
             bool isSelected = index == selectedDifficultyIndex;
             difficultyOptionBackgrounds[index].color = isSelected ? SelectedDifficultyColor : ButtonColor;
             difficultyOptionOutlines[index].enabled = isSelected;
+            if (difficultyOptionIcons[index] != null)
+            {
+                Color iconColor = Color.white;
+                iconColor.a = isSelected ? 1f : 0.78f;
+                difficultyOptionIcons[index].color = iconColor;
+            }
             difficultyOptionButtons[index].interactable = true;
         }
 
@@ -523,6 +559,19 @@ public class MainMenuController : MonoBehaviour
         CreateText(buttonObject.transform, "Label", label, ButtonFontSize, FontStyle.Bold, TextColor,
             TextAnchor.MiddleCenter, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), true);
         return button;
+    }
+
+    private static Sprite LoadDifficultyIcon(string resourcePath)
+    {
+        Texture2D iconTexture = Resources.Load<Texture2D>(resourcePath);
+        if (iconTexture == null)
+        {
+            Debug.LogWarning($"Difficulty icon could not be loaded from Resources/{resourcePath}.");
+            return null;
+        }
+
+        return Sprite.Create(iconTexture, new Rect(0f, 0f, iconTexture.width, iconTexture.height),
+            new Vector2(0.5f, 0.5f), 100f);
     }
 
     private static Image CreateImage(Transform parent, string objectName, Color color,
