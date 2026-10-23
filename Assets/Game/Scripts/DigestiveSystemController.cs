@@ -25,6 +25,10 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private const float BarrierRestorePerAction = 20f;
     private const float BarrierMaximum = 100f;
     private const string BarrierGaugeObjectName = "DigestiveBarrierGauge";
+    private const string BreachOverlayObjectName = "DigestiveBarrierBreachOverlay";
+    private const string BreachWarningObjectName = "DigestiveBarrierBreachWarning";
+    private const string BreachWarningMessage = "BARRIER BREACHED";
+    private const float BreachWarningBlinkDuration = 0.6f;
     private const float BarrierGaugeWidth = 600f;
     private const float BarrierGaugeHeight = 600f;
     private const float BarrierGaugeVerticalOffset = -338f;
@@ -34,6 +38,9 @@ public sealed class DigestiveSystemController : MonoBehaviour
     [SerializeField] private Image barrierGaugeImage;
     [SerializeField] private TextMeshProUGUI barrierTitleLabel;
     [SerializeField] private TextMeshProUGUI barrierPercentLabel;
+    [SerializeField] private Image breachOverlay;
+    [SerializeField] private TextMeshProUGUI breachWarningText;
+    private static Sprite breachOverlaySprite;
 
     private static readonly string[] DefaultPathwayObjectPaths =
     {
@@ -107,6 +114,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
             dayCounter = FindFirstObjectByType<DayCounterUI>();
         routineSystem = RoutineSystem.Instance;
         InitializeBarrierHealth();
+        InitializeBreachVisuals();
 
         GameObject ordersContainer = GameObject.Find(OrdersContainerPath);
         if (ordersContainer != null)
@@ -267,6 +275,153 @@ public sealed class DigestiveSystemController : MonoBehaviour
             barrierPercentLabel.text = $"{Mathf.RoundToInt(barrierValue)}%";
     }
 
+    private void InitializeBreachVisuals()
+    {
+        Canvas canvas = GameObject.Find("HUDCanvas")?.GetComponent<Canvas>();
+        if (canvas == null)
+            canvas = FindFirstObjectByType<Canvas>();
+        if (canvas == null)
+            return;
+
+        if (breachOverlay == null)
+        {
+            Transform existingOverlay = canvas.transform.Find(BreachOverlayObjectName);
+            breachOverlay = existingOverlay != null ? existingOverlay.GetComponent<Image>() : null;
+            if (breachOverlay == null)
+            {
+                GameObject overlayObject = new GameObject(BreachOverlayObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                overlayObject.transform.SetParent(canvas.transform, false);
+                RectTransform overlayRect = overlayObject.GetComponent<RectTransform>();
+                overlayRect.anchorMin = Vector2.zero;
+                overlayRect.anchorMax = Vector2.one;
+                overlayRect.offsetMin = Vector2.zero;
+                overlayRect.offsetMax = Vector2.zero;
+                breachOverlay = overlayObject.GetComponent<Image>();
+            }
+
+            breachOverlay.sprite = LoadBreachOverlaySprite();
+            breachOverlay.raycastTarget = false;
+        }
+
+        if (breachWarningText == null)
+        {
+            Transform existingWarning = canvas.transform.Find(BreachWarningObjectName);
+            breachWarningText = existingWarning != null ? existingWarning.GetComponent<TextMeshProUGUI>() : null;
+            if (breachWarningText == null)
+            {
+                GameObject warningObject = new GameObject(BreachWarningObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+                warningObject.transform.SetParent(canvas.transform, false);
+                RectTransform warningRect = warningObject.GetComponent<RectTransform>();
+                warningRect.anchorMin = new Vector2(0.5f, 0.5f);
+                warningRect.anchorMax = new Vector2(0.5f, 0.5f);
+                warningRect.pivot = new Vector2(0.5f, 0.5f);
+                warningRect.anchoredPosition = Vector2.zero;
+                warningRect.sizeDelta = new Vector2(720f, 90f);
+                breachWarningText = warningObject.GetComponent<TextMeshProUGUI>();
+                breachWarningText.text = BreachWarningMessage;
+                breachWarningText.font = TMP_Settings.defaultFontAsset;
+                breachWarningText.fontSize = 38f;
+                breachWarningText.fontStyle = FontStyles.Bold;
+                breachWarningText.color = Color.white;
+                breachWarningText.alignment = TextAlignmentOptions.Center;
+                breachWarningText.raycastTarget = false;
+            }
+        }
+
+        if (breachOverlay != null)
+            breachOverlay.enabled = false;
+        if (breachWarningText != null)
+            breachWarningText.enabled = false;
+    }
+
+    private void RefreshBreachVisuals()
+    {
+        bool isBreached = barrierHealth != null && barrierHealth.IsBreached;
+        if (breachOverlay != null)
+        {
+            breachOverlay.enabled = isBreached;
+            if (isBreached)
+            {
+                Color overlayColor = Color.red;
+                overlayColor.a = Mathf.PingPong(Time.time, 0.3f) + 0.1f;
+                breachOverlay.color = overlayColor;
+            }
+        }
+
+        if (breachWarningText != null)
+            breachWarningText.enabled = isBreached && Mathf.PingPong(Time.time, BreachWarningBlinkDuration) < BreachWarningBlinkDuration * 0.5f;
+    }
+
+    private static Sprite LoadBreachOverlaySprite()
+    {
+        if (breachOverlaySprite != null)
+            return breachOverlaySprite;
+
+        const int textureSize = 512;
+        Color32[] pixels = new Color32[textureSize * textureSize];
+        for (int column = -1; column <= textureSize / 48 + 1; column++)
+        {
+            int centerX = column * 48;
+            int verticalOffset = (column & 1) == 0 ? 0 : 28;
+            for (int row = -1; row <= textureSize / 56 + 1; row++)
+            {
+                int centerY = row * 56 + verticalOffset;
+                DrawHoneycombEdge(pixels, textureSize, centerX, centerY - 28, centerX + 24, centerY - 14);
+                DrawHoneycombEdge(pixels, textureSize, centerX + 24, centerY - 14, centerX + 24, centerY + 14);
+                DrawHoneycombEdge(pixels, textureSize, centerX + 24, centerY + 14, centerX, centerY + 28);
+                DrawHoneycombEdge(pixels, textureSize, centerX, centerY + 28, centerX - 24, centerY + 14);
+                DrawHoneycombEdge(pixels, textureSize, centerX - 24, centerY + 14, centerX - 24, centerY - 14);
+                DrawHoneycombEdge(pixels, textureSize, centerX - 24, centerY - 14, centerX, centerY - 28);
+            }
+        }
+
+        Texture2D texture = new Texture2D(textureSize, textureSize, TextureFormat.RGBA32, false);
+        texture.name = "Runtime Barrier Breach Honeycomb";
+        texture.filterMode = FilterMode.Bilinear;
+        texture.SetPixels32(pixels);
+        texture.Apply(false, true);
+        breachOverlaySprite = Sprite.Create(texture, new Rect(0f, 0f, textureSize, textureSize), new Vector2(0.5f, 0.5f), 100f);
+        return breachOverlaySprite;
+    }
+
+    private static void DrawHoneycombEdge(Color32[] pixels, int textureSize, int startX, int startY, int endX, int endY)
+    {
+        int deltaX = Mathf.Abs(endX - startX);
+        int stepX = startX < endX ? 1 : -1;
+        int deltaY = -Mathf.Abs(endY - startY);
+        int stepY = startY < endY ? 1 : -1;
+        int error = deltaX + deltaY;
+
+        while (true)
+        {
+            for (int offsetY = -1; offsetY <= 1; offsetY++)
+            {
+                for (int offsetX = -1; offsetX <= 1; offsetX++)
+                {
+                    int pixelX = startX + offsetX;
+                    int pixelY = startY + offsetY;
+                    if (pixelX >= 0 && pixelX < textureSize && pixelY >= 0 && pixelY < textureSize)
+                        pixels[pixelY * textureSize + pixelX] = new Color32(255, 255, 255, 255);
+                }
+            }
+
+            if (startX == endX && startY == endY)
+                break;
+
+            int doubledError = error * 2;
+            if (doubledError >= deltaY)
+            {
+                error += deltaY;
+                startX += stepX;
+            }
+            if (doubledError <= deltaX)
+            {
+                error += deltaX;
+                startY += stepY;
+            }
+        }
+    }
+
     private static void CenterQteButton(Button button)
     {
         if (button == null)
@@ -321,6 +476,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
         vomitCooldownRemaining = Mathf.Max(0f, vomitCooldownRemaining - gameplayDelta);
         RefreshButtonStates();
         RefreshBarrierGauge();
+        RefreshBreachVisuals();
     }
 
     private void HandleRoutineActivityChanged(RoutineActivity activity)
