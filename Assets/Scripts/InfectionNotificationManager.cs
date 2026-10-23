@@ -18,6 +18,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     private const int MaximumNotifications = 5;
     private const int GeneratedSpritePixelsPerUnit = 1024;
     private const float CategoryContainerFontSize = 30f;
+    private static readonly Color MutatedColor = new Color(0.72f, 0.12f, 1f, 1f);
 
     [SerializeField] private InfectionSpawner infectionSpawner;
     [SerializeField] private CameraScript cameraScript;
@@ -364,6 +365,9 @@ public sealed class InfectionNotificationManager : MonoBehaviour
                 spriteRenderer.color = Color.white;
                 break;
         }
+
+        if (marker.wasBarrierMutated)
+            spriteRenderer.color = MutatedColor;
     }
 
     private void UpdateNotification(NotificationState state, bool circulatoryActive, float gameplayDeltaTime)
@@ -379,10 +383,12 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         bool pickerActive = infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection;
         state.spriteRenderer.enabled = circulatoryActive;
         state.boxCollider.enabled = circulatoryActive && pickerActive && !state.fadingOut;
-        Color displayColor = state.marker != null && state.marker.infection != null &&
-            state.marker.infection.pathogenType == InfectionPathogenType.Fungal
-            ? fungalTextColor
-            : Color.white;
+        Color displayColor = state.marker != null && state.marker.wasBarrierMutated
+            ? MutatedColor
+            : state.marker != null && state.marker.infection != null &&
+                state.marker.infection.pathogenType == InfectionPathogenType.Fungal
+                ? fungalTextColor
+                : Color.white;
         displayColor.a *= state.alpha;
         state.spriteRenderer.color = displayColor;
 

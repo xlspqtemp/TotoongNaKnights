@@ -45,6 +45,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private static readonly Color BacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
     private static readonly Color ViralColor = new Color(0.2f, 0.55f, 1f, 1f);
     private static readonly Color FungalColor = new Color(0.3f, 0.85f, 0.35f, 1f);
+    private static readonly Color MutatedColor = new Color(0.72f, 0.12f, 1f, 1f);
     private static readonly Color ResolvedColor = new Color(0.18f, 0.85f, 0.42f, 1f);
 
     [SerializeField] private GameObject rowPrefab;
@@ -61,6 +62,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         public InfectionSpawner.InfectionMarker marker;
         public string displayName;
         public InfectionPathogenType pathogenType;
+        public bool isMutated;
         public RowStatus status;
         public GameObject rootObject;
         public CanvasGroup canvasGroup;
@@ -224,6 +226,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             marker = marker,
             displayName = displayName,
             pathogenType = pathogenType,
+            isMutated = marker != null && marker.wasBarrierMutated,
             status = RowStatus.Pending,
             rootObject = rowObject,
             canvasGroup = canvasGroup
@@ -298,6 +301,13 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
             if (row == null || row.status == RowStatus.Resolved)
                 continue;
+
+            bool isMutated = marker.wasBarrierMutated;
+            if (row.isMutated != isMutated)
+            {
+                row.isMutated = isMutated;
+                ApplyRowStatusVisuals(row);
+            }
 
             SetRowStatus(row, marker.isContained
                 ? RowStatus.Contained
@@ -643,39 +653,42 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
     private void ApplyRowStatusVisuals(RowView row)
     {
-        if (row == null || row.backgroundImage == null || row.swatchImage == null || row.statusLabel == null)
+        if (row == null || row.backgroundImage == null || row.swatchImage == null || row.nameLabel == null || row.statusLabel == null)
             return;
+
+        Color pathogenColor = row.isMutated ? MutatedColor : GetPathogenColor(row.pathogenType);
+        row.nameLabel.color = row.isMutated ? MutatedColor : Color.white;
 
         switch (row.status)
         {
             case RowStatus.Ongoing:
                 row.statusLabel.text = "Ongoing";
                 row.backgroundImage.color = OngoingRowColor;
-                row.swatchImage.color = GetPathogenColor(row.pathogenType);
+                row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = AccentColor;
                 break;
             case RowStatus.Contained:
                 row.statusLabel.text = "CONTAINED";
                 row.backgroundImage.color = OngoingRowColor;
-                row.swatchImage.color = GetPathogenColor(row.pathogenType);
+                row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = AccentColor;
                 break;
             case RowStatus.Resolved:
                 row.statusLabel.text = "Resolved";
                 row.backgroundImage.color = ResolvedColor;
-                row.swatchImage.color = ResolvedColor;
+                row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = Color.white;
                 break;
             case RowStatus.Failed:
                 row.statusLabel.text = "Failed";
                 row.backgroundImage.color = failedColor;
-                row.swatchImage.color = GetPathogenColor(row.pathogenType);
+                row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = Color.white;
                 break;
             default:
                 row.statusLabel.text = "Pending";
                 row.backgroundImage.color = DefaultRowColor;
-                row.swatchImage.color = GetPathogenColor(row.pathogenType);
+                row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = Color.white;
                 break;
         }

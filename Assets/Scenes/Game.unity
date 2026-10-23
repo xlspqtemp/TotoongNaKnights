@@ -5307,7 +5307,6 @@ MonoBehaviour:
   cameraScript: {fileID: 2766709378708606964}
   squadSpawnAnchor: {fileID: 703376539}
   squadMemberCount: 5
-  switchToCirculatoryOnSquadSpawn: 1
   idleSquadHighlightColor: {r: 0, g: 1, b: 1, a: 1}
   headshotCooldownSeconds: 5
   keepAliveUntilResolved: 1
