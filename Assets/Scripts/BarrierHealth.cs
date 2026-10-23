@@ -5,8 +5,10 @@ public sealed class BarrierHealth : MonoBehaviour
 {
     private const float MaximumBarrier = 100f;
 
+    public AudioClip breachSfx;
     public float CurrentBarrier = MaximumBarrier;
     public bool IsBreached { get; private set; }
+    public AudioClip BreachSfx => breachSfx;
 
     private void Awake()
     {

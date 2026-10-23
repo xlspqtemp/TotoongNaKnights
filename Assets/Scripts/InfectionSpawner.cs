@@ -105,6 +105,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private Color dispatchUnavailableColor = DefaultDispatchUnavailableColor;
 
     [Header("Infection Resolution")]
+    [SerializeField] private AudioClip infectionClearedSfx;
     [SerializeField] private bool useFixedDurationClash = false;
     [SerializeField, Min(0f)] private float bacterialClashDurationSeconds = 4f;
     [SerializeField] private float mildBacterialWellnessGain = 2f;
@@ -157,6 +158,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField, Min(0f)] private float promptAutoFadeSeconds = 8f;
 
     private readonly Dictionary<Button, List<InfectionMarker>> markersByBodyPartButton = new Dictionary<Button, List<InfectionMarker>>();
+    private AudioSource infectionAudioSource;
     private readonly List<WbcDispatchSlot> wbcDispatchSlots = new List<WbcDispatchSlot>();
     private readonly List<InfectionMarker> activeInfectionMarkers = new List<InfectionMarker>();
     private readonly List<InfectionMarker> fadingInfectionMarkers = new List<InfectionMarker>();
@@ -384,6 +386,11 @@ public sealed class InfectionSpawner : MonoBehaviour
     private void Awake()
     {
         infectionEntries = CreateDefaultInfectionEntries();
+        infectionAudioSource = GetComponent<AudioSource>();
+        if (infectionAudioSource == null)
+            infectionAudioSource = gameObject.AddComponent<AudioSource>();
+        infectionAudioSource.playOnAwake = false;
+        infectionAudioSource.spatialBlend = 0f;
         if (dayCounter == null)
             dayCounter = FindFirstObjectByType<DayCounterUI>();
         if (hudCanvas == null)
@@ -1847,8 +1854,20 @@ public sealed class InfectionSpawner : MonoBehaviour
         AddLeukocyteSupply(clearBonus);
 
         ApplyWellnessGainOnResolve(marker);
+        PlayInfectionClearedSfx();
         LogWbcSquadMessage($"Phagocytosis: WBC engulfed {marker.infection.displayName}. Infection cleared.", ConsoleLogUI.LogType.Success);
         BeginRemovingInfectionMarker(marker);
+    }
+
+    private void PlayInfectionClearedSfx()
+    {
+        if (infectionClearedSfx == null || infectionAudioSource == null)
+            return;
+
+        infectionAudioSource.Stop();
+        infectionAudioSource.clip = infectionClearedSfx;
+        infectionAudioSource.time = 0.01f;
+        infectionAudioSource.Play();
     }
 
     private void ApplyWellnessGainOnResolve(InfectionMarker marker)
@@ -1938,6 +1957,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             string infectionName = marker.infection.displayName;
+            PlayInfectionClearedSfx();
             BeginRemovingInfectionMarker(marker);
             LogWbcSquadMessage($"Adaptive response cleared {infectionName}.", ConsoleLogUI.LogType.Success);
         }

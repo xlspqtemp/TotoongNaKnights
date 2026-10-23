@@ -43,6 +43,8 @@ public class WellnessManager : MonoBehaviour
     [Header("Wellness")]
     [SerializeField, Min(1f)] private float maxWellness = 100f;
     [SerializeField, Range(0f, 100f)] private float currentWellness = 100f;
+    [SerializeField] private AudioClip wellnessGainSfx;
+    [SerializeField] private AudioClip wellnessLossSfx;
     [SerializeField, Min(0f)] private float criticalThreshold = 25f;
     [SerializeField, Min(0f)] private float winThreshold = 50f;
 
@@ -131,6 +133,7 @@ public class WellnessManager : MonoBehaviour
     private static readonly Color OutcomeButtonColor = new Color(0.08f, 0.38f, 0.42f, 1f);
 
     private Canvas hudCanvas;
+    private AudioSource wellnessAudioSource;
     private GameObject outcomePanel;
     private TextMeshProUGUI outcomeLabel;
     private TextMeshProUGUI leaderboardStatusLabel;
@@ -170,6 +173,11 @@ public class WellnessManager : MonoBehaviour
         }
 
         Instance = this;
+        wellnessAudioSource = GetComponent<AudioSource>();
+        if (wellnessAudioSource == null)
+            wellnessAudioSource = gameObject.AddComponent<AudioSource>();
+        wellnessAudioSource.playOnAwake = false;
+        wellnessAudioSource.spatialBlend = 0f;
         winThreshold = RequiredWinWellness;
         EnsureAddedRoutineEventEntries();
         EnsureAddedRandomEventEntries();
@@ -415,6 +423,20 @@ public class WellnessManager : MonoBehaviour
         float previousWellness = currentWellness;
         currentWellness = Mathf.Clamp(currentWellness + requestedDelta, 0f, maxWellness);
         float appliedDelta = currentWellness - previousWellness;
+        if (appliedDelta > 0f && wellnessGainSfx != null)
+        {
+            wellnessAudioSource.Stop();
+            wellnessAudioSource.clip = wellnessGainSfx;
+            wellnessAudioSource.time = 0.01f;
+            wellnessAudioSource.Play();
+        }
+        else if (appliedDelta < 0f && wellnessLossSfx != null)
+        {
+            wellnessAudioSource.Stop();
+            wellnessAudioSource.clip = wellnessLossSfx;
+            wellnessAudioSource.time = 0.05f;
+            wellnessAudioSource.Play();
+        }
 
         Debug.Log($"[WELLNESS] {eventId}: {FormatSignedDelta(appliedDelta)} -> {Mathf.RoundToInt(currentWellness)}");
 

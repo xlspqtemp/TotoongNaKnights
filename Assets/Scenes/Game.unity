@@ -5281,6 +5281,7 @@ MonoBehaviour:
   wbcAvatarResourcePath: Manual/WBC
   dispatchAvatarSize: {x: 38, y: 38}
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
+  infectionClearedSfx: {fileID: 8300000, guid: 0e31ae3a9256a894e971ee6c073311eb, type: 3}
   useFixedDurationClash: 1
   bacterialClashDurationSeconds: 4
   mildBacterialWellnessGain: 2
@@ -11345,6 +11346,8 @@ MonoBehaviour:
   barrierGaugeImage: {fileID: 0}
   barrierTitleLabel: {fileID: 0}
   barrierPercentLabel: {fileID: 0}
+  breachOverlay: {fileID: 0}
+  breachWarningText: {fileID: 0}
   airwaySpawnPoint: {fileID: 454519208}
   leftLung: {fileID: 1947778463}
   rightLung: {fileID: 692991315}
@@ -12078,6 +12081,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::WellnessManager
   maxWellness: 100
   currentWellness: 100
+  wellnessGainSfx: {fileID: 8300000, guid: 94543815e293da34a9524f4613137a49, type: 3}
+  wellnessLossSfx: {fileID: 8300000, guid: 982d330c6030e1d4bbfd832cbf67a9f9, type: 3}
   criticalThreshold: 25
   winThreshold: 50
   routineEventDeltas:
@@ -20830,6 +20835,8 @@ MonoBehaviour:
   barrierGaugeImage: {fileID: 0}
   barrierTitleLabel: {fileID: 0}
   barrierPercentLabel: {fileID: 0}
+  breachOverlay: {fileID: 0}
+  breachWarningText: {fileID: 0}
   foodPrefab: {fileID: 5459330808142471693, guid: 9c50e0e66d043914d8c37d4968c72d3d, type: 3}
   contaminatedFoodPrefab: {fileID: 8914407728640336047, guid: e13f312a12af9bd42affe2bbb21b8a7d, type: 3}
   fluidPrefab: {fileID: 7938256834102878679, guid: f270dcefb31cf9745a979d8929852802, type: 3}
@@ -25401,6 +25408,8 @@ MonoBehaviour:
   barrierGaugeImage: {fileID: 0}
   barrierTitleLabel: {fileID: 0}
   barrierPercentLabel: {fileID: 0}
+  breachOverlay: {fileID: 0}
+  breachWarningText: {fileID: 0}
   airwaySpawnPoint: {fileID: 784711881}
   leftLung: {fileID: 1266561479}
   rightLung: {fileID: 1541220}
@@ -25843,6 +25852,8 @@ MonoBehaviour:
   barrierGaugeImage: {fileID: 0}
   barrierTitleLabel: {fileID: 0}
   barrierPercentLabel: {fileID: 0}
+  breachOverlay: {fileID: 0}
+  breachWarningText: {fileID: 0}
   foodPrefab: {fileID: 5459330808142471693, guid: 9c50e0e66d043914d8c37d4968c72d3d, type: 3}
   contaminatedFoodPrefab: {fileID: 8914407728640336047, guid: e13f312a12af9bd42affe2bbb21b8a7d, type: 3}
   fluidPrefab: {fileID: 7938256834102878679, guid: f270dcefb31cf9745a979d8929852802, type: 3}
@@ -50393,6 +50404,10 @@ PrefabInstance:
       propertyPath: floor4
       value: 
       objectReference: {fileID: 1057790689}
+    - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
+      propertyPath: breachSfx
+      value: 
+      objectReference: {fileID: 8300000, guid: 878b15c79cf92d9448b1e7382f91c680, type: 3}
     - target: {fileID: 8091333390438552526, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       propertyPath: movementSfx
       value: 

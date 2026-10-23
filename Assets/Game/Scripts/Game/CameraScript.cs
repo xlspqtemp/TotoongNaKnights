@@ -53,6 +53,7 @@ public class CameraScript : MonoBehaviour
     [SerializeField] private CanvasGroup respiratoryOrdersCanvasGroup;
     [SerializeField] private Image digestiveBreachIcon;
     [SerializeField] private Image respiratoryBreachIcon;
+    [SerializeField] private AudioClip breachSfx;
 
     [Header("Tutorial Framing")]
     [SerializeField] private Vector3 fullBodyFramePosition = new Vector3(3000f, 0f, -1000f);
@@ -82,6 +83,7 @@ public class CameraScript : MonoBehaviour
     private Vector3 previousMousePosition;
     private Camera sceneCamera;
     private LayerTransitionUI layerTransitionUI;
+    private AudioSource breachAlarmAudioSource;
     private int selectedLayer = 1;
     private Coroutine infectionFocusCoroutine;
     private Coroutine frameCoroutine;
@@ -94,6 +96,7 @@ public class CameraScript : MonoBehaviour
     private int nextDeployedSquadFocusIndex;
     private BarrierHealth digestiveBarrierHealth;
     private BarrierHealth respiratoryBarrierHealth;
+    private BarrierHealth activeBreachAlarmBarrier;
 
     private void Awake()
     {
@@ -101,6 +104,12 @@ public class CameraScript : MonoBehaviour
         layerTransitionUI = GetComponent<LayerTransitionUI>();
         if (layerTransitionUI == null)
             layerTransitionUI = gameObject.AddComponent<LayerTransitionUI>();
+        breachAlarmAudioSource = gameObject.AddComponent<AudioSource>();
+        breachAlarmAudioSource.playOnAwake = false;
+        breachAlarmAudioSource.loop = true;
+        breachAlarmAudioSource.spatialBlend = 0f;
+        if (movementAudioSource != null)
+            breachAlarmAudioSource.outputAudioMixerGroup = movementAudioSource.outputAudioMixerGroup;
     }
 
     private void Start()
@@ -133,6 +142,7 @@ public class CameraScript : MonoBehaviour
     private void Update()
     {
         RefreshBreachIcons();
+        RefreshBreachAlarm();
         HandleDeployedSquadFocusInput();
 
         if (infectionFocusCoroutine != null && Time.timeScale > 0f && Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f)
@@ -270,6 +280,43 @@ public class CameraScript : MonoBehaviour
         breachIcon.color = iconColor;
     }
 
+    private void RefreshBreachAlarm()
+    {
+        if (digestiveBarrierHealth == null)
+            digestiveBarrierHealth = GameObject.Find("/Digestive")?.GetComponent<BarrierHealth>();
+        if (respiratoryBarrierHealth == null)
+            respiratoryBarrierHealth = GameObject.Find("/Respiratory")?.GetComponent<BarrierHealth>();
+
+        if (digestiveBarrierHealth != null && digestiveBarrierHealth.BreachSfx == null)
+            digestiveBarrierHealth.breachSfx = breachSfx;
+        if (respiratoryBarrierHealth != null && respiratoryBarrierHealth.BreachSfx == null)
+            respiratoryBarrierHealth.breachSfx = breachSfx;
+
+        BarrierHealth selectedBarrier = selectedLayer == 3
+            ? digestiveBarrierHealth
+            : selectedLayer == 4 ? respiratoryBarrierHealth : null;
+        if (selectedBarrier == null || !selectedBarrier.IsBreached || selectedBarrier.BreachSfx == null)
+        {
+            StopBreachAlarm();
+            return;
+        }
+
+        if (activeBreachAlarmBarrier == selectedBarrier && breachAlarmAudioSource.isPlaying)
+            return;
+
+        StopBreachAlarm();
+        breachAlarmAudioSource.clip = selectedBarrier.BreachSfx;
+        breachAlarmAudioSource.loop = true;
+        breachAlarmAudioSource.Play();
+        activeBreachAlarmBarrier = selectedBarrier;
+    }
+
+    private void StopBreachAlarm()
+    {
+        if (breachAlarmAudioSource != null && breachAlarmAudioSource.isPlaying)
+            breachAlarmAudioSource.Stop();
+        activeBreachAlarmBarrier = null;
+    }
 
     private void HandleDeployedSquadFocusInput()
     {
