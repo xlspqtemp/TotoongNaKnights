@@ -97,6 +97,11 @@ public class CameraScript : MonoBehaviour
     private BarrierHealth digestiveBarrierHealth;
     private BarrierHealth respiratoryBarrierHealth;
     private BarrierHealth activeBreachAlarmBarrier;
+    private Transform followTarget;
+    private Vector3 followOffset;
+    private Vector3 positionBeforeFollow;
+    private float zoomBeforeFollow;
+    private bool hadOrthographicZoomBeforeFollow;
 
     private void Awake()
     {
@@ -552,6 +557,51 @@ public class CameraScript : MonoBehaviour
         }
     }
 
+    /// <summary>Locks the camera to a moving unit while preserving the current camera offset.</summary>
+    public void SetFollowTarget(Transform target)
+    {
+        if (target == null)
+            return;
+
+        if (followTarget == null)
+        {
+            positionBeforeFollow = transform.position;
+            hadOrthographicZoomBeforeFollow = sceneCamera != null && sceneCamera.orthographic;
+            if (hadOrthographicZoomBeforeFollow)
+                zoomBeforeFollow = sceneCamera.orthographicSize;
+        }
+
+        StopInfectionFocus();
+        followTarget = target;
+        followOffset = transform.position - target.position;
+    }
+
+    /// <summary>Releases the camera follow lock and restores the camera position and zoom from before following.</summary>
+    public void ClearFollowTarget()
+    {
+        if (followTarget == null)
+            return;
+
+        followTarget = null;
+        transform.position = positionBeforeFollow;
+        if (hadOrthographicZoomBeforeFollow && sceneCamera != null && sceneCamera.orthographic)
+        {
+            sceneCamera.orthographicSize = zoomBeforeFollow;
+            if (focusZoomController == null)
+                focusZoomController = GetComponent<CameraScript_Zoom>();
+            if (focusZoomController != null && ZoomControllerCurrentZoomField != null)
+                ZoomControllerCurrentZoomField.SetValue(focusZoomController, zoomBeforeFollow);
+        }
+
+        hadOrthographicZoomBeforeFollow = false;
+    }
+
+    private void LateUpdate()
+    {
+        if (followTarget != null)
+            transform.position = followTarget.position + followOffset;
+    }
+
     /// <summary>Smoothly pans and zooms the camera to an infection world position.</summary>
     public void FocusOnWorldPosition(Vector3 worldPosition)
     {
@@ -765,11 +815,14 @@ public class CameraScript : MonoBehaviour
     private void SetLymphaticOrdersVisible(bool isVisible)
     {
         SetCanvasGroupVisible(lymphaticOrdersCanvasGroup, isVisible);
+        LymphaticTrainingConsoleUI trainingConsole = FindFirstObjectByType<LymphaticTrainingConsoleUI>();
+        if (trainingConsole != null)
+            trainingConsole.SetLayerAvailable(isVisible);
     }
 
     private void SetTacticalOrdersVisible(bool isVisible)
     {
-        SetCanvasGroupVisible(tacticalOrdersCanvasGroup, isVisible);
+        SetCanvasGroupVisible(tacticalOrdersCanvasGroup, false);
     }
 
     private void SetDigestiveOrdersVisible(bool isVisible)

@@ -312,7 +312,7 @@ public sealed class TutorialManager : MonoBehaviour
             RegisterTarget("tacticalOrders", hudCanvas.Find("TacticalOrdersContainer")?.gameObject, true);
             RegisterTarget("digestiveOrders", hudCanvas.Find("DigestiveOrdersContainer")?.gameObject, true);
             RegisterTarget("respiratoryOrders", hudCanvas.Find("RespiratoryOrdersContainer")?.gameObject, true);
-            RegisterTarget("lymphaticOrders", hudCanvas.Find("LymphaticOrdersContainer")?.gameObject, true);
+            RegisterTarget("lymphaticOrders", hudCanvas.Find("LymphaticTrainingConsole")?.gameObject, true);
         }
 
         RegisterTarget("wbcHeadshot", GameObject.Find("WBC Squad HUD"), true);

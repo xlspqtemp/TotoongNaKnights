@@ -28,13 +28,6 @@ public sealed class CirculatorySystemController : MonoBehaviour
     private void Start()
     {
         ResolveWaypoints();
-        if (!HasRequiredSpawnData())
-        {
-            Debug.LogError("CirculatorySystemController requires both cell prefabs, the heart, and destination and lung waypoints under its waypoint container.", this);
-            return;
-        }
-
-        StartCoroutine(SpawnPairsOverTime());
     }
 
 

@@ -14,22 +14,15 @@ public class TacticalOrdersController : MonoBehaviour
 
     private void Start()
     {
-        if (circulatorySystemController == null)
+        CanvasGroup canvasGroup = GetComponent<CanvasGroup>();
+        if (canvasGroup != null)
         {
-            Debug.LogError("TacticalOrdersController requires a CirculatorySystemController reference.", this);
-            return;
+            canvasGroup.alpha = 0f;
+            canvasGroup.interactable = false;
+            canvasGroup.blocksRaycasts = false;
         }
 
-        if (spawnPoints == null || spawnPoints.Length == 0)
-        {
-            Debug.LogError("TacticalOrdersController requires at least one spawn point.", this);
-            return;
-        }
-
-        foreach (Transform spawnPoint in spawnPoints)
-        {
-            ConfigureButton(spawnPoint);
-        }
+        enabled = false;
     }
 
     private void ConfigureButton(Transform spawnPoint)

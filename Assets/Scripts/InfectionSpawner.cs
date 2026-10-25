@@ -202,6 +202,9 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
 
+    /// <summary>Raised when the player clicks a live infection row or map icon while assigning a batch target.</summary>
+    public event Action<InfectionMarker> OnInfectionTargetClicked;
+
     /// <summary>Returns the world-space average position of each deployed squad with at least one living unit.</summary>
     public IReadOnlyList<Vector3> GetDeployedSquadPositions()
     {
@@ -440,20 +443,14 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         DifficultyStats stats = DifficultySettings.CurrentStats;
         Debug.Log($"Difficulty: {stats.difficultyName} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
-        Debug.Log($"Leukocyte supply: {leukocyteSupply:0.##}/{stats.maxSupply} | deployCost={stats.deployCost} | regenSecondsPerPoint={stats.regenSecondsPerPoint:0.##}", this);
-        CreateWbcSquadHud();
-        CreateSquadPromptBanner();
         CreateAdaptiveResponsePopup();
-        RefreshWbcSquadHud();
         EnsurePendingInfectionsPanelSubscription();
         if (dayCounter == null)
             Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; timed infection spawning is disabled.", this);
         else
             Debug.Log($"[InfectionSpawner] Timed infection spawning initialized; next spawn in {hoursUntilNextInfectionSpawn} in-game hours.", this);
         if (hudCanvas == null)
-            Debug.LogWarning("[InfectionSpawner] HUD Canvas is missing; the WBC HUD and infection row are disabled.", this);
-        if (circulatorySystemController == null)
-            Debug.LogWarning("[InfectionSpawner] CirculatorySystemController is missing; WBC squads cannot be spawned.", this);
+            Debug.LogWarning("[InfectionSpawner] HUD Canvas is missing; infection row UI is disabled.", this);
     }
 
     private void Update()
@@ -466,16 +463,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         UpdateInfectionMarkerAnimations();
         UpdateInfectionThreatVisuals();
         UpdateSelectedInfectionPopup();
-        UpdateWbcCooldowns();
-        UpdateIdleAndDispatchedSquads();
-        UpdateDendriticCells();
-        UpdateInfectionCombat();
-        HandleSquadPromptCancellation();
-        UpdateSquadPrompt();
         HandleMapClick();
-        UpdateLeukocyteSupply();
         EnsurePendingInfectionsPanelSubscription();
-        RefreshWbcSquadHud();
     }
 
     private void UpdateLeukocyteSupply()
@@ -563,6 +552,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void HandlePendingInfectionRowClicked(InfectionMarker marker)
     {
+        OnInfectionTargetClicked?.Invoke(marker);
         RequestDispatchToInfection(marker);
     }
 
@@ -912,10 +902,14 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void HandleMapClick()
     {
-        if (!awaitingInfectionTargetSelection || !Input.GetMouseButtonDown(0))
+        if (!Input.GetMouseButtonDown(0))
             return;
 
-        if (TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
+        if (!TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
+            return;
+
+        OnInfectionTargetClicked?.Invoke(infectionTarget);
+        if (awaitingInfectionTargetSelection)
             RequestDispatchToInfection(infectionTarget);
     }
 
@@ -3080,6 +3074,25 @@ public sealed class InfectionSpawner : MonoBehaviour
         return buttonName.EndsWith(OrderButtonSuffix, StringComparison.Ordinal)
             ? buttonName.Substring(0, buttonName.Length - OrderButtonSuffix.Length)
             : buttonName;
+    }
+
+    /// <summary>Returns the named bacterial and viral profiles used for lymphatic cell specializations.</summary>
+    public static List<string> GetKnownTrainingPathogenNames()
+    {
+        List<string> pathogenNames = new List<string>();
+        foreach (InfectionData infection in CreateDefaultInfectionEntries())
+        {
+            if (infection.isGeneric ||
+                (infection.pathogenType != InfectionPathogenType.Bacterial && infection.pathogenType != InfectionPathogenType.Viral))
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(infection.displayName) && !pathogenNames.Contains(infection.displayName))
+                pathogenNames.Add(infection.displayName);
+        }
+
+        return pathogenNames;
     }
 
     private static List<InfectionData> CreateDefaultInfectionEntries()
