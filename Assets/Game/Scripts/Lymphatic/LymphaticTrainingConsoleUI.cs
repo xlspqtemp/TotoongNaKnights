@@ -124,7 +124,7 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
                 if (batchCreated)
                 {
                     slot.HasCompleted = true;
-                    slot.StatusLabel.text = "5 UNITS READY - NODE " + (slot.ReservedNodeIndex + 1);
+                    slot.StatusLabel.text = "BATCH TRAINED - NODE " + (slot.ReservedNodeIndex + 1);
                     slot.TimerLabel.text = "COMPLETE";
                     SetOverlayCoverage(slot, 0f);
                 }
@@ -160,8 +160,8 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
     {
         GameObject consoleObject = CreateUiObject(ConsoleRootName, hudCanvas, true);
         consoleRect = consoleObject.GetComponent<RectTransform>();
-        SetRect(consoleRect, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(80f, -96f), new Vector2(760f, ConsoleHeight));
+        SetRect(consoleRect, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 0f),
+            new Vector2(500f, 28f), new Vector2(-528f, ConsoleHeight));
 
         Image consoleBackground = consoleObject.GetComponent<Image>();
         consoleBackground.color = ConsoleBackgroundColor;
@@ -175,15 +175,7 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
             Vector2.zero, new Vector2(0f, 3f), AccentColor);
         batchCountLabel = CreateText("BatchCount", consoleRect, "BATCHES 0/10", 12f, AccentColor,
             TextAlignmentOptions.MidlineLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(22f, -13f), new Vector2(132f, 28f));
-        CreateText("ConsoleTitle", consoleRect, "LYMPHATIC TRAINING CONSOLE", 17f, MainTextColor,
-            TextAlignmentOptions.MidlineLeft, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(164f, -13f), new Vector2(250f, 28f));
-        CreateText("ConsoleInstructions", consoleRect, "LEFT CLICK TRAIN   |   RIGHT CLICK FIELD GUIDE", 10f, MutedTextColor,
-            TextAlignmentOptions.MidlineRight, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f),
-            new Vector2(-22f, -15f), new Vector2(320f, 24f));
-        CreateAccentBar("HeaderDivider", consoleRect, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0f, -48f), new Vector2(0f, 1f), new Color(AccentColor.r, AccentColor.g, AccentColor.b, 0.42f));
+            new Vector2(22f, -13f), new Vector2(150f, 24f));
 
         for (int index = 0; index < trainingSlots.Length; index++)
             BuildTrainingSlot(consoleRect, trainingSlots[index], index);
@@ -194,7 +186,7 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
         float horizontalCenter = (index + 0.5f) / trainingSlots.Length;
         slot.Button = CreateButton("UnitIcon_" + (index + 1), parent, out Image iconBackground,
             new Vector2(horizontalCenter, 0.5f), new Vector2(horizontalCenter, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0f, 17f), new Vector2(IconSize, IconSize), IconBackgroundColor);
+            new Vector2(0f, -6f), new Vector2(IconSize, IconSize), IconBackgroundColor);
         slot.Button.targetGraphic = iconBackground;
         slot.Button.transition = Selectable.Transition.ColorTint;
         slot.Button.colors = CreateButtonColors(IconBackgroundColor, IconHighlightColor);
@@ -213,14 +205,14 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
         CreateText("UnitNumber", slot.Button.transform, (index + 1).ToString(), 44f, MainTextColor,
             TextAlignmentOptions.Center, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
         slot.TimerLabel = CreateText("TrainingTimer", parent, FormatTrainingDuration(slot.Unit.TrainingSeconds), 13f, AccentColor,
-            TextAlignmentOptions.Center, new Vector2(horizontalCenter, 1f), new Vector2(horizontalCenter, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0f, -64f), new Vector2(150f, 24f));
+            TextAlignmentOptions.Center, new Vector2(horizontalCenter, 0.5f), new Vector2(horizontalCenter, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, 76f), new Vector2(150f, 22f));
         slot.NameLabel = CreateText("UnitName", parent, slot.Unit.Name.ToUpperInvariant(), 12f, MainTextColor,
-            TextAlignmentOptions.Center, new Vector2(horizontalCenter, 0f), new Vector2(horizontalCenter, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0f, 13f), new Vector2(230f, 20f));
-        slot.StatusLabel = CreateText("TrainingStatus", parent, "READY", 9f, MutedTextColor,
-            TextAlignmentOptions.Center, new Vector2(horizontalCenter, 0f), new Vector2(horizontalCenter, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0f, 0f), new Vector2(280f, 16f));
+            TextAlignmentOptions.Center, new Vector2(horizontalCenter, 0.5f), new Vector2(horizontalCenter, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, -72f), new Vector2(230f, 20f));
+        slot.StatusLabel = CreateText("TrainingStatus", parent, string.Empty, 9f, MutedTextColor,
+            TextAlignmentOptions.Center, new Vector2(horizontalCenter, 0.5f), new Vector2(horizontalCenter, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, -90f), new Vector2(280f, 16f));
         slot.TimerLabel.raycastTarget = false;
         slot.NameLabel.raycastTarget = false;
         slot.StatusLabel.raycastTarget = false;

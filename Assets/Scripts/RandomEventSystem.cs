@@ -8,8 +8,6 @@ public class RandomEventSystem : MonoBehaviour
     private const float MEDIUM_TRIGGER_CHANCE = 0.32f;
     private const float HARD_TRIGGER_CHANCE = 0.48f;
     private const float MINIMUM_WEIGHT = 0.0001f;
-    private const string RANDOM_EVENT_PREFIX = "<color=#FF5555><b>[RANDOM EVENT]</b></color>";
-    private const string RANDOM_EVENT_SYSTEM_PREFIX = "<color=#55D6FF><b>[RANDOM EVENT SYSTEM]</b></color>";
 
     public static RandomEventSystem Instance { get; private set; }
 
@@ -25,9 +23,6 @@ public class RandomEventSystem : MonoBehaviour
     [SerializeField] private List<RandomEventDifficultyPreset> difficultyPresets = new List<RandomEventDifficultyPreset>();
 
     [Header("Debug Controls")]
-    [SerializeField] private bool enableDebugKeyboardShortcuts = true;
-    [SerializeField] private KeyCode forceEventKey = KeyCode.F9;
-    [SerializeField] private KeyCode cycleDifficultyKey = KeyCode.F10;
     [SerializeField] private bool logHourlyRolls;
 
     private void Awake()
@@ -71,20 +66,6 @@ public class RandomEventSystem : MonoBehaviour
             Instance = null;
     }
 
-    private void Update()
-    {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (!enableDebugKeyboardShortcuts)
-            return;
-
-        if (Input.GetKeyDown(forceEventKey))
-            ForceTriggerEvent();
-
-        if (Input.GetKeyDown(cycleDifficultyKey))
-            CycleDifficulty();
-#endif
-    }
-
     private void HandleHourAdvanced(int currentDay, int currentHour)
     {
         RollForEvent(currentDay, currentHour, false);
@@ -93,15 +74,21 @@ public class RandomEventSystem : MonoBehaviour
     [ContextMenu("Random Event/Force Trigger")]
     public void ForceTriggerEvent()
     {
+        TryForceTriggerEvent();
+    }
+
+    /// <summary>Forces a random event and reports whether an event was generated.</summary>
+    public bool TryForceTriggerEvent()
+    {
         int day = dayCounter != null ? dayCounter.CurrentDay : 1;
         int hour = dayCounter != null ? dayCounter.CurrentHour : 0;
-        RollForEvent(day, hour, true);
+        return RollForEvent(day, hour, true);
     }
 
     public void SetDifficulty(RandomEventDifficulty difficulty)
     {
         activeDifficulty = difficulty;
-        string message = $"{RANDOM_EVENT_SYSTEM_PREFIX} Difficulty set to <b>{activeDifficulty}</b>.";
+        string message = $"Random event difficulty set to {activeDifficulty}.";
         Debug.Log(message);
         LogToConsole(message, ConsoleLogUI.LogType.System);
     }
@@ -117,18 +104,18 @@ public class RandomEventSystem : MonoBehaviour
     public void ResetMissingPresets()
     {
         EnsureDifficultyPresets();
-        Debug.Log($"{RANDOM_EVENT_SYSTEM_PREFIX} Missing preset data restored.");
+        Debug.Log("Missing random event preset data restored.");
     }
 
-    private void RollForEvent(int day, int hour, bool forceTrigger)
+    private bool RollForEvent(int day, int hour, bool forceTrigger)
     {
         RoutineSystem routineSystem = RoutineSystem.Instance;
-        if (routineSystem != null && routineSystem.IsSleepingAtHour(hour))
-            return;
+        if (!forceTrigger && routineSystem != null && routineSystem.IsSleepingAtHour(hour))
+            return false;
 
         RandomEventDifficultyPreset preset = GetActivePreset();
         if (preset == null)
-            return;
+            return false;
 
         float triggerChance = Mathf.Clamp01(preset.hourlyTriggerChance);
         float triggerRoll = UnityEngine.Random.value;
@@ -136,14 +123,13 @@ public class RandomEventSystem : MonoBehaviour
 
         if (logHourlyRolls)
         {
-            string rollMessage = $"{RANDOM_EVENT_SYSTEM_PREFIX} Day {day}, Hour {hour:00}:00 rolled " +
-                                 $"{triggerRoll:0.000} against {triggerChance:0.000} ({activeDifficulty}).";
+            string rollMessage = $"Random event roll: {triggerRoll:0.000} against {triggerChance:0.000} ({activeDifficulty}).";
             Debug.Log(rollMessage);
             LogToConsole(rollMessage, ConsoleLogUI.LogType.System);
         }
 
         if (!shouldTrigger)
-            return;
+            return false;
 
         RandomEventSeverity severity = RollSeverity(preset);
         RandomEventId eventId = RollEventId(preset);
@@ -160,11 +146,11 @@ public class RandomEventSystem : MonoBehaviour
         if (eventData.triggersQTE)
             GameplaySpeed.BeginQTE(eventData.eventName);
 
-        string logMessage = $"{RANDOM_EVENT_PREFIX} Day {day}, Hour {hour:00}:00: " +
-                            $"{eventData.eventName} ({eventData.severity}) — {eventData.eventDescription}";
+        string logMessage = $"{eventData.eventName} ({eventData.severity}) — {eventData.eventDescription}";
         Debug.Log(logMessage);
         LogRandomEventToConsole(logMessage, eventData, GetConsoleLogType(eventData));
         OnRandomEventTriggered?.Invoke(eventData);
+        return true;
     }
 
     private RandomEventDifficultyPreset GetActivePreset()

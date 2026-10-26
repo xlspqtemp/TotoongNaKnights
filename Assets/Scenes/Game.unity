@@ -4116,12 +4116,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 362425538}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.35355338, y: 0.35355338, z: -0.1464466, w: 0.8535535}
-  m_LocalPosition: {x: 2814.2852, y: -2006.4645, z: -2013.5355}
+  m_LocalRotation: {x: -0, y: -0, z: -0.0000000074505797, w: 1}
+  m_LocalPosition: {x: 4000.0002, y: 5, z: -19.999817}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 2766709378708606965}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &362506291
 GameObject:
@@ -11824,12 +11824,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1057790688}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.35355338, y: 0.35355338, z: -0.1464466, w: 0.8535535}
-  m_LocalPosition: {x: 4228.4985, y: -3006.4644, z: -3013.5356}
+  m_LocalRotation: {x: -0, y: -0, z: -0.0000000074505797, w: 1}
+  m_LocalPosition: {x: 6000, y: 5.000244, z: -19.999878}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 2766709378708606965}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1060831431
 GameObject:
@@ -17626,6 +17626,10 @@ MonoBehaviour:
   lymphNodeRoot: {fileID: 805147626}
   rightLymphaticDuct: {fileID: 2131714818}
   thoracicDuct: {fileID: 509448780}
+  leftSubclavianVein: {fileID: 0}
+  rightSubclavianVein: {fileID: 0}
+  transferNavMeshSampleRadius: 25
+  arrivalDistance: 2
   neutrophilPrefab: {fileID: 8808105530521002257, guid: d795bf8e8628cd54c9367f9c2b5dc69d, type: 3}
   macrophagePrefab: {fileID: 5201823894453661281, guid: cbc3b4a07f31b6d4c8483566069372de, type: 3}
   tCellPrefab: {fileID: 8640416537868356536, guid: 04db253bddad3a54595071ecfa937ef1, type: 3}
@@ -19189,12 +19193,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1669230762}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.35355338, y: 0.35355338, z: -0.1464466, w: 0.8535535}
-  m_LocalPosition: {x: 1400.0715, y: -1006.4645, z: -1013.5355}
+  m_LocalRotation: {x: -0, y: -0, z: -0.0000000074505797, w: 1}
+  m_LocalPosition: {x: 2000.0001, y: 5, z: -19.999908}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 2766709378708606965}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1678445555
 GameObject:
@@ -19449,12 +19453,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1714588013}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.35355338, y: 0.35355338, z: -0.1464466, w: 0.8535535}
-  m_LocalPosition: {x: -14.142137, y: -6.464466, z: -13.535535}
+  m_LocalRotation: {x: -0, y: -0, z: -0.0000000074505797, w: 1}
+  m_LocalPosition: {x: 0, y: 5, z: -20}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 2766709378708606965}
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1725301671
 GameObject:
@@ -22711,19 +22715,7 @@ PrefabInstance:
       objectReference: {fileID: 1887316414}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects:
-    - targetCorrespondingSourceObject: {fileID: 5402452508549777365, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1714588014}
-    - targetCorrespondingSourceObject: {fileID: 5402452508549777365, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1669230763}
-    - targetCorrespondingSourceObject: {fileID: 5402452508549777365, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 362425539}
-    - targetCorrespondingSourceObject: {fileID: 5402452508549777365, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1057790689}
+    m_AddedGameObjects: []
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 4749651613382924225, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
       insertIndex: -1
@@ -22743,11 +22735,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e37d8aab2dfb9d6498d5282cf7b32abe, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Camera
---- !u!4 &2766709378708606965 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 5402452508549777365, guid: 61465ffed8038cf4bb1bfed51569b900, type: 3}
-  m_PrefabInstance: {fileID: 2766709378708606963}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &3004891328046425654
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -22871,3 +22858,7 @@ SceneRoots:
   - {fileID: 2766709378708606963}
   - {fileID: 1239481618}
   - {fileID: 2014260355}
+  - {fileID: 1714588014}
+  - {fileID: 1669230763}
+  - {fileID: 362425539}
+  - {fileID: 1057790689}

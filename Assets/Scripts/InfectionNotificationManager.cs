@@ -24,6 +24,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     [SerializeField] private CameraScript cameraScript;
     [SerializeField] private Camera gameplayCamera;
     [SerializeField] private GameObject notificationPrefab;
+    private LymphaticBatchConsoleUI batchConsoleUI;
     public Sprite fungalIcon;
     [SerializeField, HideInInspector] private Texture2D bacteriaSprite;
     [SerializeField, HideInInspector] private Texture2D virusSprite;
@@ -120,7 +121,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             return;
 
         SyncNotifications();
-        if (IsCirculatoryLayerActive() && infectionSpawner.IsAwaitingInfectionTargetSelection && GameplaySpeed.DeltaTime > 0f)
+        if (IsCirculatoryLayerActive() && IsTargetPickerActive() && GameplaySpeed.DeltaTime > 0f)
             HandlePickerClick();
     }
 
@@ -130,6 +131,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             return;
 
         bool circulatoryActive = IsCirculatoryLayerActive();
+        bool targetPickerActive = IsTargetPickerActive();
         IReadOnlyList<InfectionSpawner.InfectionMarker> activeInfections = infectionSpawner.ActiveInfections;
         foreach (NotificationState state in notifications.Values)
             state.desired = false;
@@ -165,7 +167,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             if (!state.desired)
                 state.fadingOut = true;
 
-            UpdateNotification(state, circulatoryActive, GameplaySpeed.DeltaTime);
+            UpdateNotification(state, circulatoryActive, targetPickerActive, GameplaySpeed.DeltaTime);
             if (state.fadingOut && state.alpha <= 0f)
             {
                 if (state.gameObject != null)
@@ -248,25 +250,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
 
     private bool IsCirculatoryLayerActive()
     {
-        if (cameraScript == null || cameraScript.floor1 == null || cameraScript.floor2 == null ||
-            cameraScript.floor3 == null || cameraScript.floor4 == null)
-            return false;
-
-        Vector3 cameraPosition = cameraScript.transform.position;
-        float nearestDistanceSquared = float.PositiveInfinity;
-        Transform nearestFloor = null;
-        Transform[] floors = { cameraScript.floor1, cameraScript.floor2, cameraScript.floor3, cameraScript.floor4 };
-        foreach (Transform floor in floors)
-        {
-            float distanceSquared = (cameraPosition - floor.position).sqrMagnitude;
-            if (distanceSquared >= nearestDistanceSquared)
-                continue;
-
-            nearestDistanceSquared = distanceSquared;
-            nearestFloor = floor;
-        }
-
-        return nearestFloor == cameraScript.floor2;
+        return cameraScript != null && cameraScript.SelectedLayer == 2;
     }
 
     private NotificationState CreateNotification(InfectionSpawner.InfectionMarker marker)
@@ -370,7 +354,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             spriteRenderer.color = MutatedColor;
     }
 
-    private void UpdateNotification(NotificationState state, bool circulatoryActive, float gameplayDeltaTime)
+    private void UpdateNotification(NotificationState state, bool circulatoryActive, bool targetPickerActive, float gameplayDeltaTime)
     {
         if (state.gameObject == null || state.spriteRenderer == null || state.boxCollider == null)
             return;
@@ -380,9 +364,8 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         else
             state.alpha = fadeDuration > 0f ? Mathf.MoveTowards(state.alpha, 1f, gameplayDeltaTime / fadeDuration) : 1f;
 
-        bool pickerActive = infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection;
         state.spriteRenderer.enabled = circulatoryActive;
-        state.boxCollider.enabled = circulatoryActive && pickerActive && !state.fadingOut;
+        state.boxCollider.enabled = circulatoryActive && targetPickerActive && !state.fadingOut;
         Color displayColor = state.marker != null && state.marker.wasBarrierMutated
             ? MutatedColor
             : state.marker != null && state.marker.infection != null &&
@@ -503,8 +486,16 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             }
         }
 
-        if (nearestNotification != null && infectionSpawner != null &&
-            infectionSpawner.IsAwaitingInfectionTargetSelection)
-            infectionSpawner.RequestDispatchToInfection(nearestNotification.marker);
+        if (nearestNotification != null && infectionSpawner != null && IsTargetPickerActive())
+            infectionSpawner.NotifyInfectionTargetClicked(nearestNotification.marker);
+    }
+
+    private bool IsTargetPickerActive()
+    {
+        if (infectionSpawner != null && infectionSpawner.IsAwaitingInfectionTargetSelection)
+            return true;
+        if (batchConsoleUI == null)
+            batchConsoleUI = Object.FindFirstObjectByType<LymphaticBatchConsoleUI>();
+        return batchConsoleUI != null && batchConsoleUI.IsAwaitingTargetSelection;
     }
 }

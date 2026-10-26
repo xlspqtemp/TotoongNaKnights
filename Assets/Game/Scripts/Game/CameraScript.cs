@@ -24,6 +24,10 @@ public class CameraScript : MonoBehaviour
 
     public float panSpeed = DefaultPanSpeed;
 
+    /// <summary>Gets the currently selected body-system layer number.</summary>
+    public int SelectedLayer => selectedLayer;
+
+
     /* 08/19, (4)Transform variables allotted for all four(4) systems */
     public Transform floor1;
     public Transform floor2;
@@ -40,6 +44,7 @@ public class CameraScript : MonoBehaviour
     [SerializeField] private GameObject consoleLogPanel;
     [SerializeField] private GameObject pendingInfectionsPanel;
     [SerializeField] private GameObject humanSnapshotPanel;
+    private PendingInfectionsPanel pendingInfectionsPanelController;
     private RectTransform layersPanelRect;
     [SerializeField] private Vector2 focusLayersPosition;
     [SerializeField] private Vector2 defaultLayersPosition;
@@ -99,9 +104,6 @@ public class CameraScript : MonoBehaviour
     private BarrierHealth activeBreachAlarmBarrier;
     private Transform followTarget;
     private Vector3 followOffset;
-    private Vector3 positionBeforeFollow;
-    private float zoomBeforeFollow;
-    private bool hadOrthographicZoomBeforeFollow;
 
     private void Awake()
     {
@@ -136,8 +138,11 @@ public class CameraScript : MonoBehaviour
 
         PendingInfectionsPanel livePendingInfectionsPanel = FindFirstObjectByType<PendingInfectionsPanel>();
         if (livePendingInfectionsPanel != null)
+        {
+            pendingInfectionsPanelController = livePendingInfectionsPanel;
             pendingInfectionsPanel = livePendingInfectionsPanel.gameObject;
-        SetPendingInfectionsPanelVisible(true);
+        }
+        SetPendingInfectionsPanelVisible(false);
 
         SetSelectedLayer(1, false);
         InitializeBreachIcons();
@@ -557,43 +562,33 @@ public class CameraScript : MonoBehaviour
         }
     }
 
-    /// <summary>Locks the camera to a moving unit while preserving the current camera offset.</summary>
-    public void SetFollowTarget(Transform target)
+    /// <summary>Locks the camera onto a moving unit and applies a close environment-aware zoom.</summary>
+    public void SetFollowTarget(Transform target, float orthographicSize)
     {
         if (target == null)
             return;
 
-        if (followTarget == null)
-        {
-            positionBeforeFollow = transform.position;
-            hadOrthographicZoomBeforeFollow = sceneCamera != null && sceneCamera.orthographic;
-            if (hadOrthographicZoomBeforeFollow)
-                zoomBeforeFollow = sceneCamera.orthographicSize;
-        }
-
         StopInfectionFocus();
         followTarget = target;
-        followOffset = transform.position - target.position;
+        followOffset = Vector3.zero;
+        if (sceneCamera == null)
+            sceneCamera = GetComponentInChildren<Camera>();
+        if (sceneCamera != null && sceneCamera.orthographic)
+        {
+            focusZoomController = GetComponent<CameraScript_Zoom>();
+            float minimumZoom = focusZoomController != null ? focusZoomController.minZoom : 2f;
+            float maximumZoom = focusZoomController != null ? focusZoomController.maxZoom : 50f;
+            float targetZoom = Mathf.Clamp(orthographicSize, minimumZoom, maximumZoom);
+            sceneCamera.orthographicSize = targetZoom;
+            if (focusZoomController != null && ZoomControllerCurrentZoomField != null)
+                ZoomControllerCurrentZoomField.SetValue(focusZoomController, targetZoom);
+        }
     }
 
-    /// <summary>Releases the camera follow lock and restores the camera position and zoom from before following.</summary>
+    /// <summary>Releases camera follow at the camera's current position and zoom.</summary>
     public void ClearFollowTarget()
     {
-        if (followTarget == null)
-            return;
-
         followTarget = null;
-        transform.position = positionBeforeFollow;
-        if (hadOrthographicZoomBeforeFollow && sceneCamera != null && sceneCamera.orthographic)
-        {
-            sceneCamera.orthographicSize = zoomBeforeFollow;
-            if (focusZoomController == null)
-                focusZoomController = GetComponent<CameraScript_Zoom>();
-            if (focusZoomController != null && ZoomControllerCurrentZoomField != null)
-                ZoomControllerCurrentZoomField.SetValue(focusZoomController, zoomBeforeFollow);
-        }
-
-        hadOrthographicZoomBeforeFollow = false;
     }
 
     private void LateUpdate()
@@ -729,11 +724,14 @@ public class CameraScript : MonoBehaviour
         }
 
         StopInfectionFocus();
+        if (followTarget != null)
+            ClearFollowTarget();
         selectedLayer = layerNumber;
         HideAllSystemControls();
 
         bool showLayerHud = layerNumber == 1 || layerNumber == 2;
         SetLayerHudPanelsVisible(showLayerHud && !layerHudVisibilityDeferred);
+        SetPendingInfectionsPanelVisible(layerNumber == 2 && !layerHudVisibilityDeferred);
         if (layersPanelRect != null)
             layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
 
@@ -766,6 +764,13 @@ public class CameraScript : MonoBehaviour
 
         LayerSelectionHUD.SetSelectedLayer(selectedLayer);
 
+        LymphaticTrainingConsoleUI trainingConsole = FindFirstObjectByType<LymphaticTrainingConsoleUI>();
+        if (trainingConsole != null)
+            trainingConsole.SetLayerAvailable(selectedLayer == 1);
+        LymphaticBatchConsoleUI batchConsole = FindFirstObjectByType<LymphaticBatchConsoleUI>();
+        if (batchConsole != null)
+            batchConsole.SetLayerAvailable(selectedLayer == 2);
+
         InfectionSpawner infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
         if (infectionSpawner != null)
         {
@@ -795,7 +800,7 @@ public class CameraScript : MonoBehaviour
 
         layerHudVisibilityDeferred = false;
         SetLayerHudPanelsVisible(selectedLayer == 1 || selectedLayer == 2);
-        SetPendingInfectionsPanelVisible(true);
+        SetPendingInfectionsPanelVisible(selectedLayer == 2);
     }
 
     private void SetLayerHudPanelsVisible(bool isVisible)
@@ -808,8 +813,12 @@ public class CameraScript : MonoBehaviour
 
     private void SetPendingInfectionsPanelVisible(bool isVisible)
     {
-        if (pendingInfectionsPanel != null)
-            pendingInfectionsPanel.SetActive(isVisible);
+        if (pendingInfectionsPanelController == null && pendingInfectionsPanel != null)
+            pendingInfectionsPanelController = pendingInfectionsPanel.GetComponent<PendingInfectionsPanel>();
+        if (pendingInfectionsPanelController == null)
+            pendingInfectionsPanelController = FindFirstObjectByType<PendingInfectionsPanel>();
+        if (pendingInfectionsPanelController != null)
+            pendingInfectionsPanelController.SetLayerVisible(isVisible);
     }
 
     private void SetLymphaticOrdersVisible(bool isVisible)

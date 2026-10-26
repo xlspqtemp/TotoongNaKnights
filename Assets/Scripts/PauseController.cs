@@ -84,7 +84,7 @@ public class PauseController : MonoBehaviour
     public void SetPaused(bool paused)
     {
         isPaused = paused;
-        Time.timeScale = isPaused ? 0f : 1f;
+        Time.timeScale = isPaused ? 0f : GameplaySpeed.ResumeTimeScale;
 
         if (pauseRaycastBlocker != null)
         {

@@ -39,6 +39,8 @@ public class GameBackgroundVideo : MonoBehaviour
         videoPlayer.renderMode = VideoRenderMode.RenderTexture;
         videoPlayer.isLooping = true;
         videoPlayer.playOnAwake = false;
+        videoPlayer.playbackSpeed = 1f;
+        videoPlayer.timeReference = VideoTimeReference.Freerun;
         videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
         backgroundImage.texture = renderTexture;
 

@@ -4,8 +4,9 @@ using UnityEngine;
 public class RoutineSystem : MonoBehaviour
 {
     private const int HOURS_PER_DAY = 24;
-    private const string ROUTINE_LOG_PREFIX = "<color=#55AAFF><b>[ROUTINE]</b></color>";
-    private const string ROUTINE_SYSTEM_LOG_PREFIX = "<color=#55AAFF><b>[ROUTINE SYSTEM]</b></color>";
+    private const int DEFAULT_DEBUG_JUMP_HOUR = 12;
+
+    private enum DifficultyListener { None, Routine, RandomEvent }
 
     public static RoutineSystem Instance { get; private set; }
 
@@ -20,16 +21,10 @@ public class RoutineSystem : MonoBehaviour
     [Header("Difficulty Schedules")]
     [SerializeField] private List<RoutineDifficultySchedule> schedules = new List<RoutineDifficultySchedule>();
 
-    [Header("Debug Controls")]
-    [SerializeField] private bool enableDebugKeyboardShortcuts = true;
-    [SerializeField] private KeyCode forceAdvanceHourKey = KeyCode.F7;
-    [SerializeField] private KeyCode cycleDifficultyKey = KeyCode.F8;
-    [SerializeField] private KeyCode jumpToHourKey = KeyCode.F6;
-    [Range(0, 23)]
-    [SerializeField] private int debugJumpHour = 12;
-
     private RoutineActivity currentActivity;
     private bool hasCurrentActivity;
+    private bool debuggerModeEnabled;
+    private DifficultyListener activeDifficultyListener;
 
     private void Awake()
     {
@@ -80,18 +75,146 @@ public class RoutineSystem : MonoBehaviour
     private void Update()
     {
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-        if (!enableDebugKeyboardShortcuts)
+        HandleDebuggerInput();
+#endif
+    }
+
+    private void HandleDebuggerInput()
+    {
+        if (Input.GetKeyDown(KeyCode.F1))
+        {
+            debuggerModeEnabled = !debuggerModeEnabled;
+            activeDifficultyListener = DifficultyListener.None;
+            LogDebuggerFeedback(debuggerModeEnabled
+                ? "F1: Debugger mode enabled. F2/F3 set difficulty; F4 forces an event; F6-F8 and F10 run legacy debug controls."
+                : "F1: Debugger mode disabled.");
+            return;
+        }
+
+        if (!debuggerModeEnabled)
             return;
 
-        if (Input.GetKeyDown(forceAdvanceHourKey))
-            ForceAdvanceHour();
+        if (Input.GetKeyDown(KeyCode.F2))
+        {
+            activeDifficultyListener = activeDifficultyListener == DifficultyListener.Routine
+                ? DifficultyListener.None
+                : DifficultyListener.Routine;
+            LogDebuggerFeedback(activeDifficultyListener == DifficultyListener.Routine
+                ? "F2: Choose routine difficulty with 1 Easy, 2 Normal, 3 Medium, or 4 Hard. Press F2 again to cancel."
+                : "F2: Routine difficulty selection closed.");
+            return;
+        }
 
-        if (Input.GetKeyDown(cycleDifficultyKey))
-            CycleDifficulty();
+        if (Input.GetKeyDown(KeyCode.F3))
+        {
+            activeDifficultyListener = activeDifficultyListener == DifficultyListener.RandomEvent
+                ? DifficultyListener.None
+                : DifficultyListener.RandomEvent;
+            LogDebuggerFeedback(activeDifficultyListener == DifficultyListener.RandomEvent
+                ? "F3: Choose random event difficulty with 1 Easy, 2 Normal, 3 Medium, or 4 Hard. Press F3 again to cancel."
+                : "F3: Random event difficulty selection closed.");
+            return;
+        }
 
-        if (Input.GetKeyDown(jumpToHourKey))
-            JumpToConfiguredHour();
-#endif
+        if (Input.GetKeyDown(KeyCode.F4))
+        {
+            RandomEventSystem randomEventSystem = RandomEventSystem.Instance;
+            bool eventTriggered = randomEventSystem != null && randomEventSystem.TryForceTriggerEvent();
+            LogDebuggerFeedback(eventTriggered
+                ? "F4: Random event forced."
+                : "F4: No random event could be triggered.");
+            return;
+        }
+
+        if (activeDifficultyListener == DifficultyListener.None)
+        {
+            if (Input.GetKeyDown(KeyCode.F6))
+            {
+                JumpToHour(DEFAULT_DEBUG_JUMP_HOUR);
+                LogDebuggerFeedback("F6: Clock jumped to 12 PM.");
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.F7))
+            {
+                ForceAdvanceHour();
+                LogDebuggerFeedback("F7: Advanced the game clock by one hour.");
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.F8))
+            {
+                CycleDifficulty();
+                LogDebuggerFeedback("F8: Cycled routine difficulty to " + activeDifficulty + ".");
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.F10))
+            {
+                RandomEventSystem randomEventSystem = RandomEventSystem.Instance;
+                if (randomEventSystem != null)
+                {
+                    randomEventSystem.CycleDifficulty();
+                    LogDebuggerFeedback("F10: Cycled random event difficulty to " + randomEventSystem.ActiveDifficulty + ".");
+                }
+                else
+                {
+                    LogDebuggerFeedback("F10: Random Event System is unavailable.", ConsoleLogUI.LogType.Warning);
+                }
+                return;
+            }
+        }
+
+        if (activeDifficultyListener == DifficultyListener.None || !TryGetDifficultyKey(out int difficultyIndex))
+            return;
+
+        if (activeDifficultyListener == DifficultyListener.Routine)
+        {
+            RoutineDifficulty difficulty = (RoutineDifficulty)(difficultyIndex - 1);
+            SetDifficulty(difficulty);
+            LogDebuggerFeedback("F2: Routine difficulty set to " + difficulty + ".");
+        }
+        else
+        {
+            RandomEventDifficulty difficulty = (RandomEventDifficulty)(difficultyIndex - 1);
+            RandomEventSystem randomEventSystem = RandomEventSystem.Instance;
+            if (randomEventSystem != null)
+            {
+                randomEventSystem.SetDifficulty(difficulty);
+                LogDebuggerFeedback("F3: Random event difficulty set to " + difficulty + ".");
+            }
+            else
+            {
+                LogDebuggerFeedback("F3: Random Event System is unavailable.", ConsoleLogUI.LogType.Warning);
+            }
+        }
+
+        activeDifficultyListener = DifficultyListener.None;
+    }
+
+    private static bool TryGetDifficultyKey(out int difficultyIndex)
+    {
+        if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1))
+            difficultyIndex = 1;
+        else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2))
+            difficultyIndex = 2;
+        else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3))
+            difficultyIndex = 3;
+        else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4))
+            difficultyIndex = 4;
+        else
+        {
+            difficultyIndex = 0;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void LogDebuggerFeedback(string message, ConsoleLogUI.LogType type = ConsoleLogUI.LogType.Info)
+    {
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogDevMode(message, type);
     }
 
     private void HandleHourAdvanced(int currentDay, int currentHour)
@@ -124,10 +247,10 @@ public class RoutineSystem : MonoBehaviour
         UpdateCurrentActivity(dayCounter.CurrentDay, clampedHour);
     }
 
-    [ContextMenu("Routine/Jump To Configured Hour")]
+    [ContextMenu("Routine/Jump To Default Debug Hour")]
     public void JumpToConfiguredHour()
     {
-        JumpToHour(debugJumpHour);
+        JumpToHour(DEFAULT_DEBUG_JUMP_HOUR);
     }
 
     public void SetDifficulty(RoutineDifficulty difficulty)
@@ -164,7 +287,7 @@ public class RoutineSystem : MonoBehaviour
 
         currentActivity = nextActivity;
         hasCurrentActivity = true;
-        string message = $"{ROUTINE_LOG_PREFIX} Day {day}, Hour {hour:00}: {currentActivity}";
+        string message = currentActivity.ToString();
         Debug.Log(message);
         LogToConsole(message);
         OnRoutineActivityChanged?.Invoke(currentActivity);
@@ -216,15 +339,14 @@ public class RoutineSystem : MonoBehaviour
 
     private void LogSystemMessage(string message)
     {
-        string formattedMessage = $"{ROUTINE_SYSTEM_LOG_PREFIX} {message}";
-        Debug.Log(formattedMessage);
-        LogToConsole(formattedMessage);
+        Debug.Log(message);
+        LogToConsole(message);
     }
 
     private void LogToConsole(string message)
     {
         if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log(message, ConsoleLogUI.LogType.System);
+            ConsoleLogUI.Instance.LogRoutine(message, ConsoleLogUI.LogType.System);
     }
 
     private void EnsureSchedules()

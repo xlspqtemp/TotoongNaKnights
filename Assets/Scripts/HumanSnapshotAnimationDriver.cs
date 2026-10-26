@@ -122,6 +122,6 @@ public sealed class HumanSnapshotAnimationDriver : MonoBehaviour
     private void ApplyGameplaySpeed()
     {
         if (characterAnimator != null)
-            characterAnimator.speed = GameplaySpeed.Multiplier;
+            characterAnimator.speed = 1f;
     }
 }

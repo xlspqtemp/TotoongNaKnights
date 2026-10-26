@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Provides gameplay-only acceleration without changing Unity's global time scale.</summary>
+/// <summary>Applies global simulation acceleration while keeping custom gameplay clocks scaled exactly once.</summary>
 public static class GameplaySpeed
 {
     private static readonly float[] SpeedModes = { 1f, 2f, 4f, 6f };
@@ -22,8 +22,11 @@ public static class GameplaySpeed
     /// <summary>Returns whether at least one QTE is currently unresolved.</summary>
     public static bool IsQTEActive => activeQteIds.Count > 0;
 
-    /// <summary>Returns Unity's frame delta scaled for gameplay only.</summary>
-    public static float DeltaTime => Time.deltaTime * Multiplier;
+    /// <summary>Returns Unity's scaled time factor used when gameplay resumes.</summary>
+    public static float ResumeTimeScale => SelectedMultiplier;
+
+    /// <summary>Returns an unscaled frame delta multiplied once by the selected gameplay speed.</summary>
+    public static float DeltaTime => Time.timeScale <= 0f ? 0f : Time.unscaledDeltaTime * Multiplier;
 
     /// <summary>Returns the selected mode index (0=1x, 1=2x, 2=4x, 3=6x).</summary>
     public static int SelectedModeIndex => selectedModeIndex;
@@ -32,6 +35,7 @@ public static class GameplaySpeed
     public static void Cycle()
     {
         selectedModeIndex = (selectedModeIndex + 1) % SpeedModes.Length;
+        ApplyTimeScaleIfRunning();
         OnSpeedChanged?.Invoke();
     }
 
@@ -43,6 +47,7 @@ public static class GameplaySpeed
             return;
 
         selectedModeIndex = clampedIndex;
+        ApplyTimeScaleIfRunning();
         OnSpeedChanged?.Invoke();
     }
 
@@ -81,8 +86,22 @@ public static class GameplaySpeed
         bool changed = selectedModeIndex != 0 || activeQteIds.Count > 0;
         selectedModeIndex = 0;
         activeQteIds.Clear();
+        if (Time.timeScale > 0f)
+            Time.timeScale = 1f;
         if (changed)
             OnSpeedChanged?.Invoke();
+    }
+
+    /// <summary>Restores the currently selected speed after an overlay or pause resumes gameplay.</summary>
+    public static void ApplyResumeTimeScale()
+    {
+        Time.timeScale = ResumeTimeScale;
+    }
+
+    private static void ApplyTimeScaleIfRunning()
+    {
+        if (Time.timeScale > 0f)
+            Time.timeScale = SelectedMultiplier;
     }
 
     /// <summary>Waits for a duration measured in gameplay seconds, respecting the current speed and pause state.</summary>

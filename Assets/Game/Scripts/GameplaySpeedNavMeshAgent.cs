@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-/// <summary>Applies the gameplay-only speed multiplier to a NavMeshAgent while preserving its authored speed.</summary>
+/// <summary>Keeps NavMeshAgents at authored speed because global time scale accelerates their simulation.</summary>
 public sealed class GameplaySpeedNavMeshAgent : MonoBehaviour
 {
     private NavMeshAgent agent;
@@ -41,7 +41,7 @@ public sealed class GameplaySpeedNavMeshAgent : MonoBehaviour
         {
             if (authoredSpeed <= 0f)
                 authoredSpeed = agent.speed;
-            agent.speed = authoredSpeed * GameplaySpeed.Multiplier;
+            agent.speed = authoredSpeed;
         }
     }
 }

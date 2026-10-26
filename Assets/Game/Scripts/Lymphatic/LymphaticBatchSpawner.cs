@@ -522,38 +522,37 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             circulatoryRoute.enabled = false;
     }
 
-    /// <summary>Estimates the remaining travel time for a mobilizing batch in gameplay seconds.</summary>
+    /// <summary>Estimates remaining travel time in gameplay seconds, including the duct-to-infection leg when not yet transferred.</summary>
     public float EstimateTravelTime(LymphaticBatchGroup batch)
     {
         if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Mobilizing)
             return 0f;
 
-        float longestRemainingDistance = 0f;
+        float longestArrivalTime = 0f;
         foreach (GameObject member in batch.Members)
         {
-            if (member == null)
-                continue;
-            NavMeshAgent agent = member.GetComponent<NavMeshAgent>();
-            if (agent == null || !agent.enabled)
+            if (member == null || !member.activeInHierarchy)
                 continue;
 
-            float distance = agent.pathPending || !agent.hasPath
-                ? Vector3.Distance(agent.transform.position, GetCurrentDestination(batch))
+            NavMeshAgent agent = member.GetComponent<NavMeshAgent>();
+            if (agent == null || !agent.enabled || agent.speed <= 0f)
+                continue;
+
+            Vector3 activeWaypoint = !batch.HasEnteredCirculatorySystem && batch.SelectedDuct != null
+                ? batch.SelectedDuct.position
+                : batch.TargetInfection != null ? batch.TargetInfection.worldPosition : member.transform.position;
+            float remainingDistance = agent.pathPending || !agent.hasPath
+                ? Vector3.Distance(agent.transform.position, activeWaypoint)
                 : agent.remainingDistance;
-            longestRemainingDistance = Mathf.Max(longestRemainingDistance, distance);
+            float estimatedTime = remainingDistance / agent.speed;
+
+            if (!batch.HasEnteredCirculatorySystem && batch.SelectedVein != null && batch.TargetInfection != null)
+                estimatedTime += Vector3.Distance(batch.SelectedVein.position, batch.TargetInfection.worldPosition) / agent.speed;
+
+            longestArrivalTime = Mathf.Max(longestArrivalTime, estimatedTime);
         }
 
-        float speed = 0f;
-        foreach (GameObject member in batch.Members)
-        {
-            if (member == null)
-                continue;
-            NavMeshAgent agent = member.GetComponent<NavMeshAgent>();
-            if (agent != null && agent.enabled)
-                speed = Mathf.Max(speed, agent.speed);
-        }
-
-        return speed > 0f ? longestRemainingDistance / speed : 0f;
+        return longestArrivalTime;
     }
 
     private void UpdateBatchMovement()
@@ -578,7 +577,7 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             if (!batch.HasEnteredCirculatorySystem)
             {
                 Transform duct = batch.SelectedDuct;
-                if (duct != null && HasReachedDestination(batch, duct.position))
+                if (duct != null && HasReachedDestination(batch))
                 {
                     if (TryTransferToVein(batch, batch.SelectedVein))
                     {
@@ -590,7 +589,7 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
                 continue;
             }
 
-            if (HasReachedDestination(batch, infection.worldPosition))
+            if (HasReachedDestination(batch))
             {
                 StopBatchAgents(batch);
                 batch.MarkWorking();
@@ -667,7 +666,7 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         return true;
     }
 
-    private bool HasReachedDestination(LymphaticBatchGroup batch, Vector3 destination)
+    private bool HasReachedDestination(LymphaticBatchGroup batch)
     {
         List<NavMeshAgent> agents = GetBatchAgents(batch);
         if (agents.Count == 0)
@@ -679,7 +678,10 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
                 return false;
 
             float threshold = Mathf.Max(arrivalDistance, agent.stoppingDistance + 0.25f);
-            if (Vector3.Distance(agent.transform.position, destination) > threshold)
+            float distanceToSampledDestination = agent.hasPath
+                ? agent.remainingDistance
+                : Vector3.Distance(agent.transform.position, agent.destination);
+            if (distanceToSampledDestination > threshold)
                 return false;
         }
 

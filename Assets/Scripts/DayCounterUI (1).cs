@@ -148,7 +148,7 @@ public class DayCounterUI : MonoBehaviour
 
         if (!clockShouldRun) return;
 
-        minuteTimer += Time.deltaTime * Mathf.Max(0.01f, timeScale) * GameplaySpeed.Multiplier;
+        minuteTimer += Time.unscaledDeltaTime * Mathf.Max(0.01f, timeScale) * GameplaySpeed.Multiplier;
         if (minuteTimer >= runtimeSecondsPerGameMinute)
         {
             minuteTimer -= runtimeSecondsPerGameMinute;
@@ -277,7 +277,7 @@ public class DayCounterUI : MonoBehaviour
         int displayHour = currentHour % 12;
         if (displayHour == 0) displayHour = 12;
         string ampm = currentHour < 12 ? "AM" : "PM";
-        timeLabel.text = $"{displayHour:00}:{currentMinute:00} {ampm}";
+        timeLabel.text = $"{displayHour} {ampm}";
     }
 
     public int CurrentDay => currentDay;

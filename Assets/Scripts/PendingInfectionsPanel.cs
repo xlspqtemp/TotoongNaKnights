@@ -82,6 +82,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private RectTransform panelRect;
     private RectTransform contentRect;
     private Canvas rootCanvas;
+    private CanvasGroup layerVisibilityGroup;
     private Button collapseButton;
     private TextMeshProUGUI collapseButtonLabel;
     private InfectionSpawner infectionSpawner;
@@ -186,6 +187,19 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
         SyncRows();
         UpdateRows(GameplaySpeed.DeltaTime);
+    }
+
+    /// <summary>Shows the pending-infection panel only while the circulatory layer is active.</summary>
+    public void SetLayerVisible(bool isVisible)
+    {
+        if (layerVisibilityGroup == null && panelContainerRect != null)
+            layerVisibilityGroup = panelContainerRect.GetComponent<CanvasGroup>();
+        if (layerVisibilityGroup == null)
+            return;
+
+        layerVisibilityGroup.alpha = isVisible ? 1f : 0f;
+        layerVisibilityGroup.interactable = isVisible;
+        layerVisibilityGroup.blocksRaycasts = isVisible;
     }
 
     /// <summary>Adds a standalone row; live infection rows are synchronized from InfectionSpawner.</summary>
@@ -444,6 +458,12 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         Image containerImage = panelObject.GetComponent<Image>();
         containerImage.color = Color.clear;
         containerImage.raycastTarget = false;
+        layerVisibilityGroup = panelObject.GetComponent<CanvasGroup>();
+        if (layerVisibilityGroup == null)
+            layerVisibilityGroup = panelObject.AddComponent<CanvasGroup>();
+        layerVisibilityGroup.alpha = 1f;
+        layerVisibilityGroup.interactable = true;
+        layerVisibilityGroup.blocksRaycasts = true;
 
         GameObject panelBodyObject = CreateUiObject("Pending Infections Panel Body", panelContainerRect);
         panelRect = panelBodyObject.GetComponent<RectTransform>();

@@ -7,11 +7,15 @@ public sealed class GameplaySpeedButton : MonoBehaviour
 {
     private static readonly Color AccentColor = new Color(0.1f, 0.75f, 0.88f, 1f);
     private static readonly Color PanelColor = new Color(0.035f, 0.055f, 0.075f, 0.96f);
-    private const float ButtonWidth = 64f;
-    private const float ButtonHeight = 60f;
-    private const float ButtonGap = 10f;
+    private const float ButtonWidth = 56f;
+    private const float ButtonHeight = 44f;
+    private const float ButtonGap = 8f;
 
     private Button speedButton;
+    private RectTransform dayCounterRect;
+    private RectTransform canvasRect;
+    private RectTransform speedButtonRect;
+    private readonly Vector3[] dayCounterCorners = new Vector3[4];
     private TextMeshProUGUI speedLabel;
     private TextMeshProUGUI qteLabel;
 
@@ -31,6 +35,11 @@ public sealed class GameplaySpeedButton : MonoBehaviour
         GameplaySpeed.OnSpeedChanged -= RefreshLabel;
     }
 
+    private void LateUpdate()
+    {
+        PositionButton();
+    }
+
     private void OnDestroy()
     {
         if (speedButton != null)
@@ -40,15 +49,15 @@ public sealed class GameplaySpeedButton : MonoBehaviour
     private void CreateButton()
     {
         Canvas canvas = GetComponentInParent<Canvas>();
-        RectTransform panelRect = transform as RectTransform;
-        if (canvas == null || panelRect == null)
+        dayCounterRect = transform as RectTransform;
+        if (canvas == null || dayCounterRect == null)
         {
             Debug.LogWarning("GameplaySpeedButton requires a Day Counter RectTransform under a Canvas.", this);
             enabled = false;
             return;
         }
 
-        RectTransform canvasRect = canvas.transform as RectTransform;
+        canvasRect = canvas.transform as RectTransform;
         if (canvasRect == null)
         {
             Debug.LogWarning("GameplaySpeedButton could not find the Canvas RectTransform.", this);
@@ -57,20 +66,13 @@ public sealed class GameplaySpeedButton : MonoBehaviour
         }
 
         GameObject buttonObject = new GameObject("FastForwardButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(Outline));
-        RectTransform buttonRect = buttonObject.GetComponent<RectTransform>();
-        buttonRect.SetParent(canvasRect, false);
-        buttonRect.anchorMin = new Vector2(0f, 1f);
-        buttonRect.anchorMax = new Vector2(0f, 1f);
-        buttonRect.pivot = new Vector2(0f, 1f);
-        buttonRect.sizeDelta = new Vector2(ButtonWidth, ButtonHeight);
-
-        Vector3[] panelCorners = new Vector3[4];
-        panelRect.GetWorldCorners(panelCorners);
-        Vector3 panelTopRight = canvasRect.InverseTransformPoint(panelCorners[2]);
-        Rect canvasBounds = canvasRect.rect;
-        buttonRect.anchoredPosition = new Vector2(
-            panelTopRight.x - canvasBounds.xMin + ButtonGap,
-            panelTopRight.y - canvasBounds.yMax);
+        speedButtonRect = buttonObject.GetComponent<RectTransform>();
+        speedButtonRect.SetParent(canvasRect, false);
+        speedButtonRect.anchorMin = new Vector2(0f, 1f);
+        speedButtonRect.anchorMax = new Vector2(0f, 1f);
+        speedButtonRect.pivot = new Vector2(0f, 1f);
+        speedButtonRect.sizeDelta = new Vector2(ButtonWidth, ButtonHeight);
+        PositionButton();
 
         Image background = buttonObject.GetComponent<Image>();
         background.color = PanelColor;
@@ -96,12 +98,25 @@ public sealed class GameplaySpeedButton : MonoBehaviour
         };
         speedButton.onClick.AddListener(GameplaySpeed.Cycle);
 
-        CreateText("FastForwardSymbol", buttonRect, ">>", 21f, FontStyles.Bold,
+        CreateText("FastForwardSymbol", speedButtonRect, ">>", 21f, FontStyles.Bold,
             new Vector2(0f, 0.36f), new Vector2(1f, 1f), AccentColor, out _);
-        CreateText("SpeedModeLabel", buttonRect, "1x", 12f, FontStyles.Bold,
+        CreateText("SpeedModeLabel", speedButtonRect, "1x", 12f, FontStyles.Bold,
             new Vector2(0f, 0.1f), new Vector2(1f, 0.4f), AccentColor, out speedLabel);
-        CreateText("QTEOverrideLabel", buttonRect, string.Empty, 8f, FontStyles.Bold,
+        CreateText("QTEOverrideLabel", speedButtonRect, string.Empty, 8f, FontStyles.Bold,
             new Vector2(0f, 0f), new Vector2(1f, 0.16f), AccentColor, out qteLabel);
+    }
+
+    private void PositionButton()
+    {
+        if (dayCounterRect == null || canvasRect == null || speedButtonRect == null)
+            return;
+
+        dayCounterRect.GetWorldCorners(dayCounterCorners);
+        Vector3 panelTopRight = canvasRect.InverseTransformPoint(dayCounterCorners[2]);
+        Rect canvasBounds = canvasRect.rect;
+        speedButtonRect.anchoredPosition = new Vector2(
+            panelTopRight.x - canvasBounds.xMin + ButtonGap,
+            panelTopRight.y - canvasBounds.yMax - dayCounterRect.rect.height * 0.5f);
     }
 
     private void CreateText(

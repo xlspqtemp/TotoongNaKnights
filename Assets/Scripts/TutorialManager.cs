@@ -398,7 +398,7 @@ public sealed class TutorialManager : MonoBehaviour
         {
             if (Time.timeScale <= 0f)
             {
-                Time.timeScale = 1f;
+                GameplaySpeed.ApplyResumeTimeScale();
                 StartCoroutine(CompletePendingRowActionAfterCameraFocus());
             }
             else
@@ -781,7 +781,7 @@ public sealed class TutorialManager : MonoBehaviour
 
         currentActionCompleted = true;
         completedActionSteps.Add(currentStepIndex);
-        Time.timeScale = IsLiveDemonstrationStep() ? 1f : 0f;
+        Time.timeScale = IsLiveDemonstrationStep() ? GameplaySpeed.ResumeTimeScale : 0f;
         RefreshNavigationState();
     }
 
@@ -921,7 +921,7 @@ public sealed class TutorialManager : MonoBehaviour
         ResizePanelToBodyContent();
         ApplyContainerAnchor(step.containerAnchor);
         Debug.Log($"[Tutorial] Applied {step.containerAnchor} container anchor for step {currentStepIndex + 1} of {steps.Count}.", this);
-        Time.timeScale = IsLiveDemonstrationStep() ? 1f : 0f;
+        Time.timeScale = IsLiveDemonstrationStep() ? GameplaySpeed.ResumeTimeScale : 0f;
         if (IsCurrentAction("resolveInfection") && tutorialSpawnedMarker != null)
         {
             CameraScript focusController = FindFirstObjectByType<CameraScript>();

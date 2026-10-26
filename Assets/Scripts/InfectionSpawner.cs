@@ -205,6 +205,17 @@ public sealed class InfectionSpawner : MonoBehaviour
     /// <summary>Raised when the player clicks a live infection row or map icon while assigning a batch target.</summary>
     public event Action<InfectionMarker> OnInfectionTargetClicked;
 
+    /// <summary>Forwards a clicked live infection marker to batch targeting and any active legacy target picker.</summary>
+    public void NotifyInfectionTargetClicked(InfectionMarker marker)
+    {
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            return;
+
+        OnInfectionTargetClicked?.Invoke(marker);
+        if (awaitingInfectionTargetSelection)
+            RequestDispatchToInfection(marker);
+    }
+
     /// <summary>Returns the world-space average position of each deployed squad with at least one living unit.</summary>
     public IReadOnlyList<Vector3> GetDeployedSquadPositions()
     {
@@ -552,8 +563,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void HandlePendingInfectionRowClicked(InfectionMarker marker)
     {
-        OnInfectionTargetClicked?.Invoke(marker);
-        RequestDispatchToInfection(marker);
+        NotifyInfectionTargetClicked(marker);
     }
 
     private void LateUpdate()
@@ -908,9 +918,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
             return;
 
-        OnInfectionTargetClicked?.Invoke(infectionTarget);
-        if (awaitingInfectionTargetSelection)
-            RequestDispatchToInfection(infectionTarget);
+        NotifyInfectionTargetClicked(infectionTarget);
     }
 
     private bool TryGetInfectionTargetAtScreenPosition(Vector2 screenPosition, out InfectionMarker infectionTarget)

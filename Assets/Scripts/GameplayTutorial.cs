@@ -319,7 +319,7 @@ public sealed class GameplayTutorial : MonoBehaviour
         if (pauseController != null)
             pauseController.SetPaused(false);
         else
-            Time.timeScale = 1f;
+            GameplaySpeed.ApplyResumeTimeScale();
     }
 
     private static void SetStretch(RectTransform rect)
