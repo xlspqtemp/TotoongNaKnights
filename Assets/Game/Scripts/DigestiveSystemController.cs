@@ -15,7 +15,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private const float SpawnIntervalSeconds = 0.5f;
     private const float ManualCooldownSeconds = 5f;
     private const float DefaultTransitSpeed = 20f;
-    private const string OrdersContainerPath = "HUDCanvas/DigestiveOrdersContainer";
+    private const string OrdersContainerPath = "/Event Handlers/HUDCanvas/DigestiveOrdersContainer";
     private const string SpoiledFoodQTEId = "Ate expired/spoiled food";
     private const string ExpiredFoodEventName = "Ate expired/spoiled food";
     private const string JunkFoodEventName = "Junk food binge";
@@ -46,15 +46,15 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private static readonly string[] DefaultPathwayObjectPaths =
     {
-        "/Digestive/Pathway/Stomach",
-        "/Digestive/Pathway/Intestine Entry",
-        "/Digestive/Pathway/Intestine",
-        "/Digestive/Pathway/Intestine (1)",
-        "/Digestive/Pathway/Intestine",
-        "/Digestive/Pathway/Intestine Entry",
-        "/Digestive/Pathway/Large Intestine",
-        "/Digestive/Pathway/Large Intestine (1)",
-        "/Digestive/Pathway/Anus"
+        "/Layers/Digestive/Pathway/Stomach",
+        "/Layers/Digestive/Pathway/Intestine Entry",
+        "/Layers/Digestive/Pathway/Intestine",
+        "/Layers/Digestive/Pathway/Intestine (1)",
+        "/Layers/Digestive/Pathway/Intestine",
+        "/Layers/Digestive/Pathway/Intestine Entry",
+        "/Layers/Digestive/Pathway/Large Intestine",
+        "/Layers/Digestive/Pathway/Large Intestine (1)",
+        "/Layers/Digestive/Pathway/Anus"
     };
 
     [SerializeField] private GameObject foodPrefab;
@@ -106,9 +106,9 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private void Start()
     {
         if (mouthPoint == null)
-            mouthPoint = GameObject.Find("/Digestive/Pathway/Mouth")?.transform;
+            mouthPoint = GameObject.Find("/Layers/Digestive/Pathway/Mouth")?.transform;
         if (anusPoint == null)
-            anusPoint = GameObject.Find("/Digestive/Pathway/Anus")?.transform;
+            anusPoint = GameObject.Find("/Layers/Digestive/Pathway/Anus")?.transform;
         if (pathwayWaypoints == null || pathwayWaypoints.Length == 0)
             pathwayWaypoints = FindDefaultPathwayWaypoints();
         if (anusPoint == null && pathwayWaypoints != null && pathwayWaypoints.Length > 0)
@@ -135,6 +135,8 @@ public sealed class DigestiveSystemController : MonoBehaviour
             {
                 vomitButton = vomitTransform.GetComponent<Button>();
                 vomitLabel = vomitTransform.GetComponentInChildren<TextMeshProUGUI>(true);
+                if (vomitButton != null)
+                    vomitButton.gameObject.SetActive(true);
                 CenterQteButton(vomitButton);
             }
         }
@@ -159,7 +161,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void InitializeBarrierHealth()
     {
-        GameObject digestiveRoot = GameObject.Find("/Digestive");
+        GameObject digestiveRoot = GameObject.Find("/Layers/Digestive");
         if (digestiveRoot == null)
         {
             Debug.LogError("DigestiveSystemController could not find the Digestive layer root for BarrierHealth.", this);
@@ -188,6 +190,8 @@ public sealed class DigestiveSystemController : MonoBehaviour
         }
 
         RectTransform gaugeRect = barrierGaugeImage.rectTransform;
+        barrierGaugeImage.gameObject.SetActive(true);
+        barrierGaugeImage.enabled = true;
         gaugeRect.anchorMin = new Vector2(0.5f, 0.5f);
         gaugeRect.anchorMax = new Vector2(0.5f, 0.5f);
         gaugeRect.pivot = new Vector2(0.5f, 0.5f);
@@ -280,7 +284,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void InitializeBreachVisuals()
     {
-        Canvas canvas = GameObject.Find("HUDCanvas")?.GetComponent<Canvas>();
+        Canvas canvas = GameObject.Find("/Event Handlers/HUDCanvas")?.GetComponent<Canvas>();
         if (canvas == null)
             canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)

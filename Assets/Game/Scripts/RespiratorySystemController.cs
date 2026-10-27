@@ -21,7 +21,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const float BarrierRestorePerAction = 20f;
     private const float BarrierMaximum = 100f;
     private const string BarrierGaugeObjectName = "RespiratoryBarrierGauge";
-    private const string OrdersContainerPath = "HUDCanvas/RespiratoryOrdersContainer";
+    private const string OrdersContainerPath = "/Event Handlers/HUDCanvas/RespiratoryOrdersContainer";
     private const string BreachOverlayObjectName = "RespiratoryBarrierBreachOverlay";
     private const string BreachWarningObjectName = "RespiratoryBarrierBreachWarning";
     private const string BreachWarningMessage = "BARRIER BREACHED";
@@ -70,6 +70,16 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void Start()
     {
+        if (coughButton == null)
+        {
+            Transform coughTransform = GameObject.Find(OrdersContainerPath)?.transform.Find("CoughButton");
+            if (coughTransform != null)
+                coughButton = coughTransform.GetComponent<Button>();
+        }
+
+        if (coughButtonLabel == null && coughButton != null)
+            coughButtonLabel = coughButton.GetComponentInChildren<TextMeshProUGUI>(true);
+
         CenterQteButton(coughButton);
         SetButtonVisibility(coughButton, true);
         SetButtonVisibility(testContaminatedAirButton, false);
@@ -108,7 +118,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     }
     private void InitializeBarrierHealth()
     {
-        GameObject respiratoryRoot = GameObject.Find("/Respiratory");
+        GameObject respiratoryRoot = GameObject.Find("/Layers/Respiratory");
         if (respiratoryRoot == null)
         {
             Debug.LogError("RespiratorySystemController could not find the Respiratory layer root for BarrierHealth.", this);
@@ -137,6 +147,8 @@ public sealed class RespiratorySystemController : MonoBehaviour
         }
 
         RectTransform gaugeRect = barrierGaugeImage.rectTransform;
+        barrierGaugeImage.gameObject.SetActive(true);
+        barrierGaugeImage.enabled = true;
         gaugeRect.anchorMin = new Vector2(0.5f, 0.5f);
         gaugeRect.anchorMax = new Vector2(0.5f, 0.5f);
         gaugeRect.pivot = new Vector2(0.5f, 0.5f);
@@ -229,7 +241,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void InitializeBreachVisuals()
     {
-        Canvas canvas = GameObject.Find("HUDCanvas")?.GetComponent<Canvas>();
+        Canvas canvas = GameObject.Find("/Event Handlers/HUDCanvas")?.GetComponent<Canvas>();
         if (canvas == null)
             canvas = FindFirstObjectByType<Canvas>();
         if (canvas == null)
@@ -447,6 +459,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             return;
         }
 
+        button.gameObject.SetActive(isVisible);
         CanvasGroup canvasGroup = button.GetComponent<CanvasGroup>();
         if (canvasGroup == null)
         {
