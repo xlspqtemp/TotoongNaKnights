@@ -731,7 +731,7 @@ public class CameraScript : MonoBehaviour
 
         bool showLayerHud = layerNumber == 1 || layerNumber == 2;
         SetLayerHudPanelsVisible(showLayerHud && !layerHudVisibilityDeferred);
-        SetPendingInfectionsPanelVisible(layerNumber == 2 && !layerHudVisibilityDeferred);
+        SetPendingInfectionsPanelVisible((layerNumber == 1 || layerNumber == 2) && !layerHudVisibilityDeferred);
         if (layersPanelRect != null)
             layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
 
@@ -800,7 +800,7 @@ public class CameraScript : MonoBehaviour
 
         layerHudVisibilityDeferred = false;
         SetLayerHudPanelsVisible(selectedLayer == 1 || selectedLayer == 2);
-        SetPendingInfectionsPanelVisible(selectedLayer == 2);
+        SetPendingInfectionsPanelVisible(selectedLayer == 1 || selectedLayer == 2);
     }
 
     private void SetLayerHudPanelsVisible(bool isVisible)

@@ -68,9 +68,9 @@ public sealed class GameplaySpeedButton : MonoBehaviour
         GameObject buttonObject = new GameObject("FastForwardButton", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button), typeof(Outline));
         speedButtonRect = buttonObject.GetComponent<RectTransform>();
         speedButtonRect.SetParent(canvasRect, false);
-        speedButtonRect.anchorMin = new Vector2(0f, 1f);
-        speedButtonRect.anchorMax = new Vector2(0f, 1f);
-        speedButtonRect.pivot = new Vector2(0f, 1f);
+        speedButtonRect.anchorMin = new Vector2(0f, 0.5f);
+        speedButtonRect.anchorMax = new Vector2(0f, 0.5f);
+        speedButtonRect.pivot = new Vector2(0f, 0.5f);
         speedButtonRect.sizeDelta = new Vector2(ButtonWidth, ButtonHeight);
         PositionButton();
 
@@ -112,11 +112,13 @@ public sealed class GameplaySpeedButton : MonoBehaviour
             return;
 
         dayCounterRect.GetWorldCorners(dayCounterCorners);
+        Vector3 panelBottomLeft = canvasRect.InverseTransformPoint(dayCounterCorners[0]);
         Vector3 panelTopRight = canvasRect.InverseTransformPoint(dayCounterCorners[2]);
         Rect canvasBounds = canvasRect.rect;
+        float panelCenterY = (panelBottomLeft.y + panelTopRight.y) * 0.5f;
         speedButtonRect.anchoredPosition = new Vector2(
             panelTopRight.x - canvasBounds.xMin + ButtonGap,
-            panelTopRight.y - canvasBounds.yMax - dayCounterRect.rect.height * 0.5f);
+            panelCenterY);
     }
 
     private void CreateText(

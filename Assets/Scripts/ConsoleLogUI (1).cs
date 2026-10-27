@@ -13,13 +13,15 @@ public class ConsoleLogUI : MonoBehaviour
     public static ConsoleLogUI Instance { get; private set; }
 
     public enum LogType { Info, Success, Warning, Danger, System }
-    public enum LogCategory { Routines, RandomEvents, DevMode, Shared }
+    public enum LogCategory { Routines, RandomEvents, DevMode, Shared, BattleLog }
 
     private sealed class LogEntry
     {
         public string Message;
         public LogType Type;
         public LogCategory Category;
+        public int Day;
+        public int Hour;
         public TextMeshProUGUI VisualLine;
     }
 
@@ -54,6 +56,7 @@ public class ConsoleLogUI : MonoBehaviour
 
     private readonly List<LogEntry> retainedEntries = new List<LogEntry>();
     private readonly List<Button> categoryButtons = new List<Button>();
+    private RectTransform battleLogContentRect;
     private LogCategory selectedCategory = LogCategory.Routines;
     private int totalEvents;
     private bool scrollStateInitialized;
@@ -66,7 +69,14 @@ public class ConsoleLogUI : MonoBehaviour
     private static readonly Color TabNormalColor = new Color(0.035f, 0.075f, 0.09f, 0.98f);
     private static readonly Color TabSelectedColor = new Color(0.06f, 0.32f, 0.36f, 1f);
     private static readonly Color TabTextColor = new Color(0.75f, 0.86f, 0.89f, 1f);
-    private static readonly string[] TabLabels = { "Routines", "Random Events", "Dev Mode" };
+    private static readonly string[] TabLabels = { "Battle Log", "Routines", "Random Events", "Dev Mode" };
+    private static readonly LogCategory[] TabCategories =
+    {
+        LogCategory.BattleLog,
+        LogCategory.Routines,
+        LogCategory.RandomEvents,
+        LogCategory.DevMode
+    };
 
     private void Awake()
     {
@@ -118,6 +128,12 @@ public class ConsoleLogUI : MonoBehaviour
         AddEntry(message, type, LogCategory.DevMode);
     }
 
+    /// <summary>Logs unit batch actions only in the Battle Log tab.</summary>
+    public void LogBattleAction(string message, LogType type = LogType.Info)
+    {
+        AddEntry(message, type, LogCategory.BattleLog);
+    }
+
     private void AddEntry(string message, LogType type, LogCategory category)
     {
         if (logLinePrefab == null || contentParent == null)
@@ -126,11 +142,17 @@ public class ConsoleLogUI : MonoBehaviour
             return;
         }
 
+        int logDay = dayCounter != null ? dayCounter.CurrentDay : 0;
+        int logHour = useGameClockTimestamp && dayCounter != null
+            ? dayCounter.CurrentHour
+            : System.DateTime.Now.Hour;
         LogEntry entry = new LogEntry
         {
             Message = StripRichText(message ?? string.Empty),
             Type = type,
-            Category = category
+            Category = category,
+            Day = logDay,
+            Hour = logHour
         };
         retainedEntries.Add(entry);
         totalEvents++;
@@ -145,6 +167,32 @@ public class ConsoleLogUI : MonoBehaviour
             else
                 ignoreScrollChangesUntil = Time.unscaledTime + 0.2f;
         }
+    }
+
+    private void CreateBattleLogContent(RectTransform viewportRect)
+    {
+        GameObject contentObject = new GameObject("BattleLogContent", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        contentObject.transform.SetParent(viewportRect, false);
+        battleLogContentRect = contentObject.GetComponent<RectTransform>();
+        battleLogContentRect.anchorMin = new Vector2(0f, 1f);
+        battleLogContentRect.anchorMax = new Vector2(1f, 1f);
+        battleLogContentRect.pivot = new Vector2(0f, 1f);
+        battleLogContentRect.anchoredPosition = Vector2.zero;
+        battleLogContentRect.sizeDelta = new Vector2(0f, 12f);
+
+        VerticalLayoutGroup layout = contentObject.GetComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(8, 8, 6, 6);
+        layout.spacing = 3f;
+        layout.childAlignment = TextAnchor.UpperLeft;
+        layout.childControlWidth = true;
+        layout.childControlHeight = false;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        ContentSizeFitter sizeFitter = contentObject.GetComponent<ContentSizeFitter>();
+        sizeFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        sizeFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        contentObject.SetActive(false);
     }
 
     private void CreateCategoryTabs()
@@ -162,6 +210,7 @@ public class ConsoleLogUI : MonoBehaviour
             topOffset.y = -80f;
             viewportRect.offsetMin = bottomOffset;
             viewportRect.offsetMax = topOffset;
+            CreateBattleLogContent(viewportRect);
         }
 
         GameObject tabBarObject = new GameObject("ConsoleCategoryTabs", typeof(RectTransform));
@@ -202,7 +251,7 @@ public class ConsoleLogUI : MonoBehaviour
                 colorMultiplier = 1f,
                 fadeDuration = 0.1f
             };
-            LogCategory category = (LogCategory)tabIndex;
+            LogCategory category = TabCategories[tabIndex];
             button.onClick.AddListener(() => SelectCategory(category));
             categoryButtons.Add(button);
 
@@ -232,6 +281,7 @@ public class ConsoleLogUI : MonoBehaviour
             return;
 
         selectedCategory = category;
+        SetCategoryContentVisibility();
         RefreshCategoryTabColors();
         foreach (LogEntry entry in retainedEntries)
         {
@@ -248,18 +298,32 @@ public class ConsoleLogUI : MonoBehaviour
         RequestAutoScroll();
     }
 
+    private void SetCategoryContentVisibility()
+    {
+        bool showBattleLog = selectedCategory == LogCategory.BattleLog;
+        if (contentParent != null)
+            contentParent.gameObject.SetActive(!showBattleLog);
+        if (battleLogContentRect != null)
+            battleLogContentRect.gameObject.SetActive(showBattleLog);
+        if (scrollRect != null)
+            scrollRect.content = showBattleLog ? battleLogContentRect : contentParent as RectTransform;
+    }
+
     private void RefreshCategoryTabColors()
     {
         for (int index = 0; index < categoryButtons.Count; index++)
         {
             Image background = categoryButtons[index].GetComponent<Image>();
             if (background != null)
-                background.color = (int)selectedCategory == index ? TabSelectedColor : TabNormalColor;
+                background.color = TabCategories[index] == selectedCategory ? TabSelectedColor : TabNormalColor;
         }
     }
 
     private bool IsVisibleInSelectedCategory(LogEntry entry)
     {
+        if (selectedCategory == LogCategory.BattleLog)
+            return entry.Category == LogCategory.BattleLog;
+
         return entry.Category == LogCategory.Shared || entry.Category == selectedCategory;
     }
 
@@ -268,8 +332,14 @@ public class ConsoleLogUI : MonoBehaviour
         if (entry.VisualLine != null || !IsVisibleInSelectedCategory(entry))
             return;
 
-        TextMeshProUGUI line = Instantiate(logLinePrefab, contentParent);
-        line.text = $"[{GetTimestamp()}] {entry.Message}";
+        Transform targetParent = entry.Category == LogCategory.BattleLog
+            ? battleLogContentRect
+            : contentParent;
+        if (targetParent == null)
+            return;
+
+        TextMeshProUGUI line = Instantiate(logLinePrefab, targetParent);
+        line.text = $"[Day {entry.Day}] [{GetTimestamp(entry.Hour)}] {entry.Message}";
         line.color = GetColor(entry.Type);
         line.gameObject.SetActive(true);
         entry.VisualLine = line;
@@ -315,11 +385,8 @@ public class ConsoleLogUI : MonoBehaviour
         }
     }
 
-    private string GetTimestamp()
+    private static string GetTimestamp(int hour)
     {
-        int hour = useGameClockTimestamp && dayCounter != null
-            ? dayCounter.CurrentHour
-            : System.DateTime.Now.Hour;
         int displayHour = hour % 12;
         if (displayHour == 0)
             displayHour = 12;

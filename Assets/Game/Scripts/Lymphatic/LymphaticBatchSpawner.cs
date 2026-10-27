@@ -159,10 +159,16 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         batch.BeginMobilization(infection, duct, vein);
         Vector3 firstDestination = batch.HasEnteredCirculatorySystem ? infection.worldPosition : duct.position;
         if (TrySetDestinations(batch, firstDestination, transferNavMeshSampleRadius))
+        {
+            if (ConsoleLogUI.Instance != null)
+                ConsoleLogUI.Instance.LogBattleAction("Batch " + batch.BatchId + " mobilizing to " + infection.infection.displayName + ".", ConsoleLogUI.LogType.Success);
             return true;
+        }
 
         StopBatchAgents(batch);
         batch.AbortOrder();
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogBattleAction("Batch " + batch.BatchId + " could not reach the selected infection.", ConsoleLogUI.LogType.Warning);
         return false;
     }
 
@@ -175,6 +181,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
 
         StopBatchAgents(batch);
         batch.AbortOrder();
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogBattleAction("Batch " + batch.BatchId + " target aborted; batch is ready for reassignment.", ConsoleLogUI.LogType.Info);
         return true;
     }
 
@@ -184,6 +192,13 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         int nodeIndex = batchId - 1;
         if (!reservations.TryGetValue(nodeIndex, out BatchReservation reservation) || reservation.Members == null)
             return false;
+
+        LymphaticBatchGroup batch = reservation.Members[0] != null
+            ? reservation.Members[0].GetComponent<LymphaticBatchGroup>()
+            : null;
+        string destroyedBatchName = batch != null ? batch.DisplayName : "Unit batch";
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogBattleAction("Batch " + batchId + " destroyed: " + destroyedBatchName + ".", ConsoleLogUI.LogType.Warning);
 
         foreach (GameObject member in reservation.Members)
         {
@@ -264,6 +279,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         }
 
         reservation.Members = members;
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogBattleAction("Batch " + (nodeIndex + 1) + " trained: " + displayName + ".", ConsoleLogUI.LogType.Success);
         Debug.Log($"Lymphatic batch {nodeIndex + 1}/{MaximumBatchCount} deployed: {displayName} (5 units) at '{reservation.Node.Transform.name}'.", this);
         return true;
     }

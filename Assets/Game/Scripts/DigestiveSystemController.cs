@@ -159,7 +159,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void InitializeBarrierHealth()
     {
-        GameObject digestiveRoot = GameObject.Find("/Digestive");
+        GameObject digestiveRoot = GameObject.Find("/Layers/Digestive");
         if (digestiveRoot == null)
         {
             Debug.LogError("DigestiveSystemController could not find the Digestive layer root for BarrierHealth.", this);
@@ -630,11 +630,12 @@ public sealed class DigestiveSystemController : MonoBehaviour
 
     private void HandleVomitPressed()
     {
-        if (IsSleeping || vomitCooldownRemaining > 0f)
+        if (Time.timeScale <= 0f || IsSleeping || vomitCooldownRemaining > 0f)
             return;
 
         vomitCooldownRemaining = ManualCooldownSeconds;
         barrierHealth?.RestoreBarrier(BarrierRestorePerAction);
+        RefreshBarrierGauge();
         isBarrierRepairing = barrierHealth != null && barrierHealth.CurrentBarrier > 0f && barrierHealth.CurrentBarrier < BarrierMaximum;
         RefreshBreachVisuals();
         HashSet<string> eventKeys = FindActiveContaminationEventKeys();

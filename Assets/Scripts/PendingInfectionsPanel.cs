@@ -24,6 +24,10 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private const string GameplaySceneName = "Game";
     private const string FontResourcePath = "BankGothicMediumSDF";
     private const string WhiteSwatchResourcePath = "HUDWhiteSwatch";
+    private const string NeutrophilUnitType = "Neutrophil";
+    private const string MacrophageUnitType = "Macrophage";
+    private const string TCellUnitType = "T Cell";
+    private const string BCellUnitType = "B Cell";
     private const string CollapsedPreferenceKey = "pendingPanelCollapsed";
     private const float PanelWidth = 340f;
     private const float PanelHeight = 270f;
@@ -69,6 +73,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         public CanvasGroup visualCanvasGroup;
         public RectTransform visualRect;
         public Image backgroundImage;
+        public Outline highlightOutline;
         public Button button;
         public Image swatchImage;
         public TextMeshProUGUI nameLabel;
@@ -78,6 +83,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     }
 
     private readonly List<RowView> rows = new List<RowView>();
+    private readonly HashSet<InfectionSpawner.InfectionMarker> activeLymphaticBatchTargets = new HashSet<InfectionSpawner.InfectionMarker>();
     private RectTransform panelContainerRect;
     private RectTransform panelRect;
     private RectTransform contentRect;
@@ -189,7 +195,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         UpdateRows(GameplaySpeed.DeltaTime);
     }
 
-    /// <summary>Shows the pending-infection panel only while the circulatory layer is active.</summary>
+    /// <summary>Shows the pending-infection panel while the lymphatic or circulatory layer is active.</summary>
     public void SetLayerVisible(bool isVisible)
     {
         if (layerVisibilityGroup == null && panelContainerRect != null)
@@ -293,6 +299,18 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             return;
 
         IReadOnlyList<InfectionSpawner.InfectionMarker> activeInfections = infectionSpawner.ActiveInfections;
+        activeLymphaticBatchTargets.Clear();
+        LymphaticBatchGroup[] lymphaticBatches = Object.FindObjectsByType<LymphaticBatchGroup>(FindObjectsSortMode.None);
+        foreach (LymphaticBatchGroup batch in lymphaticBatches)
+        {
+            if (batch == null || batch.TargetInfection == null || !IsTrackedLymphaticUnitType(batch.UnitType))
+                continue;
+
+            if (batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing ||
+                batch.Status == LymphaticBatchGroup.BatchStatus.Working)
+                activeLymphaticBatchTargets.Add(batch.TargetInfection);
+        }
+
         HashSet<InfectionSpawner.InfectionMarker> displayedMarkers = new HashSet<InfectionSpawner.InfectionMarker>();
         int activeCount = 0;
         for (int index = 0; index < activeInfections.Count && activeCount < MaximumRows; index++)
@@ -325,7 +343,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
 
             SetRowStatus(row, marker.isContained
                 ? RowStatus.Contained
-                : infectionSpawner.IsSquadDispatchedTo(marker) ? RowStatus.Ongoing : RowStatus.Pending);
+                : activeLymphaticBatchTargets.Contains(marker) ? RowStatus.Ongoing : RowStatus.Pending);
         }
 
         foreach (RowView row in rows)
@@ -336,6 +354,12 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             if (row.marker == null || row.marker.isRemoving || !displayedMarkers.Contains(row.marker))
                 MarkRemovedRow(row);
         }
+    }
+
+    private static bool IsTrackedLymphaticUnitType(string unitType)
+    {
+        return unitType == NeutrophilUnitType || unitType == MacrophageUnitType ||
+               unitType == TCellUnitType || unitType == BCellUnitType;
     }
 
     private RowView FindRow(InfectionSpawner.InfectionMarker marker)
@@ -434,18 +458,52 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             return true;
 
         Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        Canvas referenceCanvas = null;
         foreach (Canvas candidate in canvases)
         {
-            if (candidate != null && candidate.renderMode == RenderMode.ScreenSpaceOverlay)
+            if (candidate == null || !candidate.isActiveAndEnabled ||
+                candidate.renderMode != RenderMode.ScreenSpaceOverlay)
+                continue;
+
+            if (candidate.gameObject.name == "HUDCanvas")
             {
-                rootCanvas = candidate;
+                referenceCanvas = candidate;
                 break;
             }
+
+            if (referenceCanvas == null)
+                referenceCanvas = candidate;
         }
-        if (rootCanvas == null && canvases.Length > 0)
-            rootCanvas = canvases[0];
-        if (rootCanvas == null)
+        if (referenceCanvas == null)
             return false;
+
+        GameObject canvasObject = new GameObject("Pending Infections Panel Canvas",
+            typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasObject.transform.SetParent(transform, false);
+        canvasObject.transform.localPosition = Vector3.zero;
+        canvasObject.transform.localRotation = Quaternion.identity;
+        canvasObject.transform.localScale = Vector3.one;
+        rootCanvas = canvasObject.GetComponent<Canvas>();
+        rootCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        rootCanvas.overrideSorting = true;
+        rootCanvas.sortingLayerName = referenceCanvas.sortingLayerName;
+        rootCanvas.sortingOrder = referenceCanvas.sortingOrder + 1;
+
+        CanvasScaler panelCanvasScaler = canvasObject.GetComponent<CanvasScaler>();
+        CanvasScaler referenceCanvasScaler = referenceCanvas.GetComponent<CanvasScaler>();
+        if (referenceCanvasScaler != null)
+        {
+            panelCanvasScaler.uiScaleMode = referenceCanvasScaler.uiScaleMode;
+            panelCanvasScaler.referencePixelsPerUnit = referenceCanvasScaler.referencePixelsPerUnit;
+            panelCanvasScaler.scaleFactor = referenceCanvasScaler.scaleFactor;
+            panelCanvasScaler.referenceResolution = referenceCanvasScaler.referenceResolution;
+            panelCanvasScaler.screenMatchMode = referenceCanvasScaler.screenMatchMode;
+            panelCanvasScaler.matchWidthOrHeight = referenceCanvasScaler.matchWidthOrHeight;
+            panelCanvasScaler.physicalUnit = referenceCanvasScaler.physicalUnit;
+            panelCanvasScaler.fallbackScreenDPI = referenceCanvasScaler.fallbackScreenDPI;
+            panelCanvasScaler.defaultSpriteDPI = referenceCanvasScaler.defaultSpriteDPI;
+            panelCanvasScaler.dynamicPixelsPerUnit = referenceCanvasScaler.dynamicPixelsPerUnit;
+        }
 
         GameObject panelObject = CreateUiObject("Pending Infections Panel", rootCanvas.transform);
         panelContainerRect = panelObject.GetComponent<RectTransform>();
@@ -602,6 +660,11 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         row.backgroundImage = visualObject.GetComponent<Image>();
         row.backgroundImage.sprite = whiteSwatchSprite;
         row.backgroundImage.raycastTarget = true;
+        row.highlightOutline = visualObject.AddComponent<Outline>();
+        row.highlightOutline.effectColor = AccentColor;
+        row.highlightOutline.effectDistance = new Vector2(1.5f, -1.5f);
+        row.highlightOutline.useGraphicAlpha = true;
+        row.highlightOutline.enabled = false;
         row.button = visualObject.AddComponent<Button>();
         row.button.targetGraphic = row.backgroundImage;
         row.button.transition = Selectable.Transition.None;
@@ -676,6 +739,9 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         if (row == null || row.backgroundImage == null || row.swatchImage == null || row.nameLabel == null || row.statusLabel == null)
             return;
 
+        if (row.highlightOutline != null)
+            row.highlightOutline.enabled = row.status == RowStatus.Ongoing;
+
         Color pathogenColor = row.isMutated ? MutatedColor : GetPathogenColor(row.pathogenType);
         row.nameLabel.color = row.isMutated ? MutatedColor : Color.white;
 
@@ -688,7 +754,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 row.statusLabel.color = AccentColor;
                 break;
             case RowStatus.Contained:
-                row.statusLabel.text = "CONTAINED";
+                row.statusLabel.text = "Contained";
                 row.backgroundImage.color = OngoingRowColor;
                 row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = AccentColor;

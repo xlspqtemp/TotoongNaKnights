@@ -108,7 +108,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     }
     private void InitializeBarrierHealth()
     {
-        GameObject respiratoryRoot = GameObject.Find("/Respiratory");
+        GameObject respiratoryRoot = GameObject.Find("/Layers/Respiratory");
         if (respiratoryRoot == null)
         {
             Debug.LogError("RespiratorySystemController could not find the Respiratory layer root for BarrierHealth.", this);
@@ -634,13 +634,14 @@ public sealed class RespiratorySystemController : MonoBehaviour
 
     private void HandleCoughPressed()
     {
-        if (coughButton == null || !coughButton.interactable)
+        if (Time.timeScale <= 0f || coughButton == null || !coughButton.interactable)
         {
             return;
         }
 
         coughCooldownRemaining = CoughCooldownSeconds;
         barrierHealth?.RestoreBarrier(BarrierRestorePerAction);
+        RefreshBarrierGauge();
         isBarrierRepairing = barrierHealth != null && barrierHealth.CurrentBarrier > 0f && barrierHealth.CurrentBarrier < BarrierMaximum;
         RefreshBreachVisuals();
         HashSet<string> eventKeys = new HashSet<string>();

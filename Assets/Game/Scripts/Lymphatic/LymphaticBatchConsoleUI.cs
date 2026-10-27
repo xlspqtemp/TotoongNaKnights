@@ -314,14 +314,10 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
         if (!batchSpawner.DispatchBatch(selectedBatchId, marker))
         {
-            if (ConsoleLogUI.Instance != null)
-                ConsoleLogUI.Instance.Log("Batch " + selectedBatchId + " could not reach the selected infection.", ConsoleLogUI.LogType.Warning);
             return;
         }
 
         awaitingTargetSelection = false;
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log("Batch " + selectedBatchId + " mobilizing to " + marker.infection.displayName + ".", ConsoleLogUI.LogType.Success);
         RefreshSlots();
     }
 
@@ -336,6 +332,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             cameraScript.ClearFollowTarget();
             isFollowingBatch = false;
             followedBatchId = -1;
+            if (ConsoleLogUI.Instance != null)
+                ConsoleLogUI.Instance.LogBattleAction("Batch " + batch.BatchId + " follow stopped.", ConsoleLogUI.LogType.Info);
             return;
         }
 
@@ -346,6 +344,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         cameraScript.SetFollowTarget(unitTransform, FollowZoom);
         isFollowingBatch = true;
         followedBatchId = batch.BatchId;
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogBattleAction("Following batch " + batch.BatchId + ".", ConsoleLogUI.LogType.Info);
         RefreshSlots();
     }
 
@@ -355,8 +355,6 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             return;
 
         awaitingTargetSelection = false;
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log("Batch " + selectedBatchId + " target aborted; batch is ready for reassignment.", ConsoleLogUI.LogType.Info);
         RefreshSlots();
     }
 
@@ -375,8 +373,6 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         int destroyedBatchId = selectedBatchId;
         selectedBatchId = -1;
         awaitingTargetSelection = false;
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log("Batch " + destroyedBatchId + " destroyed; batch slot released.", ConsoleLogUI.LogType.Warning);
         RefreshSlots();
     }
 

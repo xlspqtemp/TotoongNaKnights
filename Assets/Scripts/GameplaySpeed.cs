@@ -25,8 +25,8 @@ public static class GameplaySpeed
     /// <summary>Returns Unity's scaled time factor used when gameplay resumes.</summary>
     public static float ResumeTimeScale => SelectedMultiplier;
 
-    /// <summary>Returns an unscaled frame delta multiplied once by the selected gameplay speed.</summary>
-    public static float DeltaTime => Time.timeScale <= 0f ? 0f : Time.unscaledDeltaTime * Multiplier;
+    /// <summary>Returns an unscaled frame delta with the selected gameplay speed applied exactly once; use this for custom clocks instead of multiplying Time.deltaTime.</summary>
+    public static float DeltaTime => Time.timeScale <= 0f ? 0f : Time.unscaledDeltaTime * SelectedMultiplier;
 
     /// <summary>Returns the selected mode index (0=1x, 1=2x, 2=4x, 3=6x).</summary>
     public static int SelectedModeIndex => selectedModeIndex;

@@ -36,13 +36,7 @@ public class DayCounterUI : MonoBehaviour
     [SerializeField] private ProgressionMode progressionMode = ProgressionMode.RealTime;
 
     [Header("Real-Time Tuning")]
-    [Tooltip("If enabled, set 'Day Length In Real Seconds' below and the per-minute tick rate is calculated for you.")]
-    [SerializeField] private bool useDayLengthShortcut = true;
-    [Tooltip("How many real seconds a full in-game day should take (RealTime/Hybrid only).")]
-    [SerializeField] private float dayLengthInRealSeconds = 180f;
-    [Tooltip("Manual tick rate: real seconds per in-game minute. Only used if the shortcut above is off.")]
-    [SerializeField] private float secondsPerGameMinute = 1f;
-    [Tooltip("Global speed multiplier you can nudge at runtime (e.g. a fast-forward button).")]
+    [Tooltip("Additional per-clock multiplier. Global fast-forward is applied separately by GameplaySpeed.DeltaTime.")]
     [Range(0.1f, 10f)]
     [SerializeField] private float timeScale = 1f;
 
@@ -57,9 +51,6 @@ public class DayCounterUI : MonoBehaviour
 
     [Header("Start State")]
     [SerializeField] private bool isRunning = true;
-    [SerializeField] private int startDay = 1;
-    [SerializeField] private int startHour = 6;
-    [SerializeField] private int startMinute = 0;
     [SerializeField] private string currentWeather = "Clear Weather";
 
     public event Action<int> OnDayAdvanced;
@@ -69,18 +60,20 @@ public class DayCounterUI : MonoBehaviour
     private int currentDay;
     private int currentHour;
     private int currentMinute;
-    private float minuteTimer;
-    private float runtimeSecondsPerGameMinute;
+    private double minuteTimer;
 
-    private const int MINUTES_PER_DAY = 24 * 60;
+    private const int MINUTES_PER_GAME_HOUR = 60;
+    private const int INITIAL_DAY = 0;
+    private const int INITIAL_HOUR = 22;
+    private const double REAL_SECONDS_PER_GAME_HOUR = 5d;
+    private const double REAL_SECONDS_PER_GAME_MINUTE = REAL_SECONDS_PER_GAME_HOUR / MINUTES_PER_GAME_HOUR;
 
     private void Awake()
     {
         GameplaySpeed.ResetForNewRun();
-        currentDay = startDay;
-        currentHour = startHour;
-        currentMinute = startMinute;
-        RecalculateTickRate();
+        currentDay = INITIAL_DAY;
+        currentHour = INITIAL_HOUR;
+        currentMinute = 0;
     }
 
     private void Start()
@@ -129,18 +122,6 @@ public class DayCounterUI : MonoBehaviour
         labelRect.sizeDelta = size;
     }
 
-    private void OnValidate()
-    {
-        RecalculateTickRate();
-    }
-
-    private void RecalculateTickRate()
-    {
-        runtimeSecondsPerGameMinute = useDayLengthShortcut
-            ? Mathf.Max(0.001f, dayLengthInRealSeconds / MINUTES_PER_DAY)
-            : Mathf.Max(0.001f, secondsPerGameMinute);
-    }
-
     private void Update()
     {
         bool clockShouldRun = isRunning &&
@@ -148,10 +129,10 @@ public class DayCounterUI : MonoBehaviour
 
         if (!clockShouldRun) return;
 
-        minuteTimer += Time.unscaledDeltaTime * Mathf.Max(0.01f, timeScale) * GameplaySpeed.Multiplier;
-        if (minuteTimer >= runtimeSecondsPerGameMinute)
+        minuteTimer += (double)GameplaySpeed.DeltaTime * Mathf.Max(0.01f, timeScale);
+        while (minuteTimer >= REAL_SECONDS_PER_GAME_MINUTE)
         {
-            minuteTimer -= runtimeSecondsPerGameMinute;
+            minuteTimer -= REAL_SECONDS_PER_GAME_MINUTE;
             TickMinutes(1);
         }
     }
@@ -241,6 +222,7 @@ public class DayCounterUI : MonoBehaviour
     {
         currentHour = Mathf.Clamp(hour, 0, 23);
         currentMinute = Mathf.Clamp(minute, 0, 59);
+        minuteTimer = 0d;
         RefreshTime();
     }
 

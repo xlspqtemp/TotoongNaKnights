@@ -269,14 +269,14 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (activeInfectionMarkers.Count >= maxActiveInfections)
         {
-            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because the active infection cap has been reached.", this);
+            LogBattleMessage("[InfectionSpawner] Cannot force-spawn an infection because the active infection cap has been reached.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
         List<InfectionData> validEntries = BuildValidInfectionEntries();
         if (validEntries.Count == 0 || GetValidBodyPartButtonCount() == 0)
         {
-            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because no valid entries or body-part mappings are configured.", this);
+            LogBattleMessage("[InfectionSpawner] Cannot force-spawn an infection because no valid entries or body-part mappings are configured.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -298,7 +298,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (activeInfectionMarkers.Count >= maxActiveInfections)
         {
-            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn a bacterial infection because the active infection cap has been reached.", this);
+            LogBattleMessage("[InfectionSpawner] Cannot force-spawn a bacterial infection because the active infection cap has been reached.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -328,7 +328,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (validBacterialEntries.Count == 0)
         {
-            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn a bacterial infection because no valid bacterial entries have mapped preferred body parts.", this);
+            LogBattleMessage("[InfectionSpawner] Cannot force-spawn a bacterial infection because no valid bacterial entries have mapped preferred body parts.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -453,15 +453,15 @@ public sealed class InfectionSpawner : MonoBehaviour
     private void Start()
     {
         DifficultyStats stats = DifficultySettings.CurrentStats;
-        Debug.Log($"Difficulty: {stats.difficultyName} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
+        LogBattleMessage($"Difficulty: {stats.difficultyName} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", ConsoleLogUI.LogType.Info, this);
         CreateAdaptiveResponsePopup();
         EnsurePendingInfectionsPanelSubscription();
         if (dayCounter == null)
-            Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; timed infection spawning is disabled.", this);
+            LogBattleMessage("[InfectionSpawner] DayCounterUI is missing; timed infection spawning is disabled.", ConsoleLogUI.LogType.Warning, this);
         else
-            Debug.Log($"[InfectionSpawner] Timed infection spawning initialized; next spawn in {hoursUntilNextInfectionSpawn} in-game hours.", this);
+            LogBattleMessage($"[InfectionSpawner] Timed infection spawning initialized; next spawn in {hoursUntilNextInfectionSpawn} in-game hours.", ConsoleLogUI.LogType.Info, this);
         if (hudCanvas == null)
-            Debug.LogWarning("[InfectionSpawner] HUD Canvas is missing; infection row UI is disabled.", this);
+            LogBattleMessage("[InfectionSpawner] HUD Canvas is missing; infection row UI is disabled.", ConsoleLogUI.LogType.Warning, this);
     }
 
     private void Update()
@@ -1293,7 +1293,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private bool DispatchIdleSquadTo(Vector3 destination, InfectionMarker infectionTarget, string moveLocation)
     {
-        Debug.Log("[Dispatch] Dispatch method started.");
+        LogBattleMessage("[Dispatch] Dispatch method started.", ConsoleLogUI.LogType.Info);
         if (idleSquad == null || idleSquad.Length == 0)
             return false;
 
@@ -1363,7 +1363,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 highlight.SetHighlighted(false);
         }
 
-        Debug.Log("[Dispatch] Reached dendritic spawn code.");
+        LogBattleMessage("[Dispatch] Reached dendritic spawn code.", ConsoleLogUI.LogType.Info);
         GameObject dendriticCell = SpawnDendriticCell(infectionTarget, idleSquad[0].transform.position, out GameObject dendriticDestination);
         if (dendriticCell != null)
         {
@@ -1410,7 +1410,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         CirculatoryCellRoute route = dendriticCell.GetComponent<CirculatoryCellRoute>();
         if (agent == null || route == null || !agent.enabled)
         {
-            Debug.LogWarning("[InfectionSpawner] The Dendritic Cell prefab requires an enabled NavMeshAgent and CirculatoryCellRoute.", this);
+            LogBattleMessage("[InfectionSpawner] The Dendritic Cell prefab requires an enabled NavMeshAgent and CirculatoryCellRoute.", ConsoleLogUI.LogType.Warning, this);
             Destroy(dendriticCell);
             return null;
         }
@@ -1423,7 +1423,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         Vector3 requestedDestination = infectionTarget.worldPosition + holdOffset;
         if (!NavMesh.SamplePosition(requestedDestination, out NavMeshHit destinationHit, dispatchNavMeshSampleRadius, filter))
         {
-            Debug.LogWarning("[InfectionSpawner] The Dendritic Cell could not find a NavMesh position near the infection.", this);
+            LogBattleMessage("[InfectionSpawner] The Dendritic Cell could not find a NavMesh position near the infection.", ConsoleLogUI.LogType.Warning, this);
             Destroy(dendriticCell);
             return null;
         }
@@ -1796,7 +1796,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         targetHealth.TakeDamage(damage);
         if (verboseCombatLogging)
-            Debug.Log($"[Combat] {attacker.name} hit {target.name} for {damage:0.##} damage; remaining HP={targetHealth.CurrentHp:0.##}.", this);
+            LogBattleMessage($"[Combat] {attacker.name} hit {target.name} for {damage:0.##} damage; remaining HP={targetHealth.CurrentHp:0.##}.", ConsoleLogUI.LogType.Info, this);
     }
 
     private void FadeOutAndDespawnWbcSquad(int squadIndex)
@@ -1900,7 +1900,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         string amountText = actualDelta >= 0f
             ? $"+{actualDelta:0.##}"
             : $"{actualDelta:0.##}";
-        Debug.Log($"Wellness {amountText} ({reason}): {before:0.##} -> {after:0.##}", this);
+        LogBattleMessage($"Wellness {amountText} ({reason}): {before:0.##} -> {after:0.##}", ConsoleLogUI.LogType.Info, this);
         return actualDelta;
     }
 
@@ -2072,11 +2072,20 @@ public sealed class InfectionSpawner : MonoBehaviour
         RefreshLeukocyteSupplyBar();
     }
 
+    private void LogBattleMessage(string message, ConsoleLogUI.LogType logType = ConsoleLogUI.LogType.Info, UnityEngine.Object context = null)
+    {
+        if (context != null)
+            Debug.Log(message, context);
+        else
+            Debug.Log(message);
+
+        if (ConsoleLogUI.Instance != null)
+            ConsoleLogUI.Instance.LogBattleAction(message, logType);
+    }
+
     private void LogWbcSquadMessage(string message, ConsoleLogUI.LogType logType)
     {
-        Debug.Log(message);
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log(message, logType);
+        LogBattleMessage(message, logType);
     }
 
     private Texture2D ResolveHeadshotTexture()
@@ -2179,7 +2188,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         SpawnTimedInfection(currentDay, currentHour);
         ResetInfectionSpawnTimer();
-        Debug.Log($"[InfectionSpawner] Next infection spawn scheduled in {hoursUntilNextInfectionSpawn} in-game hours.", this);
+        LogBattleMessage($"[InfectionSpawner] Next infection spawn scheduled in {hoursUntilNextInfectionSpawn} in-game hours.", ConsoleLogUI.LogType.Info, this);
     }
 
     private void ResetInfectionSpawnTimer()
@@ -2205,7 +2214,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 break;
         }
 
-        Debug.Log("[InfectionSpawner] Pathogen mutated by breached barrier!", this);
+        LogBattleMessage("[InfectionSpawner] Pathogen mutated by breached barrier!", ConsoleLogUI.LogType.Warning, this);
         return true;
     }
 
@@ -2225,13 +2234,13 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (activeInfectionMarkers.Count >= maxActiveInfections)
         {
-            Debug.LogWarning($"[InfectionSpawner] Skipped scheduled infection at Day {currentDay}, Hour {currentHour:00}: active infection cap reached ({maxActiveInfections}).", this);
+            LogBattleMessage($"[InfectionSpawner] Skipped scheduled infection at Day {currentDay}, Hour {currentHour:00}: active infection cap reached ({maxActiveInfections}).", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
         if (GetValidBodyPartButtonCount() == 0)
         {
-            Debug.LogWarning("[InfectionSpawner] Cannot spawn a timed infection because no body-part button mappings are configured.", this);
+            LogBattleMessage("[InfectionSpawner] Cannot spawn a timed infection because no body-part button mappings are configured.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -2240,7 +2249,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         InfectionData selectedProfile = SelectWeightedPathogenProfile(isGeneric);
         if (selectedProfile == null)
         {
-            Debug.LogWarning($"[InfectionSpawner] Cannot spawn a timed infection because the {(isGeneric ? "generic" : "named")} pathogen pool has no positive weights for the current difficulty.", this);
+            LogBattleMessage($"[InfectionSpawner] Cannot spawn a timed infection because the {(isGeneric ? "generic" : "named")} pathogen pool has no positive weights for the current difficulty.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -2252,7 +2261,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
         if (bodyPartButton == null)
         {
-            Debug.LogWarning($"[InfectionSpawner] Cannot place {infection.displayName}; no valid body-part mapping was selected.", this);
+            LogBattleMessage($"[InfectionSpawner] Cannot place {infection.displayName}; no valid body-part mapping was selected.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -2260,7 +2269,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         LogInfection(infection, bodyPartButton);
         DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
-        Debug.Log($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", this);
+        LogBattleMessage($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", ConsoleLogUI.LogType.Info, this);
     }
 
     private InfectionData SelectWeightedPathogenProfile(bool selectGenericPool)
@@ -2506,7 +2515,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (bacteriaPrefab == null)
         {
-            Debug.LogWarning($"[InfectionSpawner] Bacteria prefab is missing; skipping threat visuals for {marker.infection.displayName}.", this);
+            LogBattleMessage($"[InfectionSpawner] Bacteria prefab is missing; skipping threat visuals for {marker.infection.displayName}.", ConsoleLogUI.LogType.Warning, this);
             return;
         }
 
@@ -2892,9 +2901,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         string message = $"Selected infection: {marker.infection.displayName} | Cause: {marker.infection.entryCause} | " +
                          $"Stage: {marker.infection.severityStage} | Body part: {marker.bodyPartName} | Days untreated: {marker.infection.daysUntreated}";
-        Debug.Log(message);
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log(message, ConsoleLogUI.LogType.Info);
+        LogBattleMessage(message, ConsoleLogUI.LogType.Info);
     }
 
     private void DispatchSelectedWbc(InfectionMarker marker)
@@ -2907,9 +2914,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (CountActiveWbcs() + CountActiveSquadUnits() >= maxActiveWbcs || availableSlotIndex < 0)
         {
             string capacityMessage = $"WBC dispatch unavailable: {CountActiveWbcs()}/{maxActiveWbcs} active.";
-            Debug.Log(capacityMessage);
-            if (ConsoleLogUI.Instance != null)
-                ConsoleLogUI.Instance.Log(capacityMessage, ConsoleLogUI.LogType.Warning);
+            LogBattleMessage(capacityMessage, ConsoleLogUI.LogType.Warning);
             RefreshDispatchAvatar();
             return;
         }
@@ -2924,9 +2929,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         yield return GameplaySpeed.WaitForGameplaySeconds(dispatchArrivalDelaySeconds);
         string message = $"WBC deployed to {infectionName} at {bodyPartName}";
-        Debug.Log(message);
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log(message, ConsoleLogUI.LogType.Success);
+        LogBattleMessage(message, ConsoleLogUI.LogType.Success);
     }
 
     private void UpdateWbcCooldowns()
@@ -3064,9 +3067,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             ? $"Generic {infection.pathogenType} ({infection.displayName})"
             : $"Named {infection.pathogenType} ({infection.displayName})";
         string message = $"[InfectionSpawner] {infectionName} at {GetBodyPartDisplayName(bodyPartButton)}; profile={infection.pathogenDatabaseName}; rarity={infection.rarity}; severity={infection.severityStage}; resolve=+{infection.resolveGain}; neglect=-{infection.neglectLoss}.";
-        Debug.Log(message);
-        if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log(message, ConsoleLogUI.LogType.Warning);
+        LogBattleMessage(message, ConsoleLogUI.LogType.Warning);
     }
 
     private string GetBodyPartDisplayName(InfectionBodyPartButtonReference mapping)
