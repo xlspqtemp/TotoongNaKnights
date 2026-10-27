@@ -36,6 +36,10 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float DefaultPromptWellnessGap = 36f;
     private const float SquadPromptFadeDuration = 0.4f;
     private const float InfectionPopupFadeDuration = 0.3f;
+    private const string AnimatorMovingParameter = "IsMoving";
+    private const string AnimatorAttackParameter = "Attack";
+    private const float AnimatorMovementThreshold = 0.1f;
+
     private const float InfectionPopupReferenceDistance = 5f;
     [Header("Selected Infection Popup")]
     [SerializeField, Min(1f)] private float popupFontSize = 26f;
@@ -156,6 +160,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField, Min(MinimumPromptWellnessGap)] private float promptBannerWellnessGap = DefaultPromptWellnessGap;
     [SerializeField] private Color promptBannerColor = new Color(0.025f, 0.045f, 0.065f, 0.92f);
     [SerializeField, Min(0f)] private float promptAutoFadeSeconds = 8f;
+    private readonly HashSet<LymphaticBatchGroup> lymphaticBatchAttackAnimationsTriggered = new HashSet<LymphaticBatchGroup>();
+
 
     private readonly Dictionary<Button, List<InfectionMarker>> markersByBodyPartButton = new Dictionary<Button, List<InfectionMarker>>();
     private AudioSource infectionAudioSource;
@@ -491,6 +497,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         UpdateDendriticCells();
         UpdateIdleAndDispatchedSquads();
         UpdateInfectionCombat();
+        UpdateLymphaticBatchAnimations();
+
         UpdateLymphaticBatchInfectionResolutions();
         UpdateInfectionMarkerAnimations();
         UpdateInfectionThreatVisuals();
@@ -1617,10 +1625,15 @@ public sealed class InfectionSpawner : MonoBehaviour
                 squad.lifetimeRemaining -= gameplayDeltaTime;
             foreach (GameObject unit in squad.units)
             {
-                if (unit == null || !unit.activeInHierarchy || squad.arrivedUnits.Contains(unit))
+                if (unit == null || !unit.activeInHierarchy)
                     continue;
 
                 NavMeshAgent agent = unit.GetComponent<NavMeshAgent>();
+                bool hasArrived = squad.arrivedUnits.Contains(unit);
+                UpdateUnitMovementAnimation(unit, agent, !hasArrived);
+                if (hasArrived)
+                    continue;
+
                 if (agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending)
                     continue;
                 if (!agent.hasPath || agent.pathStatus != NavMeshPathStatus.PathComplete)
@@ -1829,6 +1842,101 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         return nearest;
     }
+
+    private void UpdateLymphaticBatchAnimations()
+    {
+        if (lymphaticBatchSpawner == null)
+            lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        if (lymphaticBatchSpawner == null)
+            return;
+
+        lymphaticBatchSpawner.GetBatches(activeLymphaticBatches);
+        lymphaticBatchAttackAnimationsTriggered.RemoveWhere(batch =>
+            batch == null || !activeLymphaticBatches.Contains(batch) || batch.Status != LymphaticBatchGroup.BatchStatus.Working);
+
+        foreach (LymphaticBatchGroup batch in activeLymphaticBatches)
+        {
+            if (batch == null)
+                continue;
+
+            bool isMobilizing = batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing;
+            foreach (GameObject member in batch.Members)
+            {
+                if (member == null || !member.activeInHierarchy)
+                    continue;
+
+                UpdateUnitMovementAnimation(member, member.GetComponent<NavMeshAgent>(), isMobilizing);
+            }
+
+            InfectionMarker target = batch.TargetInfection;
+            bool isBacterialClash = target != null && target.infection != null &&
+                target.infection.pathogenType != InfectionPathogenType.Viral;
+            if (batch.Status == LymphaticBatchGroup.BatchStatus.Working && isBacterialClash &&
+                lymphaticBatchAttackAnimationsTriggered.Add(batch))
+            {
+                foreach (GameObject member in batch.Members)
+                {
+                    if (member != null && member.activeInHierarchy)
+                        TriggerUnitAttackAnimation(member);
+                }
+            }
+        }
+    }
+
+    private static void UpdateUnitMovementAnimation(GameObject unit, NavMeshAgent agent, bool movementAllowed)
+    {
+        if (unit == null)
+            return;
+
+        Animator animator = unit.GetComponentInChildren<Animator>(true);
+        if (animator == null)
+            return;
+
+        if (!animator.enabled)
+            animator.enabled = true;
+
+        if (!HasAnimatorParameter(animator, AnimatorMovingParameter, AnimatorControllerParameterType.Bool))
+            return;
+
+        bool isMoving = movementAllowed && agent != null && agent.enabled && agent.isOnNavMesh &&
+            !agent.isStopped && !agent.pathPending && agent.hasPath &&
+            (agent.velocity.sqrMagnitude > AnimatorMovementThreshold * AnimatorMovementThreshold ||
+             agent.remainingDistance > Mathf.Max(agent.stoppingDistance, 0.01f));
+        animator.SetBool(AnimatorMovingParameter, isMoving);
+    }
+
+    private static void TriggerUnitAttackAnimation(GameObject unit)
+    {
+        if (unit == null)
+            return;
+
+        Animator animator = unit.GetComponentInChildren<Animator>(true);
+        if (animator == null)
+            return;
+
+        if (!animator.enabled)
+            animator.enabled = true;
+        if (HasAnimatorParameter(animator, AnimatorMovingParameter, AnimatorControllerParameterType.Bool))
+            animator.SetBool(AnimatorMovingParameter, false);
+        if (HasAnimatorParameter(animator, AnimatorAttackParameter, AnimatorControllerParameterType.Trigger))
+            animator.SetTrigger(AnimatorAttackParameter);
+    }
+
+    private static bool HasAnimatorParameter(Animator animator, string parameterName, AnimatorControllerParameterType parameterType)
+    {
+        if (animator == null || animator.runtimeAnimatorController == null)
+            return false;
+
+        int parameterHash = Animator.StringToHash(parameterName);
+        foreach (AnimatorControllerParameter parameter in animator.parameters)
+        {
+            if (parameter.nameHash == parameterHash && parameter.type == parameterType)
+                return true;
+        }
+
+        return false;
+    }
+
 
     private void TryApplyCombatHit(GameObject attacker, GameObject target, Health attackerHealth, float damage, float attackInterval)
     {
