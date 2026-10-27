@@ -4,8 +4,12 @@ using UnityEngine;
 public sealed class BarrierHealth : MonoBehaviour
 {
     private const float MaximumBarrier = 100f;
+    private const string DigestiveOrdersContainerPath = "/Event Handlers/HUDCanvas/DigestiveOrdersContainer";
+    private const string RespiratoryOrdersContainerPath = "/Event Handlers/HUDCanvas/RespiratoryOrdersContainer";
 
     public AudioClip breachSfx;
+    [SerializeField] private AudioSource breachAudioSource;
+
     public float CurrentBarrier = MaximumBarrier;
     public bool IsBreached { get; private set; }
     public AudioClip BreachSfx => breachSfx;
@@ -13,12 +17,27 @@ public sealed class BarrierHealth : MonoBehaviour
     private void Awake()
     {
         CurrentBarrier = Mathf.Clamp(CurrentBarrier, 0f, MaximumBarrier);
+        if (breachAudioSource == null)
+            breachAudioSource = GetComponent<AudioSource>();
+        if (breachAudioSource == null)
+            breachAudioSource = gameObject.AddComponent<AudioSource>();
+
+        breachAudioSource.playOnAwake = false;
+        breachAudioSource.loop = true;
+        breachAudioSource.spatialBlend = 0f;
         RefreshBreachState();
     }
 
     private void Update()
     {
         RefreshBreachState();
+        RefreshBreachAudio();
+    }
+
+    private void OnDisable()
+    {
+        if (breachAudioSource != null && breachAudioSource.isPlaying)
+            breachAudioSource.Stop();
     }
 
     /// <summary>Reduces the barrier by the requested amount and updates its breach state.</summary>
@@ -51,5 +70,38 @@ public sealed class BarrierHealth : MonoBehaviour
         {
             IsBreached = false;
         }
+    }
+
+    private void RefreshBreachAudio()
+    {
+        bool shouldPlay = IsBreached && breachSfx != null && IsLayerVisible();
+        if (!shouldPlay)
+        {
+            if (breachAudioSource.isPlaying)
+                breachAudioSource.Stop();
+            return;
+        }
+
+        if (breachAudioSource.clip != breachSfx)
+        {
+            breachAudioSource.Stop();
+            breachAudioSource.clip = breachSfx;
+        }
+
+        if (!breachAudioSource.isPlaying)
+            breachAudioSource.Play();
+    }
+
+    private bool IsLayerVisible()
+    {
+        string ordersContainerPath = gameObject.name == "Digestive"
+            ? DigestiveOrdersContainerPath
+            : gameObject.name == "Respiratory" ? RespiratoryOrdersContainerPath : null;
+        if (ordersContainerPath == null)
+            return false;
+
+        GameObject ordersContainer = GameObject.Find(ordersContainerPath);
+        CanvasGroup canvasGroup = ordersContainer != null ? ordersContainer.GetComponent<CanvasGroup>() : null;
+        return canvasGroup != null && canvasGroup.alpha > 0.5f;
     }
 }

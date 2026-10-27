@@ -425,17 +425,11 @@ public class WellnessManager : MonoBehaviour
         float appliedDelta = currentWellness - previousWellness;
         if (appliedDelta > 0f && wellnessGainSfx != null)
         {
-            wellnessAudioSource.Stop();
-            wellnessAudioSource.clip = wellnessGainSfx;
-            wellnessAudioSource.time = 0.01f;
-            wellnessAudioSource.Play();
+            wellnessAudioSource.PlayOneShot(wellnessGainSfx);
         }
         else if (appliedDelta < 0f && wellnessLossSfx != null)
         {
-            wellnessAudioSource.Stop();
-            wellnessAudioSource.clip = wellnessLossSfx;
-            wellnessAudioSource.time = 0.05f;
-            wellnessAudioSource.Play();
+            wellnessAudioSource.PlayOneShot(wellnessLossSfx);
         }
 
         Debug.Log($"[WELLNESS] {eventId}: {FormatSignedDelta(appliedDelta)} -> {Mathf.RoundToInt(currentWellness)}");

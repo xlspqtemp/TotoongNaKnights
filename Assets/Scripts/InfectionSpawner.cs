@@ -159,6 +159,9 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private readonly Dictionary<Button, List<InfectionMarker>> markersByBodyPartButton = new Dictionary<Button, List<InfectionMarker>>();
     private AudioSource infectionAudioSource;
+    private readonly List<LymphaticBatchGroup> activeLymphaticBatches = new List<LymphaticBatchGroup>();
+    private LymphaticBatchSpawner lymphaticBatchSpawner;
+
     private readonly List<WbcDispatchSlot> wbcDispatchSlots = new List<WbcDispatchSlot>();
     private readonly List<InfectionMarker> activeInfectionMarkers = new List<InfectionMarker>();
     private readonly List<InfectionMarker> fadingInfectionMarkers = new List<InfectionMarker>();
@@ -257,6 +260,18 @@ public sealed class InfectionSpawner : MonoBehaviour
             DispatchedWbcSquad squad = dispatchedWbcSquads[squadIndex];
             if (squad != null && squad.infectionTarget == marker)
                 return true;
+        }
+
+        if (lymphaticBatchSpawner == null)
+            lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        if (lymphaticBatchSpawner != null)
+        {
+            lymphaticBatchSpawner.GetBatches(activeLymphaticBatches);
+            foreach (LymphaticBatchGroup batch in activeLymphaticBatches)
+            {
+                if (batch != null && batch.TargetInfection == marker && batch.Status != LymphaticBatchGroup.BatchStatus.Ready)
+                    return true;
+            }
         }
 
         return false;
@@ -471,9 +486,17 @@ public sealed class InfectionSpawner : MonoBehaviour
             ApplyWellnessChange("Debug test", -debugWellnessLossAmount);
 #endif
 
+        UpdateWbcCooldowns();
+        UpdateLeukocyteSupply();
+        UpdateDendriticCells();
+        UpdateIdleAndDispatchedSquads();
+        UpdateInfectionCombat();
+        UpdateLymphaticBatchInfectionResolutions();
         UpdateInfectionMarkerAnimations();
         UpdateInfectionThreatVisuals();
         UpdateSelectedInfectionPopup();
+        UpdateSquadPrompt();
+        HandleSquadPromptCancellation();
         HandleMapClick();
         EnsurePendingInfectionsPanelSubscription();
     }
@@ -1761,6 +1784,28 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
     }
 
+    private void UpdateLymphaticBatchInfectionResolutions()
+    {
+        if (lymphaticBatchSpawner == null)
+            lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        if (lymphaticBatchSpawner == null)
+            return;
+
+        lymphaticBatchSpawner.GetBatches(activeLymphaticBatches);
+        foreach (LymphaticBatchGroup batch in activeLymphaticBatches)
+        {
+            if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Working)
+                continue;
+
+            InfectionMarker marker = batch.TargetInfection;
+            if (marker == null || marker.isRemoving || marker.isContained || marker.resolutionPending || marker.infection == null)
+                continue;
+
+            BeginInfectionResolution(marker);
+        }
+    }
+
+
     private GameObject FindNearestLivingUnit(List<GameObject> candidates, Vector3 origin, out float nearestDistance)
     {
         GameObject nearest = null;
@@ -1866,10 +1911,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (infectionClearedSfx == null || infectionAudioSource == null)
             return;
 
-        infectionAudioSource.Stop();
-        infectionAudioSource.clip = infectionClearedSfx;
-        infectionAudioSource.time = 0.01f;
-        infectionAudioSource.Play();
+        infectionAudioSource.PlayOneShot(infectionClearedSfx);
     }
 
     private void ApplyWellnessGainOnResolve(InfectionMarker marker)
