@@ -116,7 +116,7 @@ public sealed class GameplaySpeedButton : MonoBehaviour
         Rect canvasBounds = canvasRect.rect;
         speedButtonRect.anchoredPosition = new Vector2(
             panelTopRight.x - canvasBounds.xMin + ButtonGap,
-            panelTopRight.y - canvasBounds.yMax - dayCounterRect.rect.height * 0.5f);
+            panelTopRight.y - canvasBounds.yMax - dayCounterRect.rect.height * 0.5f + ButtonHeight * 0.5f);
     }
 
     private void CreateText(
