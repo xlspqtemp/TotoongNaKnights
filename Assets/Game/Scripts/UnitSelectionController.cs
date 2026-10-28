@@ -261,9 +261,15 @@ public sealed class UnitSelectionController : MonoBehaviour
             lines.Add($"Type: {selectedHealth.PathogenType}");
         lines.Add($"HP: {currentHp:0.##} / {maxHp:0.##}");
 
+        MacrophageScript macrophage = selectedUnit != null
+            ? selectedUnit.GetComponentInParent<MacrophageScript>()
+            : (selectedHealth != null ? selectedHealth.GetComponentInParent<MacrophageScript>() : null);
+        bool isMacrophage = !isPathogen && macrophage != null;
         bool isWbc = !isPathogen && string.Equals(displayName, "WBC", System.StringComparison.OrdinalIgnoreCase);
         if (isPathogen)
             attack = selectedHealth.PathogenType == InfectionPathogenType.Viral ? stats.virusAttack : stats.bacteriaAttack;
+        else if (isMacrophage)
+            attack = macrophage.damage;
         else
             attack = isWbc ? stats.wbcAttack : 0f;
         lines.Add($"Attack: {attack:0.##}");

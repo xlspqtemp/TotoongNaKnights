@@ -152,7 +152,7 @@ MonoBehaviour:
   agent: {fileID: 1211034880874814307}
   target: {fileID: 0}
   radius: 5
-  damage: 1
+  damage: 20
   health: 60
 --- !u!114 &2450957734260466083
 MonoBehaviour:

@@ -7,7 +7,7 @@ public class MacrophageScript : MonoBehaviour
     public Transform target;
 
     public float radius = 5f;
-    public float damage = 1f;
+    public float damage = 20f;
     public int health = 300;
     private bool isCirculatoryCell;
 

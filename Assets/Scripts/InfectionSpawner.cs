@@ -39,6 +39,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const string AnimatorMovingParameter = "IsMoving";
     private const string AnimatorAttackParameter = "Attack";
     private const float AnimatorMovementThreshold = 0.1f;
+    private const float MacrophageAttackDamage = 20f;
+    private const float MacrophageAttackRange = 2f;
+
 
     private const float InfectionPopupReferenceDistance = 5f;
     [Header("Selected Infection Popup")]
@@ -163,8 +166,12 @@ public sealed class InfectionSpawner : MonoBehaviour
     private readonly HashSet<LymphaticBatchGroup> lymphaticBatchAttackAnimationsTriggered = new HashSet<LymphaticBatchGroup>();
 
 
+
+
     private readonly Dictionary<Button, List<InfectionMarker>> markersByBodyPartButton = new Dictionary<Button, List<InfectionMarker>>();
     private AudioSource infectionAudioSource;
+    private readonly List<GameObject> activeBatchPathogens = new List<GameObject>();
+
     private readonly List<LymphaticBatchGroup> activeLymphaticBatches = new List<LymphaticBatchGroup>();
     private LymphaticBatchSpawner lymphaticBatchSpawner;
 
@@ -1804,6 +1811,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (lymphaticBatchSpawner == null)
             return;
 
+        DifficultyStats stats = DifficultySettings.CurrentStats;
         lymphaticBatchSpawner.GetBatches(activeLymphaticBatches);
         foreach (LymphaticBatchGroup batch in activeLymphaticBatches)
         {
@@ -1811,10 +1819,71 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             InfectionMarker marker = batch.TargetInfection;
-            if (marker == null || marker.isRemoving || marker.isContained || marker.resolutionPending || marker.infection == null)
+            if (marker == null || marker.isRemoving || marker.isContained || marker.infection == null)
                 continue;
 
+            if (marker.infection.pathogenType == InfectionPathogenType.Viral)
+            {
+                BeginInfectionResolution(marker);
+                continue;
+            }
+
             BeginInfectionResolution(marker);
+            activeBatchPathogens.Clear();
+            foreach (GameObject pathogen in marker.threatVisuals)
+            {
+                Health pathogenHealth = pathogen != null ? pathogen.GetComponent<Health>() : null;
+                if (pathogen != null && pathogen.activeInHierarchy && pathogenHealth != null && !pathogenHealth.IsDead)
+                    activeBatchPathogens.Add(pathogen);
+            }
+
+            bool isMacrophageBatch = string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase);
+            float attackRange = isMacrophageBatch
+                ? Mathf.Max(combatMeleeRange, MacrophageAttackRange)
+                : combatMeleeRange;
+            foreach (GameObject member in batch.Members)
+            {
+                if (member == null || !member.activeInHierarchy)
+                    continue;
+
+                MacrophageScript macrophage = isMacrophageBatch ? member.GetComponent<MacrophageScript>() : null;
+                Health memberHealth = member.GetComponent<Health>();
+                if (memberHealth == null && isMacrophageBatch)
+                {
+                    memberHealth = member.AddComponent<Health>();
+                    memberHealth.SetMaxHp(macrophage != null ? Mathf.Max(1, macrophage.health) : stats.wbcHp);
+                }
+                if (memberHealth == null || memberHealth.IsDead)
+                    continue;
+
+                float attackDamage = stats.wbcAttack;
+                if (isMacrophageBatch)
+                    attackDamage = macrophage != null ? macrophage.damage : MacrophageAttackDamage;
+
+                GameObject nearestPathogen = FindNearestLivingUnit(activeBatchPathogens, member.transform.position, out float distance);
+                if (nearestPathogen == null || distance > combatDetectionRange)
+                    continue;
+
+                NavMeshAgent agent = member.GetComponent<NavMeshAgent>();
+                if (distance > attackRange)
+                {
+                    if (agent != null && agent.enabled && agent.isOnNavMesh && !agent.pathPending &&
+                        (!agent.hasPath || (agent.destination - nearestPathogen.transform.position).sqrMagnitude > 0.25f))
+                    {
+                        agent.isStopped = false;
+                        agent.SetDestination(nearestPathogen.transform.position);
+                    }
+                    continue;
+                }
+
+                if (agent != null && agent.enabled && agent.isOnNavMesh && agent.hasPath)
+                {
+                    agent.ResetPath();
+                    agent.isStopped = true;
+                }
+
+                TryApplyCombatHit(member, nearestPathogen, memberHealth, attackDamage, stats.attackIntervalSeconds);
+            }
         }
     }
 
@@ -1859,13 +1928,14 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (batch == null)
                 continue;
 
-            bool isMobilizing = batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing;
+            bool isMovingBatch = batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing ||
+                batch.Status == LymphaticBatchGroup.BatchStatus.Working;
             foreach (GameObject member in batch.Members)
             {
                 if (member == null || !member.activeInHierarchy)
                     continue;
 
-                UpdateUnitMovementAnimation(member, member.GetComponent<NavMeshAgent>(), isMobilizing);
+                UpdateUnitMovementAnimation(member, member.GetComponent<NavMeshAgent>(), isMovingBatch);
             }
 
             InfectionMarker target = batch.TargetInfection;
