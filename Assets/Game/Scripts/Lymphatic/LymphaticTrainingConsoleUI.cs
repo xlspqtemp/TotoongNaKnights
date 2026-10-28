@@ -35,6 +35,19 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
     private static readonly Color ModalPanelColor = new Color(0.018f, 0.055f, 0.07f, 0.99f);
     private static readonly Color VariantRowColor = new Color(0.035f, 0.095f, 0.12f, 1f);
     private static readonly Color VariantSelectedColor = new Color(0.06f, 0.32f, 0.36f, 1f);
+    private static readonly Color LockedVariantRowColor = new Color(0.12f, 0.14f, 0.15f, 0.88f);
+    private static readonly Color LockedVariantTextColor = new Color(0.42f, 0.46f, 0.47f, 1f);
+    private static readonly HashSet<string> ViralVariantNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "Common Cold",
+        "Stomach Flu",
+        "Hand, Foot, Mouth",
+        "Influenza (Flu)",
+        "Chickenpox",
+        "Measles",
+        "COVID-19",
+        "Dengue"
+    };
 
     private readonly TrainingSlot[] trainingSlots =
     {
@@ -414,15 +427,21 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
         rowLayout.preferredHeight = VariantRowHeight;
 
         Image rowImage = rowObject.GetComponent<Image>();
-        rowImage.color = VariantRowColor;
+        bool isLockedViral = ViralVariantNames.Contains(pathogenName) && !IsAntigenUnlocked(pathogenName);
+        rowImage.color = isLockedViral ? LockedVariantRowColor : VariantRowColor;
         Button rowButton = rowObject.AddComponent<Button>();
         rowButton.targetGraphic = rowImage;
         rowButton.transition = Selectable.Transition.None;
+        rowButton.interactable = !isLockedViral;
         string rowName = unit.Name + " - " + pathogenName;
-        rowButton.onClick.AddListener(() => SelectVariant(rowName));
-        CreateText("VariantName", rowRect, rowName, 14f, MainTextColor, TextAlignmentOptions.MidlineLeft,
+        if (!isLockedViral)
+            rowButton.onClick.AddListener(() => SelectVariant(rowName));
+        string displayName = isLockedViral ? rowName + "  [ANTIGEN REQUIRED]" : rowName;
+        Color textColor = isLockedViral ? LockedVariantTextColor : MainTextColor;
+        CreateText("VariantName", rowRect, displayName, 14f, textColor, TextAlignmentOptions.MidlineLeft,
             Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), new Vector2(16f, 0f), new Vector2(-32f, 0f));
-        variantRowBackgrounds.Add(rowName, rowImage);
+        if (!isLockedViral)
+            variantRowBackgrounds.Add(rowName, rowImage);
     }
 
     private void SelectVariant(string variantName)
@@ -439,6 +458,21 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
         }
     }
 
+    private static bool IsAntigenUnlocked(string pathogenName)
+    {
+        List<string> unlockedAntigens = Databank.UnlockedAntigens;
+        if (string.IsNullOrWhiteSpace(pathogenName) || unlockedAntigens == null)
+            return false;
+
+        foreach (string unlockedAntigen in unlockedAntigens)
+        {
+            if (string.Equals(unlockedAntigen, pathogenName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private void ConfirmVariantTraining()
     {
         if (activeVariantUnit == null || string.IsNullOrEmpty(selectedVariantName))
@@ -452,6 +486,9 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
         }
 
         string pathogenName = selectedVariantName.Substring(activeVariantUnit.Name.Length + 3);
+        if (ViralVariantNames.Contains(pathogenName) && !IsAntigenUnlocked(pathogenName))
+            return;
+
         if (StartTraining(slot, pathogenName))
             CloseModal();
     }
