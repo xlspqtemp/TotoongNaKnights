@@ -39,6 +39,23 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const string AnimatorMovingParameter = "IsMoving";
     private const string AnimatorAttackParameter = "Attack";
     private const float AnimatorMovementThreshold = 0.1f;
+    private const int MinimumViralContainmentDays = 2;
+    private const int MaximumViralContainmentDays = 3;
+    private const float ContainedDendriticIdleBobHeight = 0.04f;
+    private const float ContainedDendriticIdleBobSpeed = 2f;
+    private const float AntigenPopupFadeDuration = 0.3f;
+    private const float AntigenPopupHoldDuration = 3f;
+    private const string AntigenIconResourcePath = "UI/Dentritic message pop up";
+    private const string AntigenScaleReferenceIconResourcePath = "UI/Blue virus icon";
+    private const int NotificationSpritePixelsPerUnit = 1024;
+    private const float AntigenNotificationIconScale = 0.65f;
+    private const float AntigenIconHeightOffset = 2f;
+    private const float AntigenIconBobHeight = 0.12f;
+    private const float AntigenIconBobSpeed = 2f;
+    private const float AntigenIconPulseSpeed = 3f;
+    private const float AntigenIconMinimumAlpha = 0.45f;
+    private const float AntigenIconMaximumAlpha = 1f;
+    private const float AntigenIconColliderScale = 1.5f;
     private const float MacrophageAttackDamage = 20f;
     private const float MacrophageAttackRange = 2f;
 
@@ -171,7 +188,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     private readonly Dictionary<Button, List<InfectionMarker>> markersByBodyPartButton = new Dictionary<Button, List<InfectionMarker>>();
     private AudioSource infectionAudioSource;
     private readonly List<GameObject> activeBatchPathogens = new List<GameObject>();
-
+    private readonly List<PendingAntigenCollection> pendingAntigenCollections = new List<PendingAntigenCollection>();
+    private Sprite resolvedAntigenIconSprite;
+    private Texture2D antigenScaleReferenceTexture;
     private readonly List<LymphaticBatchGroup> activeLymphaticBatches = new List<LymphaticBatchGroup>();
     private LymphaticBatchSpawner lymphaticBatchSpawner;
 
@@ -388,6 +407,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         public bool isContained;
         public bool resolutionPending;
         public int containedResolveDay;
+        public GameObject containedDendriticCell;
+        public Vector3 containedDendriticBasePosition;
+        public bool containedDendriticUsesProceduralIdle;
         public int unresolvedDays;
         public bool wasBarrierMutated;
         public bool wellnessGainAwardedOnResolve;
@@ -423,6 +445,17 @@ public sealed class InfectionSpawner : MonoBehaviour
         public InfectionMarker infectionTarget;
         public GameObject cell;
         public GameObject destination;
+    }
+
+    private sealed class PendingAntigenCollection
+    {
+        public string antigenName;
+        public GameObject dendriticCell;
+        public GameObject icon;
+        public SpriteRenderer iconRenderer;
+        public BoxCollider iconCollider;
+        public Vector3 iconBasePosition;
+        public Vector3 scaleAnchor;
     }
 
     private void Awake()
@@ -499,9 +532,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             ApplyWellnessChange("Debug test", -debugWellnessLossAmount);
 #endif
 
+        bool antigenIconClicked = HandleAntigenIconClick();
         UpdateWbcCooldowns();
         UpdateLeukocyteSupply();
         UpdateDendriticCells();
+        UpdateContainedDendriticCells();
+        UpdatePendingAntigenCollections();
         UpdateIdleAndDispatchedSquads();
         UpdateInfectionCombat();
         UpdateLymphaticBatchAnimations();
@@ -512,7 +548,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         UpdateSelectedInfectionPopup();
         UpdateSquadPrompt();
         HandleSquadPromptCancellation();
-        HandleMapClick();
+        HandleMapClick(antigenIconClicked);
         EnsurePendingInfectionsPanelSubscription();
     }
 
@@ -948,9 +984,9 @@ public sealed class InfectionSpawner : MonoBehaviour
             promptBannerObject.SetActive(false);
     }
 
-    private void HandleMapClick()
+    private void HandleMapClick(bool antigenIconClicked)
     {
-        if (!Input.GetMouseButtonDown(0))
+        if (antigenIconClicked || !Input.GetMouseButtonDown(0))
             return;
 
         if (!TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
@@ -1401,16 +1437,19 @@ public sealed class InfectionSpawner : MonoBehaviour
                 highlight.SetHighlighted(false);
         }
 
-        Debug.Log("[Dispatch] Reached dendritic spawn code.");
-        GameObject dendriticCell = SpawnDendriticCell(infectionTarget, idleSquad[0].transform.position, out GameObject dendriticDestination);
-        if (dendriticCell != null)
+        if (infectionTarget == null || infectionTarget.infection == null ||
+            infectionTarget.infection.pathogenType != InfectionPathogenType.Viral)
         {
-            dispatchedDendriticCells.Add(new DispatchedDendriticCell
+            GameObject dendriticCell = SpawnDendriticCell(infectionTarget, idleSquad[0].transform.position, out GameObject dendriticDestination);
+            if (dendriticCell != null)
             {
-                infectionTarget = infectionTarget,
-                cell = dendriticCell,
-                destination = dendriticDestination
-            });
+                dispatchedDendriticCells.Add(new DispatchedDendriticCell
+                {
+                    infectionTarget = infectionTarget,
+                    cell = dendriticCell,
+                    destination = dendriticDestination
+                });
+            }
         }
 
         dispatchedWbcSquads.Add(new DispatchedWbcSquad
@@ -1533,6 +1572,273 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
     }
 
+    private void UpdateContainedDendriticCells()
+    {
+        foreach (InfectionMarker marker in activeInfectionMarkers)
+        {
+            if (marker == null || !marker.isContained || marker.containedDendriticCell == null ||
+                !marker.containedDendriticUsesProceduralIdle)
+                continue;
+
+            float bobOffset = Mathf.Sin(Time.time * ContainedDendriticIdleBobSpeed) * ContainedDendriticIdleBobHeight;
+            marker.containedDendriticCell.transform.position = marker.containedDendriticBasePosition + Vector3.up * bobOffset;
+        }
+    }
+
+    private void SpawnContainedDendriticCell(InfectionMarker marker)
+    {
+        if (marker == null || dendriticPrefab == null || marker.containedDendriticCell != null)
+            return;
+
+        Vector3 spawnPosition = marker.worldPosition + Vector3.right * 1.5f;
+        Vector3 lookDirection = marker.worldPosition - spawnPosition;
+        lookDirection.y = 0f;
+        Quaternion spawnRotation = lookDirection.sqrMagnitude > 0.001f
+            ? Quaternion.LookRotation(lookDirection)
+            : Quaternion.identity;
+
+        GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, spawnRotation);
+        marker.containedDendriticCell = dendriticCell;
+        marker.containedDendriticBasePosition = dendriticCell.transform.position;
+
+        NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
+        if (agent != null && agent.enabled)
+        {
+            if (agent.isOnNavMesh)
+            {
+                agent.ResetPath();
+                agent.isStopped = true;
+            }
+            else
+            {
+                agent.enabled = false;
+            }
+        }
+
+        Animator animator = dendriticCell.GetComponentInChildren<Animator>(true);
+        bool hasIdleAnimation = animator != null && animator.runtimeAnimatorController != null &&
+            animator.HasState(0, Animator.StringToHash("Idle"));
+        marker.containedDendriticUsesProceduralIdle = !hasIdleAnimation;
+        if (hasIdleAnimation)
+            animator.Play("Idle", 0, 0f);
+    }
+
+    private bool CreatePendingAntigenCollection(InfectionMarker marker)
+    {
+        if (marker == null || marker.infection == null || marker.infection.pathogenType != InfectionPathogenType.Viral)
+            return false;
+
+        Sprite iconSprite = ResolveAntigenIconSprite();
+        if (iconSprite == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] The Dendritic antigen icon could not be loaded from Resources/UI.", this);
+            return false;
+        }
+
+        GameObject icon = new GameObject("Antigen Collection Icon", typeof(SpriteRenderer), typeof(BoxCollider));
+        icon.layer = LayerMask.NameToLayer("Default");
+        SpriteRenderer iconRenderer = icon.GetComponent<SpriteRenderer>();
+        iconRenderer.sprite = iconSprite;
+        iconRenderer.sortingOrder = 30;
+        iconRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        iconRenderer.receiveShadows = false;
+
+        Vector3 iconPosition = marker.containedDendriticCell != null
+            ? marker.containedDendriticCell.transform.position + Vector3.up * AntigenIconHeightOffset
+            : marker.worldPosition + Vector3.right * 1.5f + Vector3.up * AntigenIconHeightOffset;
+        icon.transform.position = iconPosition;
+        icon.transform.localScale = Vector3.one * GetAntigenNotificationScale(iconSprite, marker.worldPosition);
+
+        BoxCollider iconCollider = icon.GetComponent<BoxCollider>();
+        iconCollider.enabled = true;
+        iconCollider.isTrigger = false;
+        Vector3 spriteSize = iconSprite.bounds.size;
+        iconCollider.size = new Vector3(Mathf.Max(0.1f, spriteSize.x * AntigenIconColliderScale),
+            Mathf.Max(0.1f, spriteSize.y * AntigenIconColliderScale), 0.4f);
+
+        pendingAntigenCollections.Add(new PendingAntigenCollection
+        {
+            antigenName = marker.infection.displayName,
+            dendriticCell = marker.containedDendriticCell,
+            icon = icon,
+            iconRenderer = iconRenderer,
+            iconCollider = iconCollider,
+            iconBasePosition = iconPosition,
+            scaleAnchor = marker.worldPosition
+        });
+        marker.containedDendriticCell = null;
+        marker.containedDendriticUsesProceduralIdle = false;
+        return true;
+    }
+
+    private Sprite ResolveAntigenIconSprite()
+    {
+        if (resolvedAntigenIconSprite != null)
+            return resolvedAntigenIconSprite;
+
+        resolvedAntigenIconSprite = Resources.Load<Sprite>(AntigenIconResourcePath);
+        if (resolvedAntigenIconSprite != null)
+            return resolvedAntigenIconSprite;
+
+        Texture2D iconTexture = Resources.Load<Texture2D>(AntigenIconResourcePath);
+        if (iconTexture == null)
+            return null;
+
+        resolvedAntigenIconSprite = Sprite.Create(iconTexture,
+            new Rect(0f, 0f, iconTexture.width, iconTexture.height), new Vector2(0.5f, 0.5f), NotificationSpritePixelsPerUnit);
+        return resolvedAntigenIconSprite;
+    }
+
+    private void UpdatePendingAntigenCollections()
+    {
+        for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
+        {
+            PendingAntigenCollection collection = pendingAntigenCollections[index];
+            if (collection == null || collection.icon == null)
+            {
+                pendingAntigenCollections.RemoveAt(index);
+                continue;
+            }
+
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * AntigenIconPulseSpeed);
+            Vector3 bobbedPosition = collection.iconBasePosition + Vector3.up *
+                (Mathf.Sin(Time.unscaledTime * AntigenIconBobSpeed) * AntigenIconBobHeight);
+            collection.icon.transform.position = bobbedPosition;
+            collection.icon.transform.localScale = Vector3.one *
+                GetAntigenNotificationScale(collection.iconRenderer != null ? collection.iconRenderer.sprite : null, collection.scaleAnchor);
+            if (gameplayCamera != null)
+            {
+                Vector3 cameraDirection = gameplayCamera.transform.position - collection.icon.transform.position;
+                if (cameraDirection.sqrMagnitude > 0.001f)
+                    collection.icon.transform.rotation = Quaternion.LookRotation(cameraDirection);
+            }
+
+            if (collection.iconRenderer != null)
+            {
+                Color iconColor = collection.iconRenderer.color;
+                iconColor.a = Mathf.Lerp(AntigenIconMinimumAlpha, AntigenIconMaximumAlpha, pulse);
+                collection.iconRenderer.color = iconColor;
+            }
+        }
+    }
+
+    private float GetAntigenNotificationScale(Sprite iconSprite, Vector3 anchor)
+    {
+        float cameraScale = AntigenNotificationIconScale;
+        if (gameplayCamera != null)
+        {
+            if (gameplayCamera.orthographic)
+                cameraScale = Mathf.Max(0.01f, gameplayCamera.orthographicSize * AntigenNotificationIconScale);
+            else
+            {
+                float distance = Vector3.Distance(gameplayCamera.transform.position, anchor);
+                cameraScale = Mathf.Max(0.01f, distance * AntigenNotificationIconScale * 0.35f);
+            }
+        }
+
+        if (iconSprite == null)
+            return cameraScale;
+
+        if (antigenScaleReferenceTexture == null)
+            antigenScaleReferenceTexture = Resources.Load<Texture2D>(AntigenScaleReferenceIconResourcePath);
+        if (antigenScaleReferenceTexture == null)
+            return cameraScale;
+
+        float referenceIconPixels = Mathf.Max(antigenScaleReferenceTexture.width, antigenScaleReferenceTexture.height);
+        float antigenIconWorldSize = Mathf.Max(iconSprite.bounds.size.x, iconSprite.bounds.size.y);
+        if (referenceIconPixels <= 0f || antigenIconWorldSize <= 0f)
+            return cameraScale;
+
+        float referenceIconWorldSize = referenceIconPixels / NotificationSpritePixelsPerUnit;
+        return cameraScale * (referenceIconWorldSize / antigenIconWorldSize);
+    }
+
+    private bool HandleAntigenIconClick()
+    {
+        if (!Input.GetMouseButtonDown(0) || pendingAntigenCollections.Count == 0)
+            return false;
+
+        if (gameplayCamera == null)
+            gameplayCamera = cameraScript != null ? cameraScript.GetComponentInChildren<Camera>() : Camera.main;
+        if (gameplayCamera == null)
+            return false;
+
+        Ray ray = gameplayCamera.ScreenPointToRay(Input.mousePosition);
+        RaycastHit[] hits = Physics.RaycastAll(ray, gameplayCamera.farClipPlane,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
+
+        for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
+        {
+            PendingAntigenCollection collection = pendingAntigenCollections[index];
+            if (collection == null || collection.iconCollider == null || !collection.iconCollider.enabled)
+                continue;
+
+            bool colliderHit = false;
+            foreach (RaycastHit hit in hits)
+            {
+                if (hit.collider != collection.iconCollider)
+                    continue;
+
+                colliderHit = true;
+                break;
+            }
+
+            if (!colliderHit)
+                colliderHit = collection.iconCollider.Raycast(ray, out RaycastHit iconHit, gameplayCamera.farClipPlane);
+            if (!colliderHit && !IsScreenPointInsideColliderBounds(gameplayCamera, Input.mousePosition, collection.iconCollider))
+                continue;
+
+            CollectAntigen(collection);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsScreenPointInsideColliderBounds(Camera camera, Vector2 screenPosition, Collider targetCollider)
+    {
+        Bounds bounds = targetCollider.bounds;
+        Vector3 minimum = bounds.min;
+        Vector3 maximum = bounds.max;
+        float minimumScreenX = float.PositiveInfinity;
+        float maximumScreenX = float.NegativeInfinity;
+        float minimumScreenY = float.PositiveInfinity;
+        float maximumScreenY = float.NegativeInfinity;
+
+        for (int corner = 0; corner < 8; corner++)
+        {
+            Vector3 worldCorner = new Vector3(
+                (corner & 1) == 0 ? minimum.x : maximum.x,
+                (corner & 2) == 0 ? minimum.y : maximum.y,
+                (corner & 4) == 0 ? minimum.z : maximum.z);
+            Vector3 screenCorner = camera.WorldToScreenPoint(worldCorner);
+            if (screenCorner.z <= 0f)
+                continue;
+
+            minimumScreenX = Mathf.Min(minimumScreenX, screenCorner.x);
+            maximumScreenX = Mathf.Max(maximumScreenX, screenCorner.x);
+            minimumScreenY = Mathf.Min(minimumScreenY, screenCorner.y);
+            maximumScreenY = Mathf.Max(maximumScreenY, screenCorner.y);
+        }
+
+        return screenPosition.x >= minimumScreenX && screenPosition.x <= maximumScreenX &&
+            screenPosition.y >= minimumScreenY && screenPosition.y <= maximumScreenY;
+    }
+
+    private void CollectAntigen(PendingAntigenCollection collection)
+    {
+        if (collection == null)
+            return;
+
+        Databank.AddAntigen(collection.antigenName);
+        ShowAntigenPopup(collection.antigenName);
+        if (collection.dendriticCell != null)
+            Destroy(collection.dendriticCell);
+        if (collection.icon != null)
+            Destroy(collection.icon);
+        pendingAntigenCollections.Remove(collection);
+    }
+
     private void DespawnDendriticCell(DispatchedDendriticCell dispatchedCell)
     {
         if (dispatchedCell == null)
@@ -1561,6 +1867,13 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (infectionTarget == null)
             return;
+
+        if (infectionTarget.containedDendriticCell != null)
+        {
+            Destroy(infectionTarget.containedDendriticCell);
+            infectionTarget.containedDendriticCell = null;
+            infectionTarget.containedDendriticUsesProceduralIdle = false;
+        }
 
         for (int index = dispatchedDendriticCells.Count - 1; index >= 0; index--)
         {
@@ -2063,7 +2376,11 @@ public sealed class InfectionSpawner : MonoBehaviour
             (int)marker.infection.severityStage - containedSeverityDropSteps);
         marker.infection.severityStage = (InfectionSeverityStage)reducedSeverity;
         marker.isContained = true;
-        marker.containedResolveDay = (dayCounter != null ? dayCounter.CurrentDay : 0) + containedSelfResolveDays;
+        int minimumContainmentDays = Mathf.Clamp(containedSelfResolveDays,
+            MinimumViralContainmentDays, MaximumViralContainmentDays);
+        int containmentDays = UnityEngine.Random.Range(minimumContainmentDays, MaximumViralContainmentDays + 1);
+        marker.containedResolveDay = (dayCounter != null ? dayCounter.CurrentDay : 0) + containmentDays;
+        SpawnContainedDendriticCell(marker);
         AddLeukocyteSupply(containmentBonus);
         LogWbcSquadMessage($"WBC contained {marker.infection.displayName}, but the virus is hiding inside cells. Adaptive response is building.", ConsoleLogUI.LogType.Warning);
         ApplyWellnessGainOnResolve(marker);
@@ -2179,6 +2496,9 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             string infectionName = marker.infection.displayName;
+            if (marker.infection.pathogenType == InfectionPathogenType.Viral && !CreatePendingAntigenCollection(marker))
+                continue;
+
             PlayInfectionClearedSfx();
             BeginRemovingInfectionMarker(marker);
             LogWbcSquadMessage($"Adaptive response cleared {infectionName}.", ConsoleLogUI.LogType.Success);
@@ -2367,9 +2687,6 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
 
         DespawnDendriticCellsForInfection(marker);
-        if (marker.isContained && marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
-            adaptiveResponsePopup?.Show(marker.infection.displayName);
-
         marker.isRemoving = true;
         marker.animationElapsed = 0f;
         if (marker.dispatchButton != null)
@@ -2948,6 +3265,70 @@ public sealed class InfectionSpawner : MonoBehaviour
         text.alignment = alignment;
         text.raycastTarget = false;
         return text;
+    }
+
+    private void ShowAntigenPopup(string virusName)
+    {
+        if (hudCanvas == null)
+            hudCanvas = FindFirstObjectByType<Canvas>();
+        if (hudCanvas == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot show the antigen popup because no HUD Canvas is available.", this);
+            return;
+        }
+
+        GameObject popupObject = new GameObject("Antigen Collection Popup",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));
+        popupObject.transform.SetParent(hudCanvas.transform, false);
+
+        RectTransform popupRect = popupObject.GetComponent<RectTransform>();
+        popupRect.anchorMin = new Vector2(0.5f, 1f);
+        popupRect.anchorMax = new Vector2(0.5f, 1f);
+        popupRect.pivot = new Vector2(0.5f, 1f);
+        popupRect.anchoredPosition = new Vector2(0f, -promptBannerWellnessGap - 12f);
+        popupRect.sizeDelta = new Vector2(700f, 72f);
+
+        Image background = popupObject.GetComponent<Image>();
+        background.color = squadHudPanelColor;
+        background.raycastTarget = false;
+
+        CanvasGroup canvasGroup = popupObject.GetComponent<CanvasGroup>();
+        canvasGroup.alpha = 0f;
+        canvasGroup.interactable = false;
+        canvasGroup.blocksRaycasts = false;
+
+        TextMeshProUGUI message = CreateInfectionPopupText("Antigen Collection Message", Vector2.zero, Vector2.one,
+            new Vector2(16f, 8f), new Vector2(-16f, -8f), 22f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
+        message.text = $"I have obtained the {virusName} antigen.";
+        message.textWrappingMode = TextWrappingModes.Normal;
+        message.transform.SetParent(popupObject.transform, false);
+
+        StartCoroutine(FadeAndDestroyAntigenPopup(popupObject, canvasGroup));
+    }
+
+    private System.Collections.IEnumerator FadeAndDestroyAntigenPopup(GameObject popupObject, CanvasGroup canvasGroup)
+    {
+        float elapsed = 0f;
+        while (elapsed < AntigenPopupFadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            canvasGroup.alpha = Mathf.Clamp01(elapsed / AntigenPopupFadeDuration);
+            yield return null;
+        }
+
+        canvasGroup.alpha = 1f;
+        yield return new WaitForSecondsRealtime(AntigenPopupHoldDuration);
+
+        elapsed = 0f;
+        while (elapsed < AntigenPopupFadeDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            canvasGroup.alpha = 1f - Mathf.Clamp01(elapsed / AntigenPopupFadeDuration);
+            yield return null;
+        }
+
+        if (popupObject != null)
+            Destroy(popupObject);
     }
 
     private void UpdateSelectedInfectionPopup()
