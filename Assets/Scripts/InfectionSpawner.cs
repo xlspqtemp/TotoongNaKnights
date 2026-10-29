@@ -46,6 +46,12 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float AntigenPopupFadeDuration = 0.3f;
     private const float AntigenPopupHoldDuration = 3f;
     private const string AntigenIconResourcePath = "UI/Dentritic message pop up";
+    private const string AntigenPopupBackgroundResourcePath = "UI/Dentritic dialogue box";
+    private const float AntigenPopupBackgroundCropLeft = 0.1f;
+    private const float AntigenPopupBackgroundCropBottom = 0.324f;
+    private const float AntigenPopupBackgroundCropWidth = 0.8f;
+    private const float AntigenPopupBackgroundCropHeight = 0.424f;
+    private const float AntigenPopupBackgroundWidth = 700f;
     private const string AntigenScaleReferenceIconResourcePath = "UI/Blue virus icon";
     private const int NotificationSpritePixelsPerUnit = 1024;
     private const float AntigenNotificationIconScale = 0.65f;
@@ -2686,6 +2692,32 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             return;
 
+        bool shouldDespawnResolvedSquads = marker.infection == null
+            || marker.infection.pathogenType != InfectionPathogenType.Viral
+            || marker.isContained;
+        if (shouldDespawnResolvedSquads)
+        {
+            for (int squadIndex = dispatchedWbcSquads.Count - 1; squadIndex >= 0; squadIndex--)
+            {
+                DispatchedWbcSquad squad = dispatchedWbcSquads[squadIndex];
+                if (squad != null && squad.infectionTarget == marker)
+                    DespawnWbcSquad(squadIndex);
+            }
+
+            if (lymphaticBatchSpawner == null)
+                lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+            if (lymphaticBatchSpawner != null)
+            {
+                lymphaticBatchSpawner.GetBatches(activeLymphaticBatches);
+                for (int batchIndex = activeLymphaticBatches.Count - 1; batchIndex >= 0; batchIndex--)
+                {
+                    LymphaticBatchGroup batch = activeLymphaticBatches[batchIndex];
+                    if (batch != null && batch.TargetInfection == marker)
+                        lymphaticBatchSpawner.DestroyBatch(batch.BatchId);
+                }
+            }
+        }
+
         DespawnDendriticCellsForInfection(marker);
         marker.isRemoving = true;
         marker.animationElapsed = 0f;
@@ -3267,6 +3299,23 @@ public sealed class InfectionSpawner : MonoBehaviour
         return text;
     }
 
+    private Sprite CreateAntigenPopupBackgroundSprite()
+    {
+        Texture2D backgroundTexture = Resources.Load<Texture2D>(AntigenPopupBackgroundResourcePath);
+        if (backgroundTexture == null)
+        {
+            Debug.LogWarning($"[InfectionSpawner] Could not load antigen popup background at Resources/{AntigenPopupBackgroundResourcePath}.png.", this);
+            return null;
+        }
+
+        Rect spriteRect = new Rect(
+            backgroundTexture.width * AntigenPopupBackgroundCropLeft,
+            backgroundTexture.height * AntigenPopupBackgroundCropBottom,
+            backgroundTexture.width * AntigenPopupBackgroundCropWidth,
+            backgroundTexture.height * AntigenPopupBackgroundCropHeight);
+        return Sprite.Create(backgroundTexture, spriteRect, new Vector2(0.5f, 0.5f), 100f);
+    }
+
     private void ShowAntigenPopup(string virusName)
     {
         if (hudCanvas == null)
@@ -3286,10 +3335,16 @@ public sealed class InfectionSpawner : MonoBehaviour
         popupRect.anchorMax = new Vector2(0.5f, 1f);
         popupRect.pivot = new Vector2(0.5f, 1f);
         popupRect.anchoredPosition = new Vector2(0f, -promptBannerWellnessGap - 12f);
-        popupRect.sizeDelta = new Vector2(700f, 72f);
+        Sprite backgroundSprite = CreateAntigenPopupBackgroundSprite();
+        float popupHeight = backgroundSprite != null
+            ? AntigenPopupBackgroundWidth / (backgroundSprite.rect.width / backgroundSprite.rect.height)
+            : 72f;
+        popupRect.sizeDelta = new Vector2(AntigenPopupBackgroundWidth, popupHeight);
 
         Image background = popupObject.GetComponent<Image>();
-        background.color = squadHudPanelColor;
+        background.sprite = backgroundSprite;
+        background.color = Color.white;
+        background.preserveAspect = true;
         background.raycastTarget = false;
 
         CanvasGroup canvasGroup = popupObject.GetComponent<CanvasGroup>();
@@ -3298,15 +3353,15 @@ public sealed class InfectionSpawner : MonoBehaviour
         canvasGroup.blocksRaycasts = false;
 
         TextMeshProUGUI message = CreateInfectionPopupText("Antigen Collection Message", Vector2.zero, Vector2.one,
-            new Vector2(16f, 8f), new Vector2(-16f, -8f), 22f, FontStyles.Bold, Color.white, TextAlignmentOptions.Center);
-        message.text = $"I have obtained the {virusName} antigen.";
+            new Vector2(28f, 24f), new Vector2(-28f, -24f), 22f, FontStyles.Bold, Color.black, TextAlignmentOptions.Center);
+        message.text = $"I'VE OBTAINED {virusName} ANTIGEN!";
         message.textWrappingMode = TextWrappingModes.Normal;
         message.transform.SetParent(popupObject.transform, false);
 
-        StartCoroutine(FadeAndDestroyAntigenPopup(popupObject, canvasGroup));
+        StartCoroutine(FadeAndDestroyAntigenPopup(popupObject, canvasGroup, backgroundSprite));
     }
 
-    private System.Collections.IEnumerator FadeAndDestroyAntigenPopup(GameObject popupObject, CanvasGroup canvasGroup)
+    private System.Collections.IEnumerator FadeAndDestroyAntigenPopup(GameObject popupObject, CanvasGroup canvasGroup, Sprite backgroundSprite)
     {
         float elapsed = 0f;
         while (elapsed < AntigenPopupFadeDuration)
@@ -3329,6 +3384,8 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (popupObject != null)
             Destroy(popupObject);
+        if (backgroundSprite != null)
+            Destroy(backgroundSprite);
     }
 
     private void UpdateSelectedInfectionPopup()
