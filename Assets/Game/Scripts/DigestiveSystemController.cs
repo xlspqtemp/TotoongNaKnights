@@ -34,7 +34,16 @@ public sealed class DigestiveSystemController : MonoBehaviour
     private const float BarrierGaugeWidth = 600f;
     private const float BarrierGaugeHeight = 600f;
     private const float BarrierGaugeVerticalOffset = -338f;
-    private const float DigestiveQteVerticalOffset = -357f;
+    private const float DigestiveQteVerticalOffset = BarrierGaugeVerticalOffset;
+    private const string VomitButtonIconResourcePath = "UI/Vomit Button";
+    private const float QteButtonIconSize = 280f;
+    private static readonly Vector2 QteButtonSize = new Vector2(QteButtonIconSize, QteButtonIconSize);
+    private static readonly Vector2 QteButtonCenter = new Vector2(0.5f, 0.5f);
+    private static readonly Color QteButtonNormalColor = Color.white;
+    private static readonly Color QteButtonHighlightColor = new Color(0.85f, 0.95f, 1f, 1f);
+    private static readonly Color QteButtonPressedColor = new Color(0.65f, 0.82f, 0.95f, 1f);
+    private static readonly Color QteButtonDisabledColor = new Color(0.45f, 0.48f, 0.52f, 0.85f);
+    private static Sprite vomitButtonIconSprite;
     private static Sprite barrierGaugeSprite;
 
     [SerializeField] private Image barrierGaugeImage;
@@ -138,6 +147,7 @@ public sealed class DigestiveSystemController : MonoBehaviour
                 if (vomitButton != null)
                     vomitButton.gameObject.SetActive(true);
                 CenterQteButton(vomitButton);
+                ConfigureVomitButtonIcon();
             }
         }
 
@@ -466,6 +476,54 @@ public sealed class DigestiveSystemController : MonoBehaviour
         }
     }
 
+    private void ConfigureVomitButtonIcon()
+    {
+        if (vomitButton == null)
+            return;
+
+        Texture2D iconTexture = Resources.Load<Texture2D>(VomitButtonIconResourcePath);
+        if (iconTexture == null)
+        {
+            Debug.LogWarning($"DigestiveSystemController could not load Resources/{VomitButtonIconResourcePath}.png; keeping the Vomit label.", this);
+            return;
+        }
+
+        if (vomitButtonIconSprite == null)
+        {
+            vomitButtonIconSprite = Sprite.Create(
+                iconTexture,
+                new Rect(0f, 0f, iconTexture.width, iconTexture.height),
+                QteButtonCenter,
+                100f);
+            vomitButtonIconSprite.name = "Vomit Button Icon";
+        }
+
+        Image buttonImage = vomitButton.GetComponent<Image>();
+        if (buttonImage == null)
+        {
+            Debug.LogWarning("DigestiveSystemController could not find the VomitButton Image component; keeping the Vomit label.", this);
+            return;
+        }
+
+        buttonImage.sprite = vomitButtonIconSprite;
+        buttonImage.type = Image.Type.Simple;
+        buttonImage.preserveAspect = true;
+        buttonImage.color = Color.white;
+        buttonImage.raycastTarget = true;
+        vomitButton.targetGraphic = buttonImage;
+
+        ColorBlock buttonColors = vomitButton.colors;
+        buttonColors.normalColor = QteButtonNormalColor;
+        buttonColors.highlightedColor = QteButtonHighlightColor;
+        buttonColors.selectedColor = QteButtonNormalColor;
+        buttonColors.pressedColor = QteButtonPressedColor;
+        buttonColors.disabledColor = QteButtonDisabledColor;
+        vomitButton.colors = buttonColors;
+
+        if (vomitLabel != null)
+            vomitLabel.gameObject.SetActive(false);
+    }
+
     private static void CenterQteButton(Button button)
     {
         if (button == null)
@@ -475,9 +533,10 @@ public sealed class DigestiveSystemController : MonoBehaviour
         if (buttonRect == null)
             return;
 
-        buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
-        buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
-        buttonRect.pivot = new Vector2(0.5f, 0.5f);
+        buttonRect.anchorMin = QteButtonCenter;
+        buttonRect.anchorMax = QteButtonCenter;
+        buttonRect.pivot = QteButtonCenter;
+        buttonRect.sizeDelta = QteButtonSize;
         buttonRect.anchoredPosition = new Vector2(0f, DigestiveQteVerticalOffset);
     }
 

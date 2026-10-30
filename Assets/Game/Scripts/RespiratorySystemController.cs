@@ -31,7 +31,16 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const float BarrierGaugeWidth = 600f;
     private const float BarrierGaugeHeight = 600f;
     private const float BarrierGaugeVerticalOffset = -338f;
-    private const float RespiratoryQteVerticalOffset = -357f;
+    private const float RespiratoryQteVerticalOffset = BarrierGaugeVerticalOffset;
+    private const string CoughButtonIconResourcePath = "UI/Cough button";
+    private const float QteButtonIconSize = 280f;
+    private static readonly Vector2 QteButtonSize = new Vector2(QteButtonIconSize, QteButtonIconSize);
+    private static readonly Vector2 QteButtonCenter = new Vector2(0.5f, 0.5f);
+    private static readonly Color QteButtonNormalColor = Color.white;
+    private static readonly Color QteButtonHighlightColor = new Color(0.85f, 0.95f, 1f, 1f);
+    private static readonly Color QteButtonPressedColor = new Color(0.65f, 0.82f, 0.95f, 1f);
+    private static readonly Color QteButtonDisabledColor = new Color(0.45f, 0.48f, 0.52f, 0.85f);
+    private static Sprite coughButtonIconSprite;
     private static Sprite barrierGaugeSprite;
 
     [SerializeField] private Image barrierGaugeImage;
@@ -81,6 +90,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
             coughButtonLabel = coughButton.GetComponentInChildren<TextMeshProUGUI>(true);
 
         CenterQteButton(coughButton);
+        ConfigureCoughButtonIcon();
         SetButtonVisibility(coughButton, true);
         SetButtonVisibility(testContaminatedAirButton, false);
         InitializeBarrierHealth();
@@ -423,6 +433,54 @@ public sealed class RespiratorySystemController : MonoBehaviour
         }
     }
 
+    private void ConfigureCoughButtonIcon()
+    {
+        if (coughButton == null)
+            return;
+
+        Texture2D iconTexture = Resources.Load<Texture2D>(CoughButtonIconResourcePath);
+        if (iconTexture == null)
+        {
+            Debug.LogWarning($"RespiratorySystemController could not load Resources/{CoughButtonIconResourcePath}.png; keeping the COUGH label.", this);
+            return;
+        }
+
+        if (coughButtonIconSprite == null)
+        {
+            coughButtonIconSprite = Sprite.Create(
+                iconTexture,
+                new Rect(0f, 0f, iconTexture.width, iconTexture.height),
+                QteButtonCenter,
+                100f);
+            coughButtonIconSprite.name = "Cough Button Icon";
+        }
+
+        Image buttonImage = coughButton.GetComponent<Image>();
+        if (buttonImage == null)
+        {
+            Debug.LogWarning("RespiratorySystemController could not find the CoughButton Image component; keeping the COUGH label.", this);
+            return;
+        }
+
+        buttonImage.sprite = coughButtonIconSprite;
+        buttonImage.type = Image.Type.Simple;
+        buttonImage.preserveAspect = true;
+        buttonImage.color = Color.white;
+        buttonImage.raycastTarget = true;
+        coughButton.targetGraphic = buttonImage;
+
+        ColorBlock buttonColors = coughButton.colors;
+        buttonColors.normalColor = QteButtonNormalColor;
+        buttonColors.highlightedColor = QteButtonHighlightColor;
+        buttonColors.selectedColor = QteButtonNormalColor;
+        buttonColors.pressedColor = QteButtonPressedColor;
+        buttonColors.disabledColor = QteButtonDisabledColor;
+        coughButton.colors = buttonColors;
+
+        if (coughButtonLabel != null)
+            coughButtonLabel.gameObject.SetActive(false);
+    }
+
     private static void CenterQteButton(Button button)
     {
         if (button == null)
@@ -431,9 +489,10 @@ public sealed class RespiratorySystemController : MonoBehaviour
         RectTransform buttonRect = button.GetComponent<RectTransform>();
         if (buttonRect != null)
         {
-            buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
-            buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
-            buttonRect.pivot = new Vector2(0.5f, 0.5f);
+            buttonRect.anchorMin = QteButtonCenter;
+            buttonRect.anchorMax = QteButtonCenter;
+            buttonRect.pivot = QteButtonCenter;
+            buttonRect.sizeDelta = QteButtonSize;
             buttonRect.anchoredPosition = new Vector2(0f, RespiratoryQteVerticalOffset);
         }
 
