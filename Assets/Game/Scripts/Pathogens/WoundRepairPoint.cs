@@ -17,6 +17,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float ImmuneContactIntervalSeconds = 2f;
     private const float RepairProgressPerSecond = 1f;
     private const float RepairAttemptTimeoutSeconds = 100f;
+    private const float WoundInfectionSpawnRetrySeconds = 1f;
     private const float FibrinNetInitialAlpha = 0.1f;
     private const float WellnessShieldDurationSeconds = 15f;
     private const float FibrinNetSuccessHoldSeconds = 2f;
@@ -98,9 +99,14 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private GameObject fibrinNetInstance;
     private Material[] fibrinNetMaterials;
     private Coroutine fibrinNetCleanupRoutine;
+    private Coroutine infectionClearRoutine;
+    private InfectionSpawner.InfectionMarker woundInfectionMarker;
     private readonly Dictionary<int, float> nextContactReductionTime = new Dictionary<int, float>();
     private bool isBreached;
     private bool isRepairing;
+    private bool isWaitingForInfectionClear;
+    private bool breachTriggersQte;
+    private float breachElapsed;
     private float repairProgress;
     private float repairAttemptElapsed;
     private float infectionPoints;
@@ -249,6 +255,22 @@ public sealed class WoundRepairPoint : MonoBehaviour
             infectionPoints = Mathf.Min(MaximumInfectionPoints, infectionPoints + InfectionGrowthPerInterval);
         }
 
+        if (isWaitingForInfectionClear)
+        {
+            RefreshProgressUI();
+            return;
+        }
+
+        if (!isRepairing)
+        {
+            breachElapsed += gameplayDeltaTime;
+            if (breachElapsed >= RepairAttemptTimeoutSeconds)
+            {
+                LeaveWoundUntreated();
+                return;
+            }
+        }
+
         if (isRepairing)
         {
             repairAttemptElapsed += gameplayDeltaTime;
@@ -262,7 +284,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
             if (repairAttemptElapsed >= RepairAttemptTimeoutSeconds)
             {
-                FailRepairAttempt();
+                LeaveWoundUntreated();
                 return;
             }
         }
@@ -455,6 +477,9 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
         isBreached = true;
         isRepairing = false;
+        isWaitingForInfectionClear = false;
+        breachTriggersQte = triggersQte;
+        breachElapsed = 0f;
         repairProgress = 0f;
         repairAttemptElapsed = 0f;
         ClearFibrinNet();
@@ -494,21 +519,99 @@ public sealed class WoundRepairPoint : MonoBehaviour
         repairButtonLabel.text = "Repairing...";
     }
 
-    private void FailRepairAttempt()
+    private void LeaveWoundUntreated()
     {
+        if (isWaitingForInfectionClear)
+        {
+            return;
+        }
+
         isRepairing = false;
+        isWaitingForInfectionClear = true;
+        breachElapsed = 0f;
         repairProgress = 0f;
         repairAttemptElapsed = 0f;
         ClearFibrinNet();
+
+        if (floatingCanvas != null)
+        {
+            floatingCanvas.gameObject.SetActive(false);
+        }
+
         if (repairProgressCanvas != null)
         {
             repairProgressCanvas.gameObject.SetActive(false);
         }
 
-        if (floatingCanvas != null)
+        if (repairButton != null)
         {
-            floatingCanvas.gameObject.SetActive(true);
+            repairButton.interactable = false;
         }
+
+        QTETracker.Unregister(QTETracker.CirculatoryLayerIndex, wellnessEventKey);
+        if (WellnessManager.Instance != null && !string.IsNullOrWhiteSpace(wellnessEventKey))
+        {
+            WellnessManager.Instance.ResolveEventQTE(wellnessEventKey);
+        }
+
+        Debug.Log("[Wound] Wound left untreated. Staph infection has entered the bloodstream.", this);
+        if (infectionClearRoutine != null)
+        {
+            StopCoroutine(infectionClearRoutine);
+        }
+
+        infectionClearRoutine = StartCoroutine(SpawnAndWaitForWoundInfection());
+    }
+
+    private IEnumerator SpawnAndWaitForWoundInfection()
+    {
+        InfectionSpawner infectionSpawner = null;
+        while (isBreached && isWaitingForInfectionClear && woundInfectionMarker == null)
+        {
+            if (infectionSpawner == null)
+            {
+                infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+            }
+
+            if (infectionSpawner == null)
+            {
+                yield return new WaitForSecondsRealtime(WoundInfectionSpawnRetrySeconds);
+                continue;
+            }
+
+            woundInfectionMarker = infectionSpawner.ForceSpawnWoundBacterialInfection(transform.position);
+            if (woundInfectionMarker == null)
+            {
+                yield return new WaitForSecondsRealtime(WoundInfectionSpawnRetrySeconds);
+            }
+        }
+
+        if (woundInfectionMarker == null)
+        {
+            infectionClearRoutine = null;
+            yield break;
+        }
+
+        while (isBreached && isWaitingForInfectionClear && infectionSpawner != null &&
+               infectionSpawner.IsInfectionActive(woundInfectionMarker))
+        {
+            yield return null;
+        }
+
+        if (!isBreached || !isWaitingForInfectionClear)
+        {
+            infectionClearRoutine = null;
+            yield break;
+        }
+
+        woundInfectionMarker = null;
+        isWaitingForInfectionClear = false;
+        breachElapsed = 0f;
+        repairAttemptElapsed = 0f;
+        repairProgress = 0f;
+        infectionPoints = MaximumInfectionPoints;
+        infectionGrowthTimer = 0f;
+        nextContactReductionTime.Clear();
 
         if (repairButton != null)
         {
@@ -520,11 +623,30 @@ public sealed class WoundRepairPoint : MonoBehaviour
             repairButtonLabel.text = "Repair";
         }
 
-        RefreshProgressUI();
-        if (repairStatusLabel != null)
+        if (statusLabel != null)
         {
-            repairStatusLabel.text = "Repair attempt failed. Try again.";
+            statusLabel.text = $"{gameObject.name} has been wounded! Infection cleared.";
         }
+
+        RefreshProgressUI();
+        if (floatingCanvas != null)
+        {
+            floatingCanvas.gameObject.SetActive(true);
+        }
+
+        if (repairProgressCanvas != null)
+        {
+            repairProgressCanvas.gameObject.SetActive(false);
+        }
+
+        if (breachTriggersQte)
+        {
+            QTETracker.Register(QTETracker.CirculatoryLayerIndex, wellnessEventKey);
+        }
+
+        NotifySkinBreachStateChanged();
+        infectionClearRoutine = null;
+        Debug.Log($"[Wound] Infection cleared at {gameObject.name}. Repair is available again.", this);
     }
 
     private void SpawnFibrinNet()

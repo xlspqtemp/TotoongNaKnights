@@ -243,6 +243,12 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
 
+    /// <summary>Returns whether the supplied infection marker is still awaiting resolution.</summary>
+    public bool IsInfectionActive(InfectionMarker marker)
+    {
+        return marker != null && !marker.isRemoving && activeInfectionMarkers.Contains(marker);
+    }
+
     /// <summary>Raised when the player clicks a live infection row or map icon while assigning a batch target.</summary>
     public event Action<InfectionMarker> OnInfectionTargetClicked;
 
@@ -395,6 +401,54 @@ public sealed class InfectionSpawner : MonoBehaviour
         SpawnMarker(infectionToSpawn, selectedBodyPart, wasBarrierMutated);
         if (activeInfectionMarkers.Count == infectionCountBeforeSpawn + 1)
             LogInfection(infectionToSpawn, selectedBodyPart);
+    }
+
+    /// <summary>Spawns a Staph infection, falling back to Strep, at the supplied world position.</summary>
+    public InfectionMarker ForceSpawnWoundBacterialInfection(Vector3 worldPosition)
+    {
+        if (activeInfectionMarkers.Count >= maxActiveInfections)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn a wound infection because the active infection cap has been reached.", this);
+            return null;
+        }
+
+        InfectionData selectedInfection = null;
+        foreach (InfectionData infection in BuildValidInfectionEntries())
+        {
+            if (infection.pathogenType != InfectionPathogenType.Bacterial)
+                continue;
+
+            string pathogenName = string.IsNullOrWhiteSpace(infection.pathogenDatabaseName)
+                ? infection.displayName
+                : infection.pathogenDatabaseName;
+            if (string.Equals(pathogenName, "Staph", StringComparison.OrdinalIgnoreCase))
+            {
+                selectedInfection = infection;
+                break;
+            }
+
+            if (selectedInfection == null && string.Equals(pathogenName, "Strep", StringComparison.OrdinalIgnoreCase))
+                selectedInfection = infection;
+        }
+
+        if (selectedInfection == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn a wound infection because no Staph or Strep bacterial entry is available.", this);
+            return null;
+        }
+
+        InfectionData infectionToSpawn = CloneInfectionData(selectedInfection);
+        InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infectionToSpawn);
+        if (bodyPartButton == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn a wound infection because no body-part dispatch mapping is available.", this);
+            return null;
+        }
+
+        InfectionMarker marker = SpawnMarker(infectionToSpawn, bodyPartButton, false, worldPosition);
+        if (marker != null)
+            LogInfection(infectionToSpawn, bodyPartButton);
+        return marker;
     }
 
     public sealed class InfectionMarker
@@ -3037,9 +3091,16 @@ public sealed class InfectionSpawner : MonoBehaviour
     }
 
 
-    private void SpawnMarker(InfectionData infection, InfectionBodyPartButtonReference bodyPartButton, bool wasBarrierMutated = false)
+    private InfectionMarker SpawnMarker(
+        InfectionData infection,
+        InfectionBodyPartButtonReference bodyPartButton,
+        bool wasBarrierMutated = false,
+        Vector3? worldPositionOverride = null)
     {
-        Vector3 infectionWorldPosition = ResolveInitialInfectionWorldPosition(bodyPartButton, out int vesselSpawnPointIndex);
+        int vesselSpawnPointIndex = -1;
+        Vector3 infectionWorldPosition = worldPositionOverride.HasValue
+            ? worldPositionOverride.Value
+            : ResolveInitialInfectionWorldPosition(bodyPartButton, out vesselSpawnPointIndex);
         InfectionMarker marker = new InfectionMarker
         {
             infection = infection,
@@ -3067,7 +3128,10 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         if (enableLegacyAvatarClickDispatch)
             CreateDispatchAvatar(marker);
+
+        return marker;
     }
+
     private void SpawnInfectionThreatVisuals(InfectionMarker marker)
     {
         if (marker == null || threatVisualSpawnCount <= 0)
