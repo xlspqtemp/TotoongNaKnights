@@ -234,7 +234,7 @@ public class RandomEventSystem : MonoBehaviour
             case RandomEventId.ContaminatedWater:
                 return new RandomEventData("Accidentally Drank Contaminated Water", "Contaminated water caused a digestive health impact.", RandomEventType.Digestive, severity, false, false, -5f, activeDifficulty, day, hour);
             case RandomEventId.TrippedAndScratched:
-                return new RandomEventData("Tripped on a Rock and Got Scratches", "A fall caused minor scratches and a physical health impact.", RandomEventType.Physical, severity, false, false, -5f, activeDifficulty, day, hour);
+                return new RandomEventData("Tripped on a Rock and Got Scratches", "A fall caused minor scratches and a physical health impact.", RandomEventType.Physical, severity, true, false, -5f, activeDifficulty, day, hour);
             case RandomEventId.AccidentallyAteSpoiledFood:
                 return new RandomEventData("Accidentally Ate Spoiled Food", "Spoiled food caused a digestive health impact.", RandomEventType.Digestive, severity, false, false, -5f, activeDifficulty, day, hour);
             case RandomEventId.ContactWithSickPerson:

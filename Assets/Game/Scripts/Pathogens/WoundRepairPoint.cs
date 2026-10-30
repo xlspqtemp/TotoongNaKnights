@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -15,7 +16,17 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float InfectionReductionPerContact = 5f;
     private const float ImmuneContactIntervalSeconds = 2f;
     private const float RepairProgressPerSecond = 1f;
+    private const float RepairAttemptTimeoutSeconds = 100f;
+    private const float FibrinNetInitialAlpha = 0.1f;
+    private const float FibrinNetSuccessHoldSeconds = 2f;
+    private const float FibrinNetFadeOutSeconds = 0.75f;
+    private const float FibrinNetModelScale = 1.2f;
+    private const float FibrinNetModelRotationX = 270f;
+    private const float RepairProgressCanvasScale = 0.04f;
     private const float FloatingHeight = 3f;
+    private const string FibrinNetResourceName = "FibrinNet";
+    private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
     [SerializeField] private float panelScale = 0.04f;
     [SerializeField] private bool useCameraBillboard = true;
     private const float CanvasPixelsPerUnit = 10f;
@@ -30,6 +41,9 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private static readonly Vector2 BarSize = new Vector2(520f, 28f);
     private static readonly Vector2 ButtonSize = new Vector2(300f, 70f);
     private static readonly Vector2 ButtonLabelSize = new Vector2(280f, 64f);
+    private static readonly Vector2 RepairProgressCanvasSize = new Vector2(260f, 84f);
+    private static readonly Vector2 RepairProgressLabelSize = new Vector2(240f, 28f);
+    private static readonly Vector2 RepairProgressBarSize = new Vector2(220f, 18f);
     private static readonly List<WoundRepairPoint> ActivePoints = new List<WoundRepairPoint>();
     private static readonly HashSet<string> HandledEventKeys = new HashSet<string>();
     private static bool isListeningForEvents;
@@ -75,12 +89,19 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private TextMeshProUGUI infectionStatusLabel;
     private TextMeshProUGUI repairButtonLabel;
     private Image repairProgressFill;
+    private TextMeshProUGUI repairProgressLabel;
     private Image infectionProgressFill;
     private Button repairButton;
+    private Canvas repairProgressCanvas;
+    [SerializeField] private GameObject fibrinNetPrefab;
+    private GameObject fibrinNetInstance;
+    private Material[] fibrinNetMaterials;
+    private Coroutine fibrinNetCleanupRoutine;
     private readonly Dictionary<int, float> nextContactReductionTime = new Dictionary<int, float>();
     private bool isBreached;
     private bool isRepairing;
     private float repairProgress;
+    private float repairAttemptElapsed;
     private float infectionPoints;
     private float infectionGrowthTimer;
     private string wellnessEventKey;
@@ -152,23 +173,62 @@ public sealed class WoundRepairPoint : MonoBehaviour
         {
             floatingCanvas.gameObject.SetActive(false);
         }
+
+        if (repairProgressCanvas != null)
+        {
+            repairProgressCanvas.gameObject.SetActive(false);
+        }
+
+        ClearFibrinNet();
     }
 
     private void LateUpdate()
     {
-        if (floatingCanvas == null || !floatingCanvas.gameObject.activeSelf)
+        bool showMainPrompt = floatingCanvas != null && floatingCanvas.gameObject.activeSelf;
+        bool showRepairProgress = repairProgressCanvas != null && repairProgressCanvas.gameObject.activeSelf;
+        if (!showMainPrompt && !showRepairProgress)
         {
             return;
         }
 
-        floatingCanvas.transform.position = transform.position + Vector3.up * FloatingHeight;
+        if (showMainPrompt)
+        {
+            floatingCanvas.transform.position = transform.position + Vector3.up * FloatingHeight;
+        }
+
+        if (showRepairProgress)
+        {
+            repairProgressCanvas.transform.position = transform.position + Vector3.up * FloatingHeight;
+        }
+
         Camera mainCamera = Camera.main;
+        if (mainCamera == null || (mainCamera.cullingMask & (1 << gameObject.layer)) == 0)
+        {
+            foreach (Camera candidateCamera in Camera.allCameras)
+            {
+                if (candidateCamera != null && (candidateCamera.cullingMask & (1 << gameObject.layer)) != 0)
+                {
+                    mainCamera = candidateCamera;
+                    break;
+                }
+            }
+        }
+
         if (mainCamera != null)
         {
-            floatingCanvas.worldCamera = mainCamera;
-            if (useCameraBillboard)
+            if (showMainPrompt)
             {
-                floatingCanvas.transform.rotation = mainCamera.transform.rotation;
+                floatingCanvas.worldCamera = mainCamera;
+                if (useCameraBillboard)
+                {
+                    floatingCanvas.transform.rotation = mainCamera.transform.rotation;
+                }
+            }
+
+            if (showRepairProgress)
+            {
+                repairProgressCanvas.worldCamera = mainCamera;
+                repairProgressCanvas.transform.rotation = mainCamera.transform.rotation;
             }
         }
     }
@@ -190,10 +250,18 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
         if (isRepairing)
         {
+            repairAttemptElapsed += gameplayDeltaTime;
             repairProgress = Mathf.Min(100f, repairProgress + RepairProgressPerSecond * gameplayDeltaTime);
+            UpdateFibrinNetAlpha(Mathf.Lerp(FibrinNetInitialAlpha, 1f, repairProgress / 100f));
             if (repairProgress >= 100f)
             {
                 CompleteRepair();
+                return;
+            }
+
+            if (repairAttemptElapsed >= RepairAttemptTimeoutSeconds)
+            {
+                FailRepairAttempt();
                 return;
             }
         }
@@ -277,6 +345,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private void CreateFloatingPrompt()
     {
         GameObject canvasObject = new GameObject("Wound Status Floating UI", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasObject.layer = gameObject.layer;
         floatingCanvas = canvasObject.GetComponent<Canvas>();
         floatingCanvas.renderMode = RenderMode.WorldSpace;
         floatingCanvas.overrideSorting = true;
@@ -300,7 +369,6 @@ public sealed class WoundRepairPoint : MonoBehaviour
         statusLabel = CreateText("Status", panelRect, StatusSize, new Vector2(0f, 184f), "Access Point has been wounded!", StatusFontSize);
         statusLabel.color = new Color(1f, 0.82f, 0.68f, 1f);
         repairStatusLabel = CreateText("Repair Status", panelRect, RepairLabelSize, new Vector2(0f, 125f), "Repair Status: 0%", LabelFontSize);
-        repairProgressFill = CreateProgressBar("Repair Progress Bar", panelRect, new Vector2(0f, 82f), new Color(0.24f, 0.82f, 0.43f, 1f));
         infectionStatusLabel = CreateText("Bacterial Infection Status", panelRect, RepairLabelSize, new Vector2(0f, 24f), "Bacterial Infection: 0/100", LabelFontSize);
         infectionProgressFill = CreateProgressBar("Bacterial Infection Bar", panelRect, new Vector2(0f, -19f), new Color(0.86f, 0.24f, 0.2f, 1f));
 
@@ -321,6 +389,60 @@ public sealed class WoundRepairPoint : MonoBehaviour
         repairButtonLabel.raycastTarget = false;
 
         canvasObject.SetActive(false);
+        CreateRepairProgressOverlay();
+    }
+
+    private void CreateRepairProgressOverlay()
+    {
+        GameObject canvasObject = new GameObject("Wound Repair Progress UI", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        canvasObject.layer = gameObject.layer;
+        repairProgressCanvas = canvasObject.GetComponent<Canvas>();
+        repairProgressCanvas.renderMode = RenderMode.WorldSpace;
+        repairProgressCanvas.overrideSorting = true;
+        repairProgressCanvas.sortingOrder = 101;
+        repairProgressCanvas.worldCamera = Camera.main;
+        canvasObject.transform.position = transform.position + Vector3.up * FloatingHeight;
+        canvasObject.transform.rotation = Camera.main != null ? Camera.main.transform.rotation : Quaternion.identity;
+        canvasObject.transform.localScale = Vector3.one * RepairProgressCanvasScale;
+
+        CanvasScaler canvasScaler = canvasObject.GetComponent<CanvasScaler>();
+        canvasScaler.dynamicPixelsPerUnit = CanvasPixelsPerUnit;
+
+        RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = RepairProgressCanvasSize;
+
+        GameObject panelObject = CreateUiChild("Repair Progress Panel", canvasRect, typeof(Image));
+        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+        StretchToParent(panelRect);
+        panelObject.GetComponent<Image>().color = new Color(0.035f, 0.05f, 0.065f, 0.82f);
+
+        repairProgressLabel = CreateText("Repair Progress Label", panelRect, RepairProgressLabelSize, new Vector2(0f, 22f), "Repair: 0%", 20f);
+        repairProgressFill = CreateCompactProgressBar(panelRect);
+        canvasObject.SetActive(false);
+    }
+
+    private static Image CreateCompactProgressBar(RectTransform parent)
+    {
+        GameObject backgroundObject = CreateUiChild("Repair Progress Track", parent, typeof(Image));
+        RectTransform backgroundRect = backgroundObject.GetComponent<RectTransform>();
+        backgroundRect.anchorMin = CenterAnchor;
+        backgroundRect.anchorMax = CenterAnchor;
+        backgroundRect.pivot = CenterAnchor;
+        backgroundRect.sizeDelta = RepairProgressBarSize;
+        backgroundRect.anchoredPosition = new Vector2(0f, -14f);
+        backgroundObject.GetComponent<Image>().color = new Color(0.08f, 0.12f, 0.14f, 1f);
+
+        GameObject fillObject = CreateUiChild("Repair Progress Fill", backgroundRect, typeof(Image));
+        RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+        StretchToParent(fillRect);
+
+        Image fillImage = fillObject.GetComponent<Image>();
+        fillImage.color = new Color(0.24f, 0.82f, 0.43f, 1f);
+        fillImage.type = Image.Type.Filled;
+        fillImage.fillMethod = Image.FillMethod.Horizontal;
+        fillImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+        fillImage.fillAmount = 0f;
+        return fillImage;
     }
 
     private void ShowBreach(string eventKey, bool triggersQte)
@@ -333,6 +455,8 @@ public sealed class WoundRepairPoint : MonoBehaviour
         isBreached = true;
         isRepairing = false;
         repairProgress = 0f;
+        repairAttemptElapsed = 0f;
+        ClearFibrinNet();
         infectionPoints = MaximumInfectionPoints;
         infectionGrowthTimer = 0f;
         nextContactReductionTime.Clear();
@@ -345,6 +469,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         repairButtonLabel.text = "Repair";
         RefreshProgressUI();
         floatingCanvas.gameObject.SetActive(true);
+        repairProgressCanvas.gameObject.SetActive(false);
         NotifySkinBreachStateChanged();
     }
 
@@ -356,15 +481,214 @@ public sealed class WoundRepairPoint : MonoBehaviour
         }
 
         isRepairing = true;
+        repairAttemptElapsed = 0f;
+        floatingCanvas.gameObject.SetActive(false);
+        repairProgressCanvas.gameObject.SetActive(true);
+        if (fibrinNetInstance == null)
+        {
+            SpawnFibrinNet();
+        }
+
         repairButton.interactable = false;
         repairButtonLabel.text = "Repairing...";
     }
 
+    private void FailRepairAttempt()
+    {
+        isRepairing = false;
+        repairProgress = 0f;
+        repairAttemptElapsed = 0f;
+        ClearFibrinNet();
+        if (repairProgressCanvas != null)
+        {
+            repairProgressCanvas.gameObject.SetActive(false);
+        }
+
+        if (floatingCanvas != null)
+        {
+            floatingCanvas.gameObject.SetActive(true);
+        }
+
+        if (repairButton != null)
+        {
+            repairButton.interactable = true;
+        }
+
+        if (repairButtonLabel != null)
+        {
+            repairButtonLabel.text = "Repair";
+        }
+
+        RefreshProgressUI();
+        if (repairStatusLabel != null)
+        {
+            repairStatusLabel.text = "Repair attempt failed. Try again.";
+        }
+    }
+
+    private void SpawnFibrinNet()
+    {
+        GameObject prefabToInstantiate = fibrinNetPrefab != null
+            ? fibrinNetPrefab
+            : Resources.Load<GameObject>(FibrinNetResourceName);
+        if (prefabToInstantiate == null)
+        {
+            Debug.LogError($"Missing a Fibrin Net asset reference and Resources/{FibrinNetResourceName}.prefab; cannot display the wound repair net.", this);
+            return;
+        }
+
+        fibrinNetInstance = Instantiate(prefabToInstantiate, transform.position, transform.rotation);
+        fibrinNetInstance.name = "FibrinNet (Wound Repair)";
+        fibrinNetInstance.transform.rotation = Quaternion.Euler(FibrinNetModelRotationX, transform.eulerAngles.y, 0f);
+        fibrinNetInstance.transform.localScale = Vector3.one * FibrinNetModelScale;
+        Renderer[] renderers = fibrinNetInstance.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length > 0)
+        {
+            Bounds netBounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                netBounds.Encapsulate(renderers[index].bounds);
+            }
+
+            fibrinNetInstance.transform.position += transform.position - netBounds.center;
+        }
+
+        Transform[] netTransforms = fibrinNetInstance.GetComponentsInChildren<Transform>(true);
+        foreach (Transform netTransform in netTransforms)
+        {
+            netTransform.gameObject.layer = gameObject.layer;
+        }
+
+        List<Material> materials = new List<Material>();
+        foreach (Renderer targetRenderer in renderers)
+        {
+            Material[] rendererMaterials = targetRenderer.materials;
+            foreach (Material material in rendererMaterials)
+            {
+                if (material == null)
+                {
+                    continue;
+                }
+
+                ConfigureTransparentMaterial(material);
+                materials.Add(material);
+            }
+        }
+
+        fibrinNetMaterials = materials.ToArray();
+        UpdateFibrinNetAlpha(FibrinNetInitialAlpha);
+    }
+
+    private static void ConfigureTransparentMaterial(Material material)
+    {
+        if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_ZWrite", 0f);
+            material.SetFloat("_AlphaClip", 0f);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+    }
+
+    private void UpdateFibrinNetAlpha(float alpha)
+    {
+        if (fibrinNetMaterials == null)
+        {
+            return;
+        }
+
+        float clampedAlpha = Mathf.Clamp01(alpha);
+        foreach (Material material in fibrinNetMaterials)
+        {
+            if (material == null)
+            {
+                continue;
+            }
+
+            int colorPropertyId = material.HasProperty(BaseColorPropertyId)
+                ? BaseColorPropertyId
+                : material.HasProperty(ColorPropertyId) ? ColorPropertyId : 0;
+            if (colorPropertyId == 0)
+            {
+                continue;
+            }
+
+            Color materialColor = material.GetColor(colorPropertyId);
+            materialColor.a = clampedAlpha;
+            material.SetColor(colorPropertyId, materialColor);
+        }
+    }
+
+    private IEnumerator KeepThenFadeFibrinNet()
+    {
+        yield return new WaitForSecondsRealtime(FibrinNetSuccessHoldSeconds);
+
+        float fadeElapsed = 0f;
+        while (fadeElapsed < FibrinNetFadeOutSeconds)
+        {
+            fadeElapsed += Time.unscaledDeltaTime;
+            UpdateFibrinNetAlpha(1f - Mathf.Clamp01(fadeElapsed / FibrinNetFadeOutSeconds));
+            yield return null;
+        }
+
+        UpdateFibrinNetAlpha(0f);
+        DestroyFibrinNetInstances();
+        fibrinNetCleanupRoutine = null;
+    }
+
+    private void ClearFibrinNet()
+    {
+        if (fibrinNetCleanupRoutine != null)
+        {
+            StopCoroutine(fibrinNetCleanupRoutine);
+            fibrinNetCleanupRoutine = null;
+        }
+
+        UpdateFibrinNetAlpha(0f);
+        DestroyFibrinNetInstances();
+    }
+
+    private void DestroyFibrinNetInstances()
+    {
+        if (fibrinNetMaterials != null)
+        {
+            foreach (Material material in fibrinNetMaterials)
+            {
+                if (material != null)
+                {
+                    Destroy(material);
+                }
+            }
+
+            fibrinNetMaterials = null;
+        }
+
+        if (fibrinNetInstance != null)
+        {
+            Destroy(fibrinNetInstance);
+            fibrinNetInstance = null;
+        }
+    }
     private void CompleteRepair()
     {
         isBreached = false;
         isRepairing = false;
+        repairProgress = 100f;
+        repairAttemptElapsed = 0f;
+        UpdateFibrinNetAlpha(1f);
+        if (fibrinNetInstance != null)
+        {
+            fibrinNetCleanupRoutine = StartCoroutine(KeepThenFadeFibrinNet());
+        }
+
         floatingCanvas.gameObject.SetActive(false);
+        repairProgressCanvas.gameObject.SetActive(false);
 
         WellnessManager wellnessManager = WellnessManager.Instance;
         if (wellnessManager != null && !string.IsNullOrWhiteSpace(wellnessEventKey))
@@ -382,6 +706,11 @@ public sealed class WoundRepairPoint : MonoBehaviour
         if (repairStatusLabel != null)
         {
             repairStatusLabel.text = $"Repair Status: {repairProgress:0}%";
+        }
+
+        if (repairProgressLabel != null)
+        {
+            repairProgressLabel.text = $"Repair: {repairProgress:0}%";
         }
 
         if (repairProgressFill != null)
@@ -440,6 +769,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         }
 
         GameObject child = new GameObject(objectName, requiredTypes);
+        child.layer = parent.gameObject.layer;
         child.transform.SetParent(parent, false);
         return child;
     }

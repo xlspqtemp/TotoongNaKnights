@@ -1952,6 +1952,53 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 68832323}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &77522459
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 77522460}
+  - component: {fileID: 77522461}
+  m_Layer: 0
+  m_Name: Left Leg
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &77522460
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 77522459}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1905, y: 0, z: -602}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 244402269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &77522461
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 77522459}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
+  fibrinNetPrefab: {fileID: 1237335485931434276, guid: 48cd0daaad55d1f4880b8708fed71581, type: 3}
 --- !u!1 &92909452
 GameObject:
   m_ObjectHideFlags: 0
@@ -3438,6 +3485,43 @@ MonoBehaviour:
   viralTextColor: {r: 0.25, g: 0.66, b: 1, a: 1}
   fungalTextColor: {r: 0.3, g: 0.85, b: 0.35, a: 1}
   containerPadding: {x: 9, y: 4}
+--- !u!1 &244402268
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 244402269}
+  m_Layer: 0
+  m_Name: Access Points
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &244402269
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 244402268}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.33333334, y: 0, z: 0.16666667}
+  m_LocalScale: {x: 0.00016666666, y: 0.00016666666, z: 0.00016666666}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1407515463}
+  - {fileID: 1060154015}
+  - {fileID: 77522460}
+  - {fileID: 2136067557}
+  - {fileID: 1153393582}
+  - {fileID: 1064439679}
+  m_Father: {fileID: 2007297925}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &257625956
 GameObject:
   m_ObjectHideFlags: 0
@@ -11834,6 +11918,53 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1060154014
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1060154015}
+  - component: {fileID: 1060154016}
+  m_Layer: 0
+  m_Name: Left Hand
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1060154015
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1060154014}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1813, y: 0, z: -333}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 244402269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1060154016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1060154014}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
+  fibrinNetPrefab: {fileID: 1237335485931434276, guid: 48cd0daaad55d1f4880b8708fed71581, type: 3}
 --- !u!1 &1060831431
 GameObject:
   m_ObjectHideFlags: 0
@@ -11892,6 +12023,53 @@ MonoBehaviour:
   coughButtonLabel: {fileID: 116900731}
   testContaminatedAirButton: {fileID: 354688670}
   showTestButtons: 0
+--- !u!1 &1064439678
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1064439679}
+  - component: {fileID: 1064439680}
+  m_Layer: 0
+  m_Name: Right Leg
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1064439679
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1064439678}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2100, y: 0, z: -602}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 244402269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1064439680
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1064439678}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
+  fibrinNetPrefab: {fileID: 1237335485931434276, guid: 48cd0daaad55d1f4880b8708fed71581, type: 3}
 --- !u!1 &1083217998
 GameObject:
   m_ObjectHideFlags: 0
@@ -13708,6 +13886,53 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1152368735}
   m_Mesh: {fileID: -153830957423991239, guid: 872a5a8707551e2428df54f4d61e1aa9, type: 3}
+--- !u!1 &1153393581
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1153393582}
+  - component: {fileID: 1153393583}
+  m_Layer: 0
+  m_Name: Right Hand
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1153393582
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1153393581}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2194, y: 0, z: -333}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 244402269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1153393583
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1153393581}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
+  fibrinNetPrefab: {fileID: 1237335485931434276, guid: 48cd0daaad55d1f4880b8708fed71581, type: 3}
 --- !u!1 &1163054868
 GameObject:
   m_ObjectHideFlags: 0
@@ -15849,6 +16074,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: da25c874f24b9bb46a7b090d2e0a91cc, type: 3}
       insertIndex: -1
       addedObject: {fileID: 622521904}
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: da25c874f24b9bb46a7b090d2e0a91cc, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 244402269}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: da25c874f24b9bb46a7b090d2e0a91cc, type: 3}
       insertIndex: -1
@@ -16083,6 +16311,53 @@ MonoBehaviour:
   breachSfx: {fileID: 8300000, guid: 878b15c79cf92d9448b1e7382f91c680, type: 3}
   breachAudioSource: {fileID: 1400702075}
   CurrentBarrier: 100
+--- !u!1 &1407515462
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1407515463}
+  - component: {fileID: 1407515464}
+  m_Layer: 0
+  m_Name: Left Arm
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1407515463
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407515462}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1855, y: 0, z: -43}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 244402269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1407515464
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1407515462}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
+  fibrinNetPrefab: {fileID: 1237335485931434276, guid: 48cd0daaad55d1f4880b8708fed71581, type: 3}
 --- !u!1 &1422195804
 GameObject:
   m_ObjectHideFlags: 0
@@ -22803,6 +23078,53 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2131714817}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &2136067556
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2136067557}
+  - component: {fileID: 2136067558}
+  m_Layer: 0
+  m_Name: Right Arm
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2136067557
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2136067556}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2152, y: 0, z: -43}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 244402269}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2136067558
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2136067556}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 746627176c515ef419bfd773be5f8980, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WoundRepairPoint
+  panelScale: 0.04
+  useCameraBillboard: 1
+  fibrinNetPrefab: {fileID: 1237335485931434276, guid: 48cd0daaad55d1f4880b8708fed71581, type: 3}
 --- !u!1001 &2766709378708606963
 PrefabInstance:
   m_ObjectHideFlags: 0
