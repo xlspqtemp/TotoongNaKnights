@@ -32,7 +32,7 @@ public sealed class RespiratorySystemController : MonoBehaviour
     private const float BarrierGaugeHeight = 600f;
     private const float BarrierGaugeVerticalOffset = -338f;
     private const float RespiratoryQteVerticalOffset = BarrierGaugeVerticalOffset;
-    private const string CoughButtonIconResourcePath = "UI/Cough button";
+    private const string CoughButtonIconResourcePath = "UI/Cough icon final";
     private const float QteButtonIconSize = 280f;
     private static readonly Vector2 QteButtonSize = new Vector2(QteButtonIconSize, QteButtonIconSize);
     private static readonly Vector2 QteButtonCenter = new Vector2(0.5f, 0.5f);

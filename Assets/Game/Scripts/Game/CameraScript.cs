@@ -13,6 +13,9 @@ public class CameraScript : MonoBehaviour
     private static Sprite breachIconSprite;
 
     private const int LayerCount = 4;
+    private const int DigestiveLayerNumber = 3;
+    private const int RespiratoryLayerNumber = 4;
+    private const float DayCounterLayerSelectionGap = 12f;
     private const int MousePanButton = 1;
     private const float DefaultPanSpeed = 5f;
     private const float DefaultInfectionFocusDuration = 0.4f;
@@ -733,7 +736,28 @@ public class CameraScript : MonoBehaviour
         SetLayerHudPanelsVisible(showLayerHud && !layerHudVisibilityDeferred);
         SetPendingInfectionsPanelVisible(layerNumber == 2 && !layerHudVisibilityDeferred);
         if (layersPanelRect != null)
-            layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
+        {
+            if (layerNumber == DigestiveLayerNumber || layerNumber == RespiratoryLayerNumber)
+            {
+                RectTransform dayCounterRect = layersPanelRect.parent != null
+                    ? layersPanelRect.parent.Find("DayCounterPanel") as RectTransform
+                    : null;
+                if (dayCounterRect != null)
+                {
+                    layersPanelRect.anchoredPosition = new Vector2(
+                        dayCounterRect.anchoredPosition.x,
+                        dayCounterRect.anchoredPosition.y - dayCounterRect.rect.height - DayCounterLayerSelectionGap);
+                }
+                else
+                {
+                    layersPanelRect.anchoredPosition = defaultLayersPosition;
+                }
+            }
+            else
+            {
+                layersPanelRect.anchoredPosition = showLayerHud ? defaultLayersPosition : focusLayersPosition;
+            }
+        }
 
         Transform destination = null;
         switch (selectedLayer)
