@@ -18,9 +18,10 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float RepairProgressPerSecond = 1f;
     private const float RepairAttemptTimeoutSeconds = 100f;
     private const float FibrinNetInitialAlpha = 0.1f;
+    private const float WellnessShieldDurationSeconds = 15f;
     private const float FibrinNetSuccessHoldSeconds = 2f;
     private const float FibrinNetFadeOutSeconds = 0.75f;
-    private const float FibrinNetModelScale = 1.2f;
+    private const float FibrinNetModelScale = 3f;
     private const float FibrinNetModelRotationX = 270f;
     private const float RepairProgressCanvasScale = 0.04f;
     private const float FloatingHeight = 3f;
@@ -695,6 +696,11 @@ public sealed class WoundRepairPoint : MonoBehaviour
         {
             wellnessManager.TryAwardEventPoints(wellnessEventKey, "WoundRepaired", 2f);
             wellnessManager.ResolveEventQTE(wellnessEventKey);
+        }
+
+        if (wellnessManager != null)
+        {
+            wellnessManager.ActivateWellnessShield(WellnessShieldDurationSeconds);
         }
 
         QTETracker.Unregister(QTETracker.CirculatoryLayerIndex, wellnessEventKey);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -127,13 +128,23 @@ public class WellnessManager : MonoBehaviour
     private const string VictoryMessage = "Human survived. You won!";
     private const string MainMenuSceneName = "MainMenu";
     private const float RequiredWinWellness = 50f;
+    private const float DefaultWellnessShieldDurationSeconds = 15f;
+    private const string WellnessShieldIconResourcePath = "UI/Shield perk";
+    private const string WellnessShieldIconName = "Wellness Shield Timer";
     private const int OutcomeButtonWidth = 300;
     private const int OutcomeButtonHeight = 76;
     private const float OutcomeButtonFontSize = 28f;
+    private const float WellnessShieldIconSize = 56f;
+    private const float WellnessShieldIconGap = 4f;
+    private static readonly Vector2 WellnessShieldIconAnchoredPosition = new Vector2(180f, -35f);
+    private static readonly Vector2 TopCenterAnchor = new Vector2(0.5f, 1f);
     private static readonly Color OutcomeButtonColor = new Color(0.08f, 0.38f, 0.42f, 1f);
 
     private Canvas hudCanvas;
     private AudioSource wellnessAudioSource;
+    private Image wellnessShieldImage;
+    private Sprite wellnessShieldSprite;
+    private Coroutine wellnessShieldCoroutine;
     private GameObject outcomePanel;
     private TextMeshProUGUI outcomeLabel;
     private TextMeshProUGUI leaderboardStatusLabel;
@@ -142,6 +153,7 @@ public class WellnessManager : MonoBehaviour
     private bool criticalWasEntered;
     private bool finalDayWasEvaluated;
     private bool runHasEnded;
+    private bool isShieldActive;
     private bool bacteremiaIsActive;
     private bool feverOverrideTriggered;
     private float bacteremiaActiveSeconds;
@@ -157,6 +169,9 @@ public class WellnessManager : MonoBehaviour
 
     /// <summary>Returns the configured wellness maximum.</summary>
     public float MaxWellness => maxWellness;
+
+    /// <summary>Returns whether the temporary wellness shield is currently active.</summary>
+    public bool IsShieldActive => isShieldActive;
 
     /// <summary>Returns the configured critical threshold.</summary>
     public float CriticalThreshold => criticalThreshold;
@@ -186,6 +201,7 @@ public class WellnessManager : MonoBehaviour
 
         hudCanvas = GetComponentInParent<Canvas>();
         currentWellness = Mathf.Clamp(currentWellness, 0f, Mathf.Max(1f, maxWellness));
+        CreateWellnessShieldIcon();
     }
 
     private void OnEnable()
@@ -225,6 +241,9 @@ public class WellnessManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (wellnessShieldSprite != null)
+            Destroy(wellnessShieldSprite);
+
         if (Instance == this)
             Instance = null;
     }
@@ -333,6 +352,107 @@ public class WellnessManager : MonoBehaviour
             GameplaySpeed.ResolveQTE(progress.qteId);
     }
 
+    /// <summary>Activates or refreshes a timed shield that blocks negative wellness deltas.</summary>
+    public void ActivateWellnessShield(float durationSeconds = DefaultWellnessShieldDurationSeconds)
+    {
+        if (runHasEnded || durationSeconds <= 0f)
+            return;
+
+        CreateWellnessShieldIcon();
+        if (wellnessShieldCoroutine != null)
+            StopCoroutine(wellnessShieldCoroutine);
+
+        isShieldActive = true;
+        if (wellnessShieldImage != null)
+        {
+            wellnessShieldImage.fillAmount = 1f;
+            wellnessShieldImage.gameObject.SetActive(true);
+        }
+
+        Debug.Log($"[WELLNESS SHIELD] Activated for {durationSeconds:0.#} seconds.");
+        wellnessShieldCoroutine = StartCoroutine(RunWellnessShield(durationSeconds));
+    }
+
+    private IEnumerator RunWellnessShield(float durationSeconds)
+    {
+        float elapsedSeconds = 0f;
+        while (elapsedSeconds < durationSeconds)
+        {
+            elapsedSeconds = Mathf.Min(durationSeconds, elapsedSeconds + Time.unscaledDeltaTime);
+            if (wellnessShieldImage != null)
+                wellnessShieldImage.fillAmount = 1f - elapsedSeconds / durationSeconds;
+
+            yield return null;
+        }
+
+        isShieldActive = false;
+        if (wellnessShieldImage != null)
+        {
+            wellnessShieldImage.fillAmount = 0f;
+            wellnessShieldImage.gameObject.SetActive(false);
+        }
+
+        wellnessShieldCoroutine = null;
+        Debug.Log("[WELLNESS SHIELD] Expired.");
+    }
+
+    private void CreateWellnessShieldIcon()
+    {
+        if (wellnessShieldImage != null)
+            return;
+
+        if (hudCanvas == null)
+            hudCanvas = GetComponentInParent<Canvas>();
+        RectTransform canvasRect = hudCanvas != null ? hudCanvas.transform as RectTransform : null;
+        if (canvasRect == null)
+            return;
+
+        Texture2D shieldTexture = Resources.Load<Texture2D>(WellnessShieldIconResourcePath);
+        if (shieldTexture == null)
+        {
+            Debug.LogWarning($"[WELLNESS SHIELD] Icon texture not found at Resources/{WellnessShieldIconResourcePath}.png.");
+            return;
+        }
+
+        wellnessShieldSprite = Sprite.Create(
+            shieldTexture,
+            new Rect(0f, 0f, shieldTexture.width, shieldTexture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
+        wellnessShieldSprite.name = WellnessShieldIconName + " Sprite";
+
+        GameObject shieldIconObject = new GameObject(
+            WellnessShieldIconName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        shieldIconObject.transform.SetParent(canvasRect, false);
+
+        RectTransform shieldIconRect = shieldIconObject.GetComponent<RectTransform>();
+        shieldIconRect.anchorMin = TopCenterAnchor;
+        shieldIconRect.anchorMax = TopCenterAnchor;
+        shieldIconRect.pivot = new Vector2(0.5f, 0.5f);
+        shieldIconRect.sizeDelta = new Vector2(WellnessShieldIconSize, WellnessShieldIconSize);
+
+        RectTransform wellnessBarRect = canvasRect.Find("GameProgressBar") as RectTransform;
+        shieldIconRect.anchoredPosition = wellnessBarRect != null
+            ? new Vector2(
+                wellnessBarRect.anchoredPosition.x + wellnessBarRect.rect.width * 0.5f + WellnessShieldIconSize * 0.5f + WellnessShieldIconGap,
+                wellnessBarRect.anchoredPosition.y - wellnessBarRect.rect.height * 0.5f)
+            : WellnessShieldIconAnchoredPosition;
+
+        wellnessShieldImage = shieldIconObject.GetComponent<Image>();
+        wellnessShieldImage.sprite = wellnessShieldSprite;
+        wellnessShieldImage.preserveAspect = true;
+        wellnessShieldImage.raycastTarget = false;
+        wellnessShieldImage.type = Image.Type.Filled;
+        wellnessShieldImage.fillMethod = Image.FillMethod.Radial360;
+        wellnessShieldImage.fillOrigin = (int)Image.Origin360.Top;
+        wellnessShieldImage.fillClockwise = true;
+        wellnessShieldImage.fillAmount = 1f;
+        shieldIconObject.SetActive(false);
+    }
+
     /// <summary>Sets whether the currently unwired bacteremia state is active.</summary>
     public void SetBacteremiaActive(bool isActive)
     {
@@ -419,6 +539,12 @@ public class WellnessManager : MonoBehaviour
     {
         if (runHasEnded)
             return;
+
+        if (isShieldActive && requestedDelta < 0f)
+        {
+            Debug.Log($"[WELLNESS SHIELD] Blocked {FormatSignedDelta(requestedDelta)} wellness from {eventId}.");
+            return;
+        }
 
         float previousWellness = currentWellness;
         currentWellness = Mathf.Clamp(currentWellness + requestedDelta, 0f, maxWellness);
