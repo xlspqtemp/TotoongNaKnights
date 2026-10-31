@@ -12,6 +12,10 @@ public sealed class BarrierHealth : MonoBehaviour
 
     public float CurrentBarrier = MaximumBarrier;
     public bool IsBreached { get; private set; }
+
+    /// <summary>Raised when positive damage actually reduces this barrier's current value.</summary>
+    public event System.Action<float> OnBarrierDamaged;
+
     public AudioClip BreachSfx => breachSfx;
 
     private void Awake()
@@ -43,8 +47,13 @@ public sealed class BarrierHealth : MonoBehaviour
     /// <summary>Reduces the barrier by the requested amount and updates its breach state.</summary>
     public void TakeDamage(float amount)
     {
+        float previousBarrier = CurrentBarrier;
         if (amount > 0f)
             CurrentBarrier = Mathf.Clamp(CurrentBarrier - amount, 0f, MaximumBarrier);
+
+        float appliedDamage = previousBarrier - CurrentBarrier;
+        if (appliedDamage > 0f)
+            OnBarrierDamaged?.Invoke(appliedDamage);
 
         RefreshBreachState();
     }

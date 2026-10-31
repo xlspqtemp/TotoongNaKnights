@@ -9,8 +9,17 @@ public class CameraScript : MonoBehaviour
     private const string LayerTransitionOverlayObjectName = "Layer Transition Overlay";
     private const string DigestiveBreachIconObjectName = "DigestiveBreachIcon";
     private const string RespiratoryBreachIconObjectName = "RespiratoryBreachIcon";
+    private const string DigestiveBarrierHitIconObjectName = "DigestiveBarrierHitIcon";
+    private const string RespiratoryBarrierHitIconObjectName = "RespiratoryBarrierHitIcon";
+    private const string HudLayerRowsPath = "/Event Handlers/HUDCanvas/SystemLayerButtons/LayerSelectionRows";
+    private const string BarrierHitIconResourcePath = "UI/Barrier taking hit";
+    private const float BarrierHitFlashDurationSeconds = 5f;
+    private const float BarrierHitFlashIntervalSeconds = 0.3f;
+    private const float BarrierHitIconSize = 24f;
+    private const float BarrierHitIconRightOffset = -126f;
     private const string BreachIconResourcePath = "UI/Breach icon";
     private static Sprite breachIconSprite;
+    private static Sprite barrierHitIconSprite;
 
     private const int LayerCount = 4;
     private const int DigestiveLayerNumber = 3;
@@ -104,9 +113,21 @@ public class CameraScript : MonoBehaviour
     private int nextDeployedSquadFocusIndex;
     private BarrierHealth digestiveBarrierHealth;
     private BarrierHealth respiratoryBarrierHealth;
+    private Image digestiveBarrierHitIcon;
+    private Image respiratoryBarrierHitIcon;
+    private float digestiveBarrierHitFlashUntil;
+    private float respiratoryBarrierHitFlashUntil;
     private BarrierHealth activeBreachAlarmBarrier;
     private Transform followTarget;
     private Vector3 followOffset;
+
+    private void OnDestroy()
+    {
+        if (digestiveBarrierHealth != null)
+            digestiveBarrierHealth.OnBarrierDamaged -= HandleDigestiveBarrierDamaged;
+        if (respiratoryBarrierHealth != null)
+            respiratoryBarrierHealth.OnBarrierDamaged -= HandleRespiratoryBarrierDamaged;
+    }
 
     private void Awake()
     {
@@ -155,6 +176,7 @@ public class CameraScript : MonoBehaviour
     private void Update()
     {
         RefreshBreachIcons();
+        RefreshBarrierHitIcons();
         RefreshBreachAlarm();
         HandleDeployedSquadFocusInput();
 
@@ -204,12 +226,13 @@ public class CameraScript : MonoBehaviour
 
     private void InitializeBreachIcons()
     {
-        GameObject digestiveRow = GameObject.Find("/HUDCanvas/SystemLayerButtons/LayerSelectionRows/LayerButtonRow_Digestive");
-        GameObject respiratoryRow = GameObject.Find("/HUDCanvas/SystemLayerButtons/LayerSelectionRows/LayerButtonRow_Respiratory");
+        GameObject digestiveRow = GameObject.Find(HudLayerRowsPath + "/LayerButtonRow_Digestive");
+        GameObject respiratoryRow = GameObject.Find(HudLayerRowsPath + "/LayerButtonRow_Respiratory");
         digestiveBreachIcon = GetOrCreateBreachIcon(digestiveRow, DigestiveBreachIconObjectName, digestiveBreachIcon);
         respiratoryBreachIcon = GetOrCreateBreachIcon(respiratoryRow, RespiratoryBreachIconObjectName, respiratoryBreachIcon);
-        digestiveBarrierHealth = GameObject.Find("/Digestive")?.GetComponent<BarrierHealth>();
-        respiratoryBarrierHealth = GameObject.Find("/Respiratory")?.GetComponent<BarrierHealth>();
+        digestiveBarrierHitIcon = GetOrCreateBarrierHitIcon(digestiveRow, DigestiveBarrierHitIconObjectName, digestiveBarrierHitIcon);
+        respiratoryBarrierHitIcon = GetOrCreateBarrierHitIcon(respiratoryRow, RespiratoryBarrierHitIconObjectName, respiratoryBarrierHitIcon);
+        RefreshBarrierHealthReferences();
     }
 
     private static Image GetOrCreateBreachIcon(GameObject layerRow, string iconObjectName, Image breachIcon)
@@ -244,6 +267,124 @@ public class CameraScript : MonoBehaviour
         return breachIcon;
     }
 
+    private static Image GetOrCreateBarrierHitIcon(GameObject layerRow, string iconObjectName, Image barrierHitIcon)
+    {
+        if (layerRow == null)
+            return barrierHitIcon;
+
+        if (barrierHitIcon == null)
+        {
+            Transform existingIcon = layerRow.transform.Find(iconObjectName);
+            barrierHitIcon = existingIcon != null ? existingIcon.GetComponent<Image>() : null;
+        }
+
+        if (barrierHitIcon == null)
+        {
+            GameObject iconObject = new GameObject(iconObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            iconObject.transform.SetParent(layerRow.transform, false);
+            RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(1f, 0.5f);
+            iconRect.anchorMax = new Vector2(1f, 0.5f);
+            iconRect.pivot = new Vector2(1f, 0.5f);
+            iconRect.anchoredPosition = new Vector2(BarrierHitIconRightOffset, 0f);
+            iconRect.sizeDelta = new Vector2(BarrierHitIconSize, BarrierHitIconSize);
+            barrierHitIcon = iconObject.GetComponent<Image>();
+        }
+
+        if (barrierHitIcon.sprite == null)
+            barrierHitIcon.sprite = LoadBarrierHitIconSprite();
+        barrierHitIcon.preserveAspect = true;
+        barrierHitIcon.raycastTarget = false;
+        barrierHitIcon.gameObject.SetActive(false);
+        return barrierHitIcon;
+    }
+
+    private static Sprite LoadBarrierHitIconSprite()
+    {
+        if (barrierHitIconSprite != null)
+            return barrierHitIconSprite;
+
+        Texture2D texture = Resources.Load<Texture2D>(BarrierHitIconResourcePath);
+        if (texture == null)
+        {
+            Debug.LogWarning($"Barrier hit icon texture could not be loaded from Resources/{BarrierHitIconResourcePath}.png.");
+            return null;
+        }
+
+        barrierHitIconSprite = Sprite.Create(
+            texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
+        barrierHitIconSprite.name = "Barrier Taking Hit Sprite";
+        return barrierHitIconSprite;
+    }
+
+    private void RefreshBarrierHealthReferences()
+    {
+        BarrierHealth digestive = FindBarrierHealth("Digestive");
+        if (digestiveBarrierHealth != digestive)
+        {
+            if (digestiveBarrierHealth != null)
+                digestiveBarrierHealth.OnBarrierDamaged -= HandleDigestiveBarrierDamaged;
+            digestiveBarrierHealth = digestive;
+            if (digestiveBarrierHealth != null)
+                digestiveBarrierHealth.OnBarrierDamaged += HandleDigestiveBarrierDamaged;
+        }
+
+        BarrierHealth respiratory = FindBarrierHealth("Respiratory");
+        if (respiratoryBarrierHealth != respiratory)
+        {
+            if (respiratoryBarrierHealth != null)
+                respiratoryBarrierHealth.OnBarrierDamaged -= HandleRespiratoryBarrierDamaged;
+            respiratoryBarrierHealth = respiratory;
+            if (respiratoryBarrierHealth != null)
+                respiratoryBarrierHealth.OnBarrierDamaged += HandleRespiratoryBarrierDamaged;
+        }
+    }
+
+    private static BarrierHealth FindBarrierHealth(string layerName)
+    {
+        GameObject layerObject = GameObject.Find("/Layers/" + layerName);
+        if (layerObject == null)
+            layerObject = GameObject.Find("/" + layerName);
+        return layerObject != null ? layerObject.GetComponent<BarrierHealth>() : null;
+    }
+
+    private void HandleDigestiveBarrierDamaged(float appliedDamage)
+    {
+        if (appliedDamage > 0f)
+            digestiveBarrierHitFlashUntil = Time.unscaledTime + BarrierHitFlashDurationSeconds;
+    }
+
+    private void HandleRespiratoryBarrierDamaged(float appliedDamage)
+    {
+        if (appliedDamage > 0f)
+            respiratoryBarrierHitFlashUntil = Time.unscaledTime + BarrierHitFlashDurationSeconds;
+    }
+
+    private void RefreshBarrierHitIcons()
+    {
+        if (digestiveBarrierHitIcon == null || respiratoryBarrierHitIcon == null)
+            InitializeBreachIcons();
+
+        UpdateBarrierHitIcon(digestiveBarrierHitIcon, digestiveBarrierHitFlashUntil);
+        UpdateBarrierHitIcon(respiratoryBarrierHitIcon, respiratoryBarrierHitFlashUntil);
+    }
+
+    private static void UpdateBarrierHitIcon(Image icon, float flashUntil)
+    {
+        if (icon == null)
+            return;
+
+        float remaining = flashUntil - Time.unscaledTime;
+        bool isFlashing = remaining > 0f;
+        bool isVisible = isFlashing &&
+            Mathf.FloorToInt((BarrierHitFlashDurationSeconds - remaining) / BarrierHitFlashIntervalSeconds) % 2 == 0;
+        if (icon.gameObject.activeSelf != isVisible)
+            icon.gameObject.SetActive(isVisible);
+    }
+
     private static Sprite LoadBreachIconSprite()
     {
         if (breachIconSprite != null)
@@ -266,14 +407,13 @@ public class CameraScript : MonoBehaviour
 
     private void RefreshBreachIcons()
     {
-        if (digestiveBreachIcon == null || respiratoryBreachIcon == null)
+        if (digestiveBreachIcon == null || respiratoryBreachIcon == null ||
+            digestiveBarrierHitIcon == null || respiratoryBarrierHitIcon == null)
+        {
             InitializeBreachIcons();
+        }
 
-        if (digestiveBarrierHealth == null)
-            digestiveBarrierHealth = GameObject.Find("/Digestive")?.GetComponent<BarrierHealth>();
-        if (respiratoryBarrierHealth == null)
-            respiratoryBarrierHealth = GameObject.Find("/Respiratory")?.GetComponent<BarrierHealth>();
-
+        RefreshBarrierHealthReferences();
         UpdateBreachIcon(digestiveBreachIcon, digestiveBarrierHealth);
         UpdateBreachIcon(respiratoryBreachIcon, respiratoryBarrierHealth);
     }
@@ -295,11 +435,6 @@ public class CameraScript : MonoBehaviour
 
     private void RefreshBreachAlarm()
     {
-        if (digestiveBarrierHealth == null)
-            digestiveBarrierHealth = GameObject.Find("/Digestive")?.GetComponent<BarrierHealth>();
-        if (respiratoryBarrierHealth == null)
-            respiratoryBarrierHealth = GameObject.Find("/Respiratory")?.GetComponent<BarrierHealth>();
-
         if (digestiveBarrierHealth != null && digestiveBarrierHealth.BreachSfx == null)
             digestiveBarrierHealth.breachSfx = breachSfx;
         if (respiratoryBarrierHealth != null && respiratoryBarrierHealth.BreachSfx == null)
