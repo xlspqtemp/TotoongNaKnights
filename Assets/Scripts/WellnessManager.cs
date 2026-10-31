@@ -129,7 +129,7 @@ public class WellnessManager : MonoBehaviour
     private const string MainMenuSceneName = "MainMenu";
     private const float RequiredWinWellness = 50f;
     private const float DefaultWellnessShieldDurationSeconds = 15f;
-    private const string WellnessShieldIconResourcePath = "UI/Shield perk";
+    private const string WellnessShieldIconResourcePath = "UI/Shield Perk";
     private const string WellnessShieldIconName = "Wellness Shield Timer";
     private const int OutcomeButtonWidth = 300;
     private const int OutcomeButtonHeight = 76;
