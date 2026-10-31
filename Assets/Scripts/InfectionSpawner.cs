@@ -3825,6 +3825,24 @@ public sealed class InfectionSpawner : MonoBehaviour
         return pathogenNames;
     }
 
+    /// <summary>Determines whether a name is one of the named viral profiles used for B/T-cell training.</summary>
+    public static bool IsKnownViralTrainingPathogenName(string pathogenName)
+    {
+        if (string.IsNullOrWhiteSpace(pathogenName))
+            return false;
+
+        foreach (InfectionData infection in CreateDefaultInfectionEntries())
+        {
+            if (!infection.isGeneric && infection.pathogenType == InfectionPathogenType.Viral &&
+                string.Equals(infection.displayName, pathogenName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static List<InfectionData> CreateDefaultInfectionEntries()
     {
         return new List<InfectionData>

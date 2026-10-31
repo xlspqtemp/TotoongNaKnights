@@ -8,6 +8,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
 {
     private const int MaximumBatchCount = 10;
     private const int UnitsPerBatch = 5;
+    private const string TCellUnitName = "T Cell";
+    private const string BCellUnitName = "B Cell";
     private const float DefaultNavMeshSampleRadius = 2f;
     private const float FormationSpacing = 1.3f;
     private const float MinimumFormationSeparation = 0.9f;
@@ -126,9 +128,19 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
     /// <summary>Starts routing a ready batch to its closest lymphatic duct and then to an infection.</summary>
     public bool DispatchBatch(int batchId, InfectionSpawner.InfectionMarker infection)
     {
+        return DispatchBatch(batchId, infection, out _);
+    }
+
+    /// <summary>Starts routing a ready batch and returns a reason when its viral target does not match.</summary>
+    public bool DispatchBatch(int batchId, InfectionSpawner.InfectionMarker infection, out string failureReason)
+    {
+        failureReason = null;
         LymphaticBatchGroup batch = GetBatch(batchId);
         if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Ready ||
             infection == null || infection.isRemoving || infection.infection == null)
+            return false;
+
+        if (!IsViralTargetCompatible(batch, infection, out failureReason))
             return false;
 
         Transform duct = null;
@@ -163,6 +175,32 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
 
         StopBatchAgents(batch);
         batch.AbortOrder();
+        failureReason = "The selected infection is not reachable by the available lymphatic route.";
+        return false;
+    }
+
+    private static bool IsViralTargetCompatible(LymphaticBatchGroup batch,
+        InfectionSpawner.InfectionMarker infection, out string failureReason)
+    {
+        bool isAdaptiveCell = string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase);
+        if (!isAdaptiveCell || !InfectionSpawner.IsKnownViralTrainingPathogenName(batch.PathogenVariant))
+        {
+            failureReason = null;
+            return true;
+        }
+
+        bool targetIsViral = infection.infection.pathogenType == InfectionPathogenType.Viral;
+        if (targetIsViral &&
+            string.Equals(batch.PathogenVariant, infection.infection.displayName, System.StringComparison.OrdinalIgnoreCase))
+        {
+            failureReason = null;
+            return true;
+        }
+
+        failureReason = targetIsViral
+            ? batch.DisplayName + " can only target " + batch.PathogenVariant + "."
+            : batch.DisplayName + " can only target its matching viral infection, not " + infection.infection.displayName + ".";
         return false;
     }
 

@@ -312,10 +312,15 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         if (!layerAvailable || !awaitingTargetSelection || selectedBatchId < 1 || batchSpawner == null || marker == null)
             return;
 
-        if (!batchSpawner.DispatchBatch(selectedBatchId, marker))
+        if (!batchSpawner.DispatchBatch(selectedBatchId, marker, out string failureReason))
         {
             if (ConsoleLogUI.Instance != null)
-                ConsoleLogUI.Instance.Log("Batch " + selectedBatchId + " could not reach the selected infection.", ConsoleLogUI.LogType.Warning);
+            {
+                string message = string.IsNullOrWhiteSpace(failureReason)
+                    ? "Batch " + selectedBatchId + " could not reach the selected infection."
+                    : failureReason;
+                ConsoleLogUI.Instance.Log(message, ConsoleLogUI.LogType.Warning);
+            }
             return;
         }
 
