@@ -19,7 +19,19 @@ public sealed class AdaptiveResponsePopup : MonoBehaviour
 
     [SerializeField] private AudioClip resolvedSoundClip;
 
-    private readonly Queue<string> pendingDisplayNames = new Queue<string>();
+    private sealed class PopupMessage
+    {
+        public string title;
+        public string subtitle;
+
+        public PopupMessage(string title, string subtitle)
+        {
+            this.title = title;
+            this.subtitle = subtitle;
+        }
+    }
+
+    private readonly Queue<PopupMessage> pendingMessages = new Queue<PopupMessage>();
     private CanvasGroup popupCanvasGroup;
     private AudioSource audioSource;
     private TextMeshProUGUI titleLabel;
@@ -64,10 +76,23 @@ public sealed class AdaptiveResponsePopup : MonoBehaviour
         gameObject.SetActive(false);
     }
 
-    /// <summary>Queues an adaptive-response message and plays its HUD sound once when shown.</summary>
+    /// <summary>Queues an adaptive-response resolution message and plays its HUD sound once when shown.</summary>
     public void Show(string displayName)
     {
-        pendingDisplayNames.Enqueue(string.IsNullOrWhiteSpace(displayName) ? "Viral infection" : displayName);
+        string resolvedName = string.IsNullOrWhiteSpace(displayName) ? "Viral infection" : displayName;
+        EnqueueMessage("ADAPTIVE RESPONSE CLEARED", $"{resolvedName} resolved by the body. Good work, soldier.");
+    }
+
+    /// <summary>Queues the antigen collection message using the shared HUD popup banner.</summary>
+    public void ShowAntigenCollected(string virusName)
+    {
+        string resolvedName = string.IsNullOrWhiteSpace(virusName) ? "Virus" : virusName;
+        EnqueueMessage("ANTIGEN COLLECTED", $"{resolvedName} antigen acquired. T-Cell training unlocked.");
+    }
+
+    private void EnqueueMessage(string title, string subtitle)
+    {
+        pendingMessages.Enqueue(new PopupMessage(title, subtitle));
         if (phase == PopupPhase.Hidden)
             BeginNextPopup();
     }
@@ -110,7 +135,7 @@ public sealed class AdaptiveResponsePopup : MonoBehaviour
 
     private void BeginNextPopup()
     {
-        if (pendingDisplayNames.Count == 0)
+        if (pendingMessages.Count == 0)
         {
             phase = PopupPhase.Hidden;
             if (gameObject.activeSelf)
@@ -118,9 +143,9 @@ public sealed class AdaptiveResponsePopup : MonoBehaviour
             return;
         }
 
-        string displayName = pendingDisplayNames.Dequeue();
-        titleLabel.text = "ADAPTIVE RESPONSE CLEARED";
-        subtitleLabel.text = $"{displayName} resolved by the body. Good work, soldier.";
+        PopupMessage message = pendingMessages.Dequeue();
+        titleLabel.text = message.title;
+        subtitleLabel.text = message.subtitle;
         popupCanvasGroup.alpha = 0f;
         animationElapsed = 0f;
         phase = PopupPhase.FadingIn;
