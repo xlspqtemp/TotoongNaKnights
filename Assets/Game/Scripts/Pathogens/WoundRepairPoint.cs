@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Video;
 
 /// <summary>Displays wound repair and infection progress at an access point selected by a wound event.</summary>
 public sealed class WoundRepairPoint : MonoBehaviour
@@ -20,6 +21,12 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float WoundInfectionSpawnRetrySeconds = 1f;
     private const float FibrinNetInitialAlpha = 0.1f;
     private const float WellnessShieldDurationSeconds = 15f;
+    private const string WellnessShieldOverlayObjectName = "Wellness Shield Video Overlay";
+    private const string WellnessShieldOverlayVideoResourcePath = "Shield perk overlay";
+    private const string WellnessShieldOverlayMaterialResourcePath = "UI/Wellness Shield Additive";
+    private const int WellnessShieldOverlayTextureWidth = 1920;
+    private const int WellnessShieldOverlayTextureHeight = 1080;
+    private const int TransparentRenderQueue = 3000;
     private const float FibrinNetSuccessHoldSeconds = 2f;
     private const float FibrinNetFadeOutSeconds = 0.75f;
     private const float FibrinNetModelScale = 3f;
@@ -112,6 +119,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private float infectionPoints;
     private float infectionGrowthTimer;
     private string wellnessEventKey;
+    private static WellnessShieldOverlayController wellnessShieldOverlayController;
 
     /// <summary>Returns the active wellness event occurrence assigned to this wound.</summary>
     public string WellnessEventKey => wellnessEventKey;
@@ -823,10 +831,83 @@ public sealed class WoundRepairPoint : MonoBehaviour
         if (wellnessManager != null)
         {
             wellnessManager.ActivateWellnessShield(WellnessShieldDurationSeconds);
+            if (wellnessManager.IsShieldActive)
+                PlayWellnessShieldOverlay();
         }
 
         QTETracker.Unregister(QTETracker.CirculatoryLayerIndex, wellnessEventKey);
         NotifySkinBreachStateChanged();
+    }
+
+    private void PlayWellnessShieldOverlay()
+    {
+        if (wellnessShieldOverlayController == null)
+        {
+            VideoClip videoClip = Resources.Load<VideoClip>(WellnessShieldOverlayVideoResourcePath);
+            Material additiveMaterial = Resources.Load<Material>(WellnessShieldOverlayMaterialResourcePath);
+            GameObject hudCanvasObject = GameObject.Find("HUDCanvas");
+            Canvas hudCanvas = hudCanvasObject != null ? hudCanvasObject.GetComponent<Canvas>() : null;
+
+            if (videoClip == null)
+            {
+                Debug.LogError($"[WOUND REPAIR] Video clip not found at Resources/{WellnessShieldOverlayVideoResourcePath}.mp4.", this);
+                return;
+            }
+
+            if (additiveMaterial == null)
+            {
+                Debug.LogError($"[WOUND REPAIR] Additive material not found at Resources/{WellnessShieldOverlayMaterialResourcePath}.mat.", this);
+                return;
+            }
+
+            if (hudCanvas == null)
+            {
+                Debug.LogError("[WOUND REPAIR] HUDCanvas was not found; the Wellness Shield video overlay cannot be created.", this);
+                return;
+            }
+
+            GameObject overlayObject = GameObject.Find(WellnessShieldOverlayObjectName);
+            if (overlayObject == null)
+            {
+                overlayObject = new GameObject(
+                    WellnessShieldOverlayObjectName,
+                    typeof(RectTransform),
+                    typeof(CanvasRenderer),
+                    typeof(RawImage),
+                    typeof(VideoPlayer));
+                overlayObject.transform.SetParent(hudCanvas.transform, false);
+
+                RectTransform overlayRect = overlayObject.GetComponent<RectTransform>();
+                overlayRect.anchorMin = Vector2.zero;
+                overlayRect.anchorMax = Vector2.one;
+                overlayRect.offsetMin = Vector2.zero;
+                overlayRect.offsetMax = Vector2.zero;
+
+                Transform pausePanel = hudCanvas.transform.Find("PausePanel");
+                if (pausePanel != null)
+                    overlayObject.transform.SetSiblingIndex(pausePanel.GetSiblingIndex());
+                else
+                    overlayObject.transform.SetAsLastSibling();
+            }
+
+            wellnessShieldOverlayController = overlayObject.GetComponent<WellnessShieldOverlayController>();
+            if (wellnessShieldOverlayController == null)
+                wellnessShieldOverlayController = overlayObject.AddComponent<WellnessShieldOverlayController>();
+
+            if (!wellnessShieldOverlayController.Initialize(
+                    videoClip,
+                    additiveMaterial,
+                    WellnessShieldOverlayTextureWidth,
+                    WellnessShieldOverlayTextureHeight,
+                    TransparentRenderQueue))
+            {
+                wellnessShieldOverlayController = null;
+                Destroy(overlayObject);
+                return;
+            }
+        }
+
+        wellnessShieldOverlayController.PlayForDuration(WellnessShieldDurationSeconds);
     }
 
     private void RefreshProgressUI()
@@ -927,5 +1008,139 @@ public sealed class WoundRepairPoint : MonoBehaviour
         rectTransform.anchorMax = Vector2.one;
         rectTransform.offsetMin = Vector2.zero;
         rectTransform.offsetMax = Vector2.zero;
+    }
+}
+
+/// <summary>Owns the reusable Wellness Shield video overlay and its timed playback lifecycle.</summary>
+internal sealed class WellnessShieldOverlayController : MonoBehaviour
+{
+    private RawImage overlayImage;
+    private VideoPlayer videoPlayer;
+    private RenderTexture outputTexture;
+    private Material runtimeOverlayMaterial;
+    private Coroutine disableOverlayCoroutine;
+    private bool isInitialized;
+
+    private void Awake()
+    {
+        overlayImage = GetComponent<RawImage>();
+        videoPlayer = GetComponent<VideoPlayer>();
+    }
+
+    /// <summary>Configures the fullscreen image and video player for additive playback.</summary>
+    public bool Initialize(VideoClip videoClip, Material additiveMaterial, int textureWidth, int textureHeight, int transparentRenderQueue)
+    {
+        if (videoClip == null || additiveMaterial == null || overlayImage == null || videoPlayer == null)
+            return false;
+
+        ReleaseRuntimeAssets();
+        outputTexture = new RenderTexture(textureWidth, textureHeight, 0, RenderTextureFormat.ARGB32)
+        {
+            name = "WellnessShieldOverlayRenderTexture",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+
+        if (!outputTexture.Create())
+        {
+            Debug.LogError("[WOUND REPAIR] Could not create the Wellness Shield overlay RenderTexture.", this);
+            ReleaseRuntimeAssets();
+            return false;
+        }
+
+        runtimeOverlayMaterial = new Material(additiveMaterial)
+        {
+            name = additiveMaterial.name + " (Runtime)"
+        };
+        runtimeOverlayMaterial.SetTexture("_MainTex", outputTexture);
+        runtimeOverlayMaterial.SetColor("_Color", Color.white);
+        runtimeOverlayMaterial.renderQueue = transparentRenderQueue;
+
+        overlayImage.texture = outputTexture;
+        overlayImage.material = runtimeOverlayMaterial;
+        overlayImage.color = Color.white;
+        overlayImage.raycastTarget = false;
+        overlayImage.enabled = false;
+
+        videoPlayer.Stop();
+        videoPlayer.source = VideoSource.VideoClip;
+        videoPlayer.clip = videoClip;
+        videoPlayer.playOnAwake = false;
+        videoPlayer.waitForFirstFrame = true;
+        videoPlayer.isLooping = true;
+        videoPlayer.skipOnDrop = true;
+        videoPlayer.renderMode = VideoRenderMode.RenderTexture;
+        videoPlayer.targetTexture = outputTexture;
+        videoPlayer.aspectRatio = VideoAspectRatio.Stretch;
+        videoPlayer.timeUpdateMode = VideoTimeUpdateMode.UnscaledGameTime;
+        videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
+        videoPlayer.Prepare();
+        isInitialized = true;
+        return true;
+    }
+
+    /// <summary>Starts looping video playback and hides it after the shield duration.</summary>
+    public void PlayForDuration(float durationSeconds)
+    {
+        if (!isInitialized || durationSeconds <= 0f)
+            return;
+
+        if (disableOverlayCoroutine != null)
+            StopCoroutine(disableOverlayCoroutine);
+        if (videoPlayer.isPlaying)
+            videoPlayer.Stop();
+
+        overlayImage.color = Color.white;
+        overlayImage.raycastTarget = false;
+        overlayImage.enabled = true;
+        videoPlayer.Play();
+        disableOverlayCoroutine = StartCoroutine(DisableOverlayAfter(durationSeconds));
+    }
+
+    private IEnumerator DisableOverlayAfter(float durationSeconds)
+    {
+        yield return new WaitForSecondsRealtime(durationSeconds);
+
+        if (videoPlayer != null)
+            videoPlayer.Stop();
+        if (overlayImage != null)
+            overlayImage.enabled = false;
+
+        disableOverlayCoroutine = null;
+    }
+
+    private void OnDestroy()
+    {
+        ReleaseRuntimeAssets();
+    }
+
+    private void ReleaseRuntimeAssets()
+    {
+        if (videoPlayer != null)
+        {
+            videoPlayer.Stop();
+            videoPlayer.targetTexture = null;
+        }
+
+        if (overlayImage != null)
+        {
+            overlayImage.texture = null;
+            overlayImage.material = null;
+        }
+
+        if (outputTexture != null)
+        {
+            outputTexture.Release();
+            Destroy(outputTexture);
+            outputTexture = null;
+        }
+
+        if (runtimeOverlayMaterial != null)
+        {
+            Destroy(runtimeOverlayMaterial);
+            runtimeOverlayMaterial = null;
+        }
+
+        isInitialized = false;
     }
 }
