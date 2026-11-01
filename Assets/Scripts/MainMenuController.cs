@@ -13,10 +13,10 @@ public class MainMenuController : MonoBehaviour
     private const string MainMenuSceneName = "MainMenu";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
     private const string BankGothicFontResourceName = "BankGothicMediumSDF";
-    private const string EasyDifficultyIconResourcePath = "UI/Easy difficulty";
-    private const string NormalDifficultyIconResourcePath = "UI/Normal Difficulty";
-    private const string MediumDifficultyIconResourcePath = "UI/Medium Difficulty";
-    private const string HardDifficultyIconResourcePath = "UI/Hard difficulty";
+    private const string EasyDifficultyIconResourcePath = "UI/Easy";
+    private const string NormalDifficultyIconResourcePath = "UI/Normal";
+    private const string MediumDifficultyIconResourcePath = "UI/Medium";
+    private const string HardDifficultyIconResourcePath = "UI/hard";
     private const int DifficultyIconSize = 46;
     private const int OverlayWidth = 920;
     private const int OverlayHeight = 720;
