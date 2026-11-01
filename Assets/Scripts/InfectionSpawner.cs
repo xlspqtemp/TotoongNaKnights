@@ -2461,6 +2461,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
             marker.resolutionPending = true;
             Debug.Log($"[Resolution] Killer T-Cell induced apoptosis in {marker.infection.displayName}. Infection cleared.", this);
+            ApplyWellnessGainOnResolve(marker);
             BeginRemovingInfectionMarker(marker);
             return;
         }
