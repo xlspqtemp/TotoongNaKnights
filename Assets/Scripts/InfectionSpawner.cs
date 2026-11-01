@@ -59,6 +59,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float NormalDifficultyWbcHp = 100f;
     private const float NormalDifficultyWbcAttack = 10f;
     private const float MacrophageAttackRange = 2f;
+    private const float OxygenBuffMovementMultiplier = 2f;
+    private const float OxygenBuffAgentRefreshIntervalSeconds = 0.2f;
     private static readonly InfectionRarity[] GenericPathogenRarities =
     {
         InfectionRarity.Common,
@@ -249,6 +251,103 @@ public sealed class InfectionSpawner : MonoBehaviour
     private Camera gameplayCamera;
 
     public IReadOnlyList<InfectionMarker> ActiveInfections => activeInfectionMarkers;
+
+    /// <summary>Indicates whether the timed Respiratory Oxygen Boost perk is active.</summary>
+    public static bool isOxygenBuffActive;
+
+    private static InfectionSpawner activeInstance;
+    private readonly Dictionary<NavMeshAgent, float> oxygenBuffOriginalAgentSpeeds = new Dictionary<NavMeshAgent, float>();
+    private float oxygenBuffAgentRefreshTimer;
+
+    /// <summary>Activates or ends the Respiratory Oxygen Boost and updates deployed immune-unit speeds.</summary>
+    public static void SetOxygenBuffActive(bool isActive)
+    {
+        if (isOxygenBuffActive == isActive)
+        {
+            if (isActive && activeInstance != null)
+                activeInstance.RefreshOxygenBuffAgentSpeeds();
+            return;
+        }
+
+        isOxygenBuffActive = isActive;
+        if (activeInstance == null)
+            return;
+
+        if (isActive)
+        {
+            activeInstance.oxygenBuffAgentRefreshTimer = 0f;
+            activeInstance.RefreshOxygenBuffAgentSpeeds();
+        }
+        else
+        {
+            activeInstance.RestoreOxygenBuffAgentSpeeds();
+        }
+    }
+
+    /// <summary>Returns whether an agent represents a tactical WBC or a Macrophage unit.</summary>
+    private static bool IsOxygenBuffTarget(NavMeshAgent agent)
+    {
+        if (agent == null)
+            return false;
+
+        if (agent.GetComponentInParent<WbcIdleHighlight>() != null)
+            return true;
+
+        MacrophageScript macrophage = agent.GetComponentInParent<MacrophageScript>();
+        LymphaticBatchGroup batch = agent.GetComponentInParent<LymphaticBatchGroup>();
+        return macrophage != null && batch != null &&
+            string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase) &&
+            batch.Status != LymphaticBatchGroup.BatchStatus.Ready;
+    }
+
+    private void ApplyOxygenBuffSpeed(NavMeshAgent agent)
+    {
+        if (!isOxygenBuffActive || agent == null || !agent.isActiveAndEnabled || !IsOxygenBuffTarget(agent))
+            return;
+
+        if (!oxygenBuffOriginalAgentSpeeds.TryGetValue(agent, out float originalSpeed))
+        {
+            originalSpeed = agent.speed;
+            oxygenBuffOriginalAgentSpeeds.Add(agent, originalSpeed);
+        }
+
+        agent.speed = originalSpeed * OxygenBuffMovementMultiplier;
+    }
+
+    private void RefreshOxygenBuffAgentSpeeds()
+    {
+        foreach (NavMeshAgent agent in FindObjectsByType<NavMeshAgent>(FindObjectsSortMode.None))
+            ApplyOxygenBuffSpeed(agent);
+    }
+
+    private void RestoreOxygenBuffAgentSpeeds()
+    {
+        foreach (KeyValuePair<NavMeshAgent, float> entry in oxygenBuffOriginalAgentSpeeds)
+        {
+            if (entry.Key != null)
+                entry.Key.speed = entry.Value;
+        }
+
+        oxygenBuffOriginalAgentSpeeds.Clear();
+        oxygenBuffAgentRefreshTimer = 0f;
+    }
+
+    private void UpdateOxygenBuff()
+    {
+        if (!isOxygenBuffActive)
+        {
+            if (oxygenBuffOriginalAgentSpeeds.Count > 0)
+                RestoreOxygenBuffAgentSpeeds();
+            return;
+        }
+
+        oxygenBuffAgentRefreshTimer -= Time.unscaledDeltaTime;
+        if (oxygenBuffAgentRefreshTimer > 0f)
+            return;
+
+        oxygenBuffAgentRefreshTimer = OxygenBuffAgentRefreshIntervalSeconds;
+        RefreshOxygenBuffAgentSpeeds();
+    }
 
     /// <summary>Returns whether the supplied infection marker is still awaiting resolution.</summary>
     public bool IsInfectionActive(InfectionMarker marker)
@@ -534,6 +633,8 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void Awake()
     {
+        activeInstance = this;
+        isOxygenBuffActive = false;
         infectionEntries = CreateDefaultInfectionEntries();
         infectionAudioSource = GetComponent<AudioSource>();
         if (infectionAudioSource == null)
@@ -606,6 +707,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             ApplyWellnessChange("Debug test", -debugWellnessLossAmount);
 #endif
 
+        UpdateOxygenBuff();
         bool antigenIconClicked = HandleAntigenIconClick();
         UpdateWbcCooldowns();
         UpdateLeukocyteSupply();
@@ -734,6 +836,12 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (pendingInfectionsPanel != null)
             pendingInfectionsPanel.OnRowClickedPublic -= HandlePendingInfectionRowClicked;
         pendingInfectionsPanel = null;
+        if (activeInstance == this)
+        {
+            isOxygenBuffActive = false;
+            RestoreOxygenBuffAgentSpeeds();
+            activeInstance = null;
+        }
     }
 
     private void OnValidate()
@@ -1401,6 +1509,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             highlight.SetHighlightColor(idleSquadHighlightColor);
             highlight.SetHighlighted(true);
             NavMeshAgent agent = unit.GetComponent<NavMeshAgent>();
+            ApplyOxygenBuffSpeed(agent);
             if (agent != null && agent.enabled && agent.isOnNavMesh)
                 agent.isStopped = true;
         }
@@ -2173,7 +2282,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                     wbc.transform.position = Vector3.MoveTowards(
                         wbc.transform.position,
                         nearestPathogen.transform.position,
-                        wbcCombatMoveSpeed * gameplayDeltaTime);
+                        wbcCombatMoveSpeed * (isOxygenBuffActive ? OxygenBuffMovementMultiplier : 1f) * gameplayDeltaTime);
                 }
             }
 

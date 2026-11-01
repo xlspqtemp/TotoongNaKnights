@@ -9,6 +9,12 @@ using UnityEngine.UI;
 public sealed class LungInfectionResponse : MonoBehaviour
 {
     private const float SecondsPerInfiltration = 10f;
+    private const float OxygenBoostDurationSeconds = 15f;
+    internal const string OxygenBoostIconObjectName = "Oxygen Boost Perk Timer";
+    internal const string OxygenBoostIconResourcePath = "UI/Oxygen Boost perk";
+    internal const float OxygenBoostIconSize = 46f;
+    internal const float OxygenBoostIconHorizontalOffset = -198f;
+    internal const float OxygenBoostIconVerticalOffset = -34f;
     private const float FloatingHeight = 12f;
     [SerializeField] private float panelScale = 0.04f;
     [SerializeField] private bool useCameraBillboard = true;
@@ -206,6 +212,7 @@ public sealed class LungInfectionResponse : MonoBehaviour
         responseInProgress = false;
         infiltrationCount = 0;
         remainingResponseSeconds = 0f;
+        bool completedQte = pendingWellnessEventKeys.Count > 0;
         WellnessManager wellnessManager = WellnessManager.Instance;
         if (wellnessManager != null)
         {
@@ -217,6 +224,8 @@ public sealed class LungInfectionResponse : MonoBehaviour
             }
         }
         pendingWellnessEventKeys.Clear();
+        if (completedQte)
+            ActivateOxygenBoost();
         DestroySpawnedImmuneCells();
         if (floatingCanvas != null)
         {
@@ -224,6 +233,23 @@ public sealed class LungInfectionResponse : MonoBehaviour
         }
 
         sendImmuneCellsButton.interactable = true;
+    }
+
+    private void ActivateOxygenBoost()
+    {
+        GameObject hudCanvasObject = GameObject.Find("HUDCanvas");
+        Canvas hudCanvas = hudCanvasObject != null ? hudCanvasObject.GetComponent<Canvas>() : null;
+        if (hudCanvas == null)
+        {
+            Debug.LogWarning("[RESPIRATORY] HUDCanvas was not found; the Oxygen Boost perk could not be displayed or timed.", this);
+            return;
+        }
+
+        RespiratoryOxygenBoostHud oxygenBoostHud = hudCanvas.GetComponent<RespiratoryOxygenBoostHud>();
+        if (oxygenBoostHud == null)
+            oxygenBoostHud = hudCanvas.gameObject.AddComponent<RespiratoryOxygenBoostHud>();
+
+        oxygenBoostHud.Activate(OxygenBoostDurationSeconds);
     }
 
     private void RefreshPrompt()
@@ -311,5 +337,130 @@ public sealed class LungInfectionResponse : MonoBehaviour
         rectTransform.anchorMax = Vector2.one;
         rectTransform.offsetMin = Vector2.zero;
         rectTransform.offsetMax = Vector2.zero;
+    }
+}
+
+/// <summary>Displays and times the Respiratory Oxygen Boost icon on the main HUD.</summary>
+internal sealed class RespiratoryOxygenBoostHud : MonoBehaviour
+{
+    private const string ProgressBarObjectName = "GameProgressBar";
+    private const string PausePanelObjectName = "PausePanel";
+
+    private Image oxygenBoostImage;
+    private Sprite oxygenBoostSprite;
+    private Coroutine oxygenBoostRoutine;
+
+    /// <summary>Starts or refreshes the Oxygen Boost icon countdown and WBC speed buff.</summary>
+    public void Activate(float durationSeconds)
+    {
+        if (durationSeconds <= 0f)
+            return;
+
+        CreateOxygenBoostIcon();
+        if (oxygenBoostRoutine != null)
+            StopCoroutine(oxygenBoostRoutine);
+
+        if (oxygenBoostImage != null)
+        {
+            oxygenBoostImage.fillAmount = 1f;
+            oxygenBoostImage.gameObject.SetActive(true);
+        }
+
+        InfectionSpawner.SetOxygenBuffActive(true);
+        oxygenBoostRoutine = StartCoroutine(RunOxygenBoost(durationSeconds));
+    }
+
+    private void CreateOxygenBoostIcon()
+    {
+        if (oxygenBoostImage != null)
+            return;
+
+        Texture2D iconTexture = Resources.Load<Texture2D>(LungInfectionResponse.OxygenBoostIconResourcePath);
+        if (iconTexture == null)
+        {
+            Debug.LogWarning($"[RESPIRATORY] Icon texture was not found at Resources/{LungInfectionResponse.OxygenBoostIconResourcePath}.png.", this);
+            return;
+        }
+
+        oxygenBoostSprite = Sprite.Create(
+            iconTexture,
+            new Rect(0f, 0f, iconTexture.width, iconTexture.height),
+            new Vector2(0.5f, 0.5f),
+            100f);
+        oxygenBoostSprite.name = LungInfectionResponse.OxygenBoostIconObjectName + " Sprite";
+
+        GameObject iconObject = new GameObject(
+            LungInfectionResponse.OxygenBoostIconObjectName,
+            typeof(RectTransform),
+            typeof(CanvasRenderer),
+            typeof(Image));
+        iconObject.transform.SetParent(transform, false);
+
+        RectTransform iconRect = iconObject.GetComponent<RectTransform>();
+        iconRect.anchorMin = new Vector2(0.5f, 1f);
+        iconRect.anchorMax = new Vector2(0.5f, 1f);
+        iconRect.pivot = new Vector2(0.5f, 0.5f);
+        iconRect.sizeDelta = new Vector2(LungInfectionResponse.OxygenBoostIconSize, LungInfectionResponse.OxygenBoostIconSize);
+        iconRect.anchoredPosition = new Vector2(
+            LungInfectionResponse.OxygenBoostIconHorizontalOffset,
+            LungInfectionResponse.OxygenBoostIconVerticalOffset);
+
+        oxygenBoostImage = iconObject.GetComponent<Image>();
+        oxygenBoostImage.sprite = oxygenBoostSprite;
+        oxygenBoostImage.color = Color.white;
+        oxygenBoostImage.type = Image.Type.Filled;
+        oxygenBoostImage.fillMethod = Image.FillMethod.Horizontal;
+        oxygenBoostImage.fillOrigin = (int)Image.OriginHorizontal.Left;
+        oxygenBoostImage.fillAmount = 1f;
+        oxygenBoostImage.raycastTarget = false;
+        oxygenBoostImage.preserveAspect = true;
+
+        Transform pausePanel = transform.Find(PausePanelObjectName);
+        if (pausePanel != null)
+            iconObject.transform.SetSiblingIndex(pausePanel.GetSiblingIndex());
+        else
+        {
+            Transform progressBar = transform.Find(ProgressBarObjectName);
+            if (progressBar != null)
+                iconObject.transform.SetSiblingIndex(progressBar.GetSiblingIndex() + 1);
+            else
+                iconObject.transform.SetAsLastSibling();
+        }
+
+        iconObject.SetActive(false);
+    }
+
+    private IEnumerator RunOxygenBoost(float durationSeconds)
+    {
+        float elapsedSeconds = 0f;
+        while (elapsedSeconds < durationSeconds)
+        {
+            elapsedSeconds = Mathf.Min(durationSeconds, elapsedSeconds + Time.unscaledDeltaTime);
+            if (oxygenBoostImage != null)
+                oxygenBoostImage.fillAmount = 1f - elapsedSeconds / durationSeconds;
+
+            yield return null;
+        }
+
+        if (oxygenBoostImage != null)
+        {
+            oxygenBoostImage.fillAmount = 0f;
+            oxygenBoostImage.gameObject.SetActive(false);
+        }
+
+        InfectionSpawner.SetOxygenBuffActive(false);
+        oxygenBoostRoutine = null;
+    }
+
+    private void OnDestroy()
+    {
+        if (oxygenBoostRoutine != null)
+            StopCoroutine(oxygenBoostRoutine);
+
+        if (InfectionSpawner.isOxygenBuffActive)
+            InfectionSpawner.SetOxygenBuffActive(false);
+
+        if (oxygenBoostSprite != null)
+            Destroy(oxygenBoostSprite);
     }
 }
