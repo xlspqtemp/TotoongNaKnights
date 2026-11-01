@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.UI;
+using UnityEngine.Video;
 
 /// <summary>Tracks virus infiltrations for one lung and dispatches a timed immune-cell pair.</summary>
 public sealed class LungInfectionResponse : MonoBehaviour
@@ -15,6 +16,12 @@ public sealed class LungInfectionResponse : MonoBehaviour
     internal const float OxygenBoostIconSize = 46f;
     internal const float OxygenBoostIconHorizontalOffset = -198f;
     internal const float OxygenBoostIconVerticalOffset = -34f;
+    internal const string OxygenBoostOverlayObjectName = "Respiratory Oxygen Boost Video Overlay";
+    internal const string OxygenBoostOverlayVideoResourcePath = "Oxygen boost overlay";
+    internal const string OxygenBoostOverlayMaterialResourcePath = "UI/Wellness Shield Additive";
+    internal const int OxygenBoostOverlayTextureWidth = 1920;
+    internal const int OxygenBoostOverlayTextureHeight = 1080;
+    internal const int TransparentRenderQueue = 3000;
     private const float FloatingHeight = 12f;
     [SerializeField] private float panelScale = 0.04f;
     [SerializeField] private bool useCameraBillboard = true;
@@ -349,6 +356,15 @@ internal sealed class RespiratoryOxygenBoostHud : MonoBehaviour
     private Image oxygenBoostImage;
     private Sprite oxygenBoostSprite;
     private Coroutine oxygenBoostRoutine;
+    private RawImage oxygenBoostOverlayImage;
+    private VideoPlayer oxygenBoostOverlayVideoPlayer;
+    private RenderTexture oxygenBoostOverlayTexture;
+    private Material runtimeOxygenBoostOverlayMaterial;
+
+    private void Awake()
+    {
+        InitializeOxygenBoostOverlay();
+    }
 
     /// <summary>Starts or refreshes the Oxygen Boost icon countdown and WBC speed buff.</summary>
     public void Activate(float durationSeconds)
@@ -357,6 +373,7 @@ internal sealed class RespiratoryOxygenBoostHud : MonoBehaviour
             return;
 
         CreateOxygenBoostIcon();
+        PlayOxygenBoostOverlay();
         if (oxygenBoostRoutine != null)
             StopCoroutine(oxygenBoostRoutine);
 
@@ -448,14 +465,126 @@ internal sealed class RespiratoryOxygenBoostHud : MonoBehaviour
             oxygenBoostImage.gameObject.SetActive(false);
         }
 
+        StopOxygenBoostOverlay();
         InfectionSpawner.SetOxygenBuffActive(false);
         oxygenBoostRoutine = null;
+    }
+
+    private bool InitializeOxygenBoostOverlay()
+    {
+        Transform overlayTransform = transform.Find(LungInfectionResponse.OxygenBoostOverlayObjectName);
+        if (overlayTransform == null)
+        {
+            Debug.LogWarning($"[RESPIRATORY] {LungInfectionResponse.OxygenBoostOverlayObjectName} was not found under HUDCanvas.", this);
+            return false;
+        }
+
+        VideoClip videoClip = Resources.Load<VideoClip>(LungInfectionResponse.OxygenBoostOverlayVideoResourcePath);
+        Material additiveMaterial = Resources.Load<Material>(LungInfectionResponse.OxygenBoostOverlayMaterialResourcePath);
+        oxygenBoostOverlayImage = overlayTransform.GetComponent<RawImage>();
+        oxygenBoostOverlayVideoPlayer = overlayTransform.GetComponent<VideoPlayer>();
+        if (videoClip == null || additiveMaterial == null || oxygenBoostOverlayImage == null || oxygenBoostOverlayVideoPlayer == null)
+        {
+            Debug.LogError("[RESPIRATORY] Oxygen Boost overlay requires its video clip, additive material, RawImage, and VideoPlayer.", this);
+            return false;
+        }
+
+        if (oxygenBoostOverlayTexture != null)
+        {
+            oxygenBoostOverlayTexture.Release();
+            Destroy(oxygenBoostOverlayTexture);
+        }
+        if (runtimeOxygenBoostOverlayMaterial != null)
+            Destroy(runtimeOxygenBoostOverlayMaterial);
+
+        oxygenBoostOverlayTexture = new RenderTexture(
+            LungInfectionResponse.OxygenBoostOverlayTextureWidth,
+            LungInfectionResponse.OxygenBoostOverlayTextureHeight,
+            0)
+        {
+            name = "RespiratoryOxygenBoostOverlayRenderTexture",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        if (!oxygenBoostOverlayTexture.Create())
+        {
+            Debug.LogError("[RESPIRATORY] Could not create the Oxygen Boost overlay RenderTexture.", this);
+            Destroy(oxygenBoostOverlayTexture);
+            oxygenBoostOverlayTexture = null;
+            return false;
+        }
+
+        runtimeOxygenBoostOverlayMaterial = new Material(additiveMaterial)
+        {
+            name = additiveMaterial.name + " (Oxygen Boost Runtime)"
+        };
+        runtimeOxygenBoostOverlayMaterial.SetTexture("_MainTex", oxygenBoostOverlayTexture);
+        runtimeOxygenBoostOverlayMaterial.SetColor("_Color", Color.white);
+        runtimeOxygenBoostOverlayMaterial.renderQueue = LungInfectionResponse.TransparentRenderQueue;
+
+        oxygenBoostOverlayImage.texture = oxygenBoostOverlayTexture;
+        oxygenBoostOverlayImage.material = runtimeOxygenBoostOverlayMaterial;
+        oxygenBoostOverlayImage.color = Color.white;
+        oxygenBoostOverlayImage.raycastTarget = false;
+        oxygenBoostOverlayImage.enabled = false;
+
+        oxygenBoostOverlayVideoPlayer.Stop();
+        oxygenBoostOverlayVideoPlayer.source = VideoSource.VideoClip;
+        oxygenBoostOverlayVideoPlayer.clip = videoClip;
+        oxygenBoostOverlayVideoPlayer.playOnAwake = false;
+        oxygenBoostOverlayVideoPlayer.waitForFirstFrame = true;
+        oxygenBoostOverlayVideoPlayer.isLooping = true;
+        oxygenBoostOverlayVideoPlayer.skipOnDrop = true;
+        oxygenBoostOverlayVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
+        oxygenBoostOverlayVideoPlayer.targetTexture = oxygenBoostOverlayTexture;
+        oxygenBoostOverlayVideoPlayer.aspectRatio = VideoAspectRatio.Stretch;
+        oxygenBoostOverlayVideoPlayer.timeUpdateMode = VideoTimeUpdateMode.UnscaledGameTime;
+        oxygenBoostOverlayVideoPlayer.audioOutputMode = VideoAudioOutputMode.None;
+        oxygenBoostOverlayVideoPlayer.Prepare();
+        return true;
+    }
+
+    private void PlayOxygenBoostOverlay()
+    {
+        if ((oxygenBoostOverlayImage == null || oxygenBoostOverlayVideoPlayer == null) && !InitializeOxygenBoostOverlay())
+            return;
+
+        if (oxygenBoostOverlayVideoPlayer.isPlaying)
+            oxygenBoostOverlayVideoPlayer.Stop();
+
+        oxygenBoostOverlayImage.color = Color.white;
+        oxygenBoostOverlayImage.raycastTarget = false;
+        oxygenBoostOverlayImage.enabled = true;
+        oxygenBoostOverlayImage.gameObject.SetActive(true);
+        oxygenBoostOverlayVideoPlayer.Play();
+    }
+
+    private void StopOxygenBoostOverlay()
+    {
+        if (oxygenBoostOverlayVideoPlayer != null)
+            oxygenBoostOverlayVideoPlayer.Stop();
+        if (oxygenBoostOverlayImage != null)
+        {
+            oxygenBoostOverlayImage.enabled = false;
+            oxygenBoostOverlayImage.gameObject.SetActive(false);
+        }
     }
 
     private void OnDestroy()
     {
         if (oxygenBoostRoutine != null)
             StopCoroutine(oxygenBoostRoutine);
+
+        StopOxygenBoostOverlay();
+        if (oxygenBoostOverlayVideoPlayer != null)
+            oxygenBoostOverlayVideoPlayer.targetTexture = null;
+        if (oxygenBoostOverlayTexture != null)
+        {
+            oxygenBoostOverlayTexture.Release();
+            Destroy(oxygenBoostOverlayTexture);
+        }
+        if (runtimeOxygenBoostOverlayMaterial != null)
+            Destroy(runtimeOxygenBoostOverlayMaterial);
 
         if (InfectionSpawner.isOxygenBuffActive)
             InfectionSpawner.SetOxygenBuffActive(false);
