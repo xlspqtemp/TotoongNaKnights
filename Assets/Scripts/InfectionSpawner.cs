@@ -23,7 +23,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const int MinimumHoursBetweenInfectionSpawns = 2;
     private const int MaximumHoursBetweenInfectionSpawns = 3;
     private const int PathogenPoolDifficultyCount = 4;
-    private const int GenericInfectionChancePercent = 60;
     private const float FungalHealthMultiplier = 1.25f;
     private const float BreachedBarrierPathogenMultiplier = 1.5f;
     private const int DefaultMaximumActiveWbcs = 5;
@@ -62,8 +61,23 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float AntigenIconMinimumAlpha = 0.45f;
     private const float AntigenIconMaximumAlpha = 1f;
     private const float AntigenIconColliderScale = 1.5f;
-    private const float MacrophageAttackDamage = 20f;
+    private const float MacrophageDefaultHealth = 300f;
+    private const float MacrophageDefaultAttackDamage = 20f;
+    private const float NormalDifficultyWbcHp = 100f;
+    private const float NormalDifficultyWbcAttack = 10f;
     private const float MacrophageAttackRange = 2f;
+    private static readonly InfectionRarity[] GenericPathogenRarities =
+    {
+        InfectionRarity.Common,
+        InfectionRarity.Uncommon
+    };
+    private static readonly InfectionRarity[] NamedPathogenRarities =
+    {
+        InfectionRarity.Common,
+        InfectionRarity.Uncommon,
+        InfectionRarity.Rare,
+        InfectionRarity.VeryRare
+    };
 
 
     private const float InfectionPopupReferenceDistance = 5f;
@@ -323,7 +337,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     public bool IsAwaitingInfectionTargetSelection => awaitingInfectionTargetSelection;
 
-    /// <summary>Spawns one infection through the same configured path used for daily infection events.</summary>
+    /// <summary>Force-spawns one infection using the active difficulty's generic/named and rarity weights.</summary>
     public void ForceSpawnOneInfection()
     {
         if (activeInfectionMarkers.Count >= maxActiveInfections)
@@ -332,15 +346,18 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        List<InfectionData> validEntries = BuildValidInfectionEntries();
-        if (validEntries.Count == 0 || GetValidBodyPartButtonCount() == 0)
+        if (GetValidBodyPartButtonCount() == 0)
         {
-            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because no valid entries or body-part mappings are configured.", this);
+            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because no body-part mappings are configured.", this);
             return;
         }
 
-        InfectionData selectedProfile = validEntries[UnityEngine.Random.Range(0, validEntries.Count)];
-        InfectionData infection = CloneInfectionData(selectedProfile);
+        if (!TryCreateWeightedInfection(out InfectionData infection, out bool isGeneric, out int namedRoll))
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot force-spawn an infection because the current difficulty has no positive pathogen weights.", this);
+            return;
+        }
+
         InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
         if (bodyPartButton == null)
             return;
@@ -349,7 +366,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         int infectionCountBeforeSpawn = activeInfectionMarkers.Count;
         SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         if (activeInfectionMarkers.Count == infectionCountBeforeSpawn + 1)
+        {
             LogInfection(infection, bodyPartButton);
+            DifficultyStats stats = DifficultySettings.CurrentStats;
+            Debug.Log($"[InfectionSpawner] Forced weighted roll {namedRoll}/100; NamedChance={stats.namedInfectionChance:0.##}%; Result={(isGeneric ? "Generic" : "Named")}; Difficulty={stats.difficultyName}.", this);
+        }
     }
 
     /// <summary>Spawns one bacterial infection through the configured marker creation path, preferring its configured body parts.</summary>
@@ -2222,16 +2243,27 @@ public sealed class InfectionSpawner : MonoBehaviour
                 MacrophageScript macrophage = isMacrophageBatch ? member.GetComponent<MacrophageScript>() : null;
                 Health memberHealth = member.GetComponent<Health>();
                 if (memberHealth == null && isMacrophageBatch)
-                {
                     memberHealth = member.AddComponent<Health>();
-                    memberHealth.SetMaxHp(macrophage != null ? Mathf.Max(1, macrophage.health) : stats.wbcHp);
+
+                if (isMacrophageBatch && memberHealth != null && !memberHealth.IsDead)
+                {
+                    float baseMacrophageHealth = macrophage != null ? Mathf.Max(1, macrophage.health) : MacrophageDefaultHealth;
+                    float macrophageHealthScale = Mathf.Max(0f, stats.wbcHp) / NormalDifficultyWbcHp;
+                    float targetMacrophageHealth = Mathf.Max(1f, baseMacrophageHealth * macrophageHealthScale);
+                    if (!Mathf.Approximately(memberHealth.MaxHp, targetMacrophageHealth))
+                        memberHealth.SetMaxHp(targetMacrophageHealth);
                 }
+
                 if (memberHealth == null || memberHealth.IsDead)
                     continue;
 
                 float attackDamage = stats.wbcAttack;
                 if (isMacrophageBatch)
-                    attackDamage = macrophage != null ? macrophage.damage : MacrophageAttackDamage;
+                {
+                    float baseMacrophageDamage = macrophage != null ? macrophage.damage : MacrophageDefaultAttackDamage;
+                    float macrophageDamageScale = Mathf.Max(0f, stats.wbcAttack) / NormalDifficultyWbcAttack;
+                    attackDamage = baseMacrophageDamage * macrophageDamageScale;
+                }
 
                 GameObject nearestPathogen = FindNearestLivingUnit(activeBatchPathogens, member.transform.position, out float distance);
                 if (nearestPathogen == null || distance > combatDetectionRange)
@@ -2858,19 +2890,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        int genericRoll = UnityEngine.Random.Range(0, 100);
-        bool isGeneric = genericRoll < GenericInfectionChancePercent;
-        InfectionData selectedProfile = SelectWeightedPathogenProfile(isGeneric);
-        if (selectedProfile == null)
+        if (!TryCreateWeightedInfection(out InfectionData infection, out bool isGeneric, out int namedRoll))
         {
-            Debug.LogWarning($"[InfectionSpawner] Cannot spawn a timed infection because the {(isGeneric ? "generic" : "named")} pathogen pool has no positive weights for the current difficulty.", this);
+            DifficultyStats stats = DifficultySettings.CurrentStats;
+            Debug.LogWarning($"[InfectionSpawner] Cannot spawn a timed infection because the {(isGeneric ? "generic" : "named")} pathogen pool has no positive weights for {stats.difficultyName} difficulty.", this);
             return;
         }
-
-        InfectionData infection = CloneInfectionData(selectedProfile);
-        infection.isGeneric = isGeneric;
-        if (isGeneric)
-            infection.displayName = GetGenericInfectionDisplayName(infection.pathogenType);
 
         InfectionBodyPartButtonReference bodyPartButton = SelectWeightedBodyPartButton(infection);
         if (bodyPartButton == null)
@@ -2883,7 +2908,31 @@ public sealed class InfectionSpawner : MonoBehaviour
         SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         LogInfection(infection, bodyPartButton);
         DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
-        Debug.Log($"[InfectionSpawner] Spawn roll {genericRoll}/100 => {(isGeneric ? "Generic" : "Named")} under the 60/40 split. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", this);
+        Debug.Log($"[InfectionSpawner] Spawn roll {namedRoll}/100 with NamedChance={difficultyStats.namedInfectionChance:0.##}% => {(isGeneric ? "Generic" : "Named")}. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", this);
+    }
+
+    private bool TryCreateWeightedInfection(out InfectionData infection, out bool isGeneric, out int namedRoll)
+    {
+        infection = null;
+        isGeneric = true;
+        namedRoll = 0;
+
+        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
+        if (difficultyStats == null)
+            return false;
+
+        namedRoll = UnityEngine.Random.Range(0, 100);
+        float namedChance = Mathf.Clamp(difficultyStats.namedInfectionChance, 0f, 100f);
+        isGeneric = namedRoll >= namedChance;
+        InfectionData selectedProfile = SelectWeightedPathogenProfile(isGeneric);
+        if (selectedProfile == null)
+            return false;
+
+        infection = CloneInfectionData(selectedProfile);
+        infection.isGeneric = isGeneric;
+        if (isGeneric)
+            infection.displayName = GetGenericInfectionDisplayName(infection.pathogenType);
+        return true;
     }
 
     private InfectionData SelectWeightedPathogenProfile(bool selectGenericPool)
@@ -2894,18 +2943,37 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (difficultyStats == null)
             return null;
 
-        InfectionRarity firstRarity = selectGenericPool ? InfectionRarity.Common : InfectionRarity.Rare;
-        InfectionRarity secondRarity = selectGenericPool ? InfectionRarity.Uncommon : InfectionRarity.VeryRare;
-        float firstRarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, firstRarity, difficultyIndex);
-        float secondRarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, secondRarity, difficultyIndex);
-        float totalRarityWeight = firstRarityWeight + secondRarityWeight;
+        InfectionRarity[] selectableRarities = selectGenericPool
+            ? GenericPathogenRarities
+            : NamedPathogenRarities;
+        List<InfectionRarity> availableRarities = new List<InfectionRarity>();
+        List<float> rarityWeights = new List<float>();
+        float totalRarityWeight = 0f;
+        foreach (InfectionRarity rarity in selectableRarities)
+        {
+            float rarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, rarity, difficultyIndex);
+            if (rarityWeight <= 0f)
+                continue;
+
+            availableRarities.Add(rarity);
+            rarityWeights.Add(rarityWeight);
+            totalRarityWeight += rarityWeight;
+        }
+
         if (totalRarityWeight <= 0f)
             return null;
 
         float rarityRoll = UnityEngine.Random.value * totalRarityWeight;
-        InfectionRarity selectedRarity = rarityRoll < firstRarityWeight || secondRarityWeight <= 0f
-            ? firstRarity
-            : secondRarity;
+        InfectionRarity selectedRarity = availableRarities[availableRarities.Count - 1];
+        for (int index = 0; index < availableRarities.Count; index++)
+        {
+            rarityRoll -= rarityWeights[index];
+            if (rarityRoll < 0f)
+            {
+                selectedRarity = availableRarities[index];
+                break;
+            }
+        }
 
         List<InfectionData> candidates = new List<InfectionData>();
         List<float> candidateWeights = new List<float>();
@@ -2916,16 +2984,16 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             float profileWeight = GetPathogenSpawnWeight(entry, difficultyIndex);
+            if (profileWeight <= 0f)
+                continue;
+
             candidates.Add(entry);
             candidateWeights.Add(profileWeight);
             totalProfileWeight += profileWeight;
         }
 
-        if (candidates.Count == 0)
+        if (candidates.Count == 0 || totalProfileWeight <= 0f)
             return null;
-
-        if (totalProfileWeight <= 0f)
-            return candidates[UnityEngine.Random.Range(0, candidates.Count)];
 
         float profileRoll = UnityEngine.Random.value * totalProfileWeight;
         for (int index = 0; index < candidates.Count; index++)
@@ -3863,7 +3931,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             CreatePathogenEntry("Chickenpox", InfectionPathogenType.Viral, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 0f, 10f, 15f, InfectionCorrectResponder.KillerT),
             CreatePathogenEntry("Measles", InfectionPathogenType.Viral, InfectionRarity.Rare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.KillerT),
             CreatePathogenEntry("COVID-19", InfectionPathogenType.Viral, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 0f, 5f, InfectionCorrectResponder.KillerT),
-            CreatePathogenEntry("Dengue", InfectionPathogenType.Viral, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 0f, 5f, InfectionCorrectResponder.KillerT),
+            CreatePathogenEntry("Dengue", InfectionPathogenType.Viral, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 0f, 40f, InfectionCorrectResponder.KillerT),
 
             CreatePathogenEntry("Ringworm", InfectionPathogenType.Fungal, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 50f, 30f, 20f, 15f, InfectionCorrectResponder.WBC),
             CreatePathogenEntry("Athlete's Foot", InfectionPathogenType.Fungal, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 30f, 30f, 20f, 15f, InfectionCorrectResponder.WBC),
@@ -3872,7 +3940,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             CreatePathogenEntry("Histoplasmosis", InfectionPathogenType.Fungal, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
             CreatePathogenEntry("Sporotrichosis", InfectionPathogenType.Fungal, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
             CreatePathogenEntry("Cryptococcus", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC),
-            CreatePathogenEntry("Mucormycosis", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC)
+            CreatePathogenEntry("Mucormycosis", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 40f, InfectionCorrectResponder.WBC)
         };
     }
 

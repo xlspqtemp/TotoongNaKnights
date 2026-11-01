@@ -44,12 +44,16 @@ public sealed class BarrierHealth : MonoBehaviour
             breachAudioSource.Stop();
     }
 
-    /// <summary>Reduces the barrier by the requested amount and updates its breach state.</summary>
+    /// <summary>Reduces the barrier by difficulty-scaled damage and updates its breach state.</summary>
     public void TakeDamage(float amount)
     {
         float previousBarrier = CurrentBarrier;
+        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
+        float damageMultiplier = difficultyStats != null
+            ? Mathf.Max(0f, difficultyStats.barrierDamageMultiplier)
+            : 1f;
         if (amount > 0f)
-            CurrentBarrier = Mathf.Clamp(CurrentBarrier - amount, 0f, MaximumBarrier);
+            CurrentBarrier = Mathf.Clamp(CurrentBarrier - amount * damageMultiplier, 0f, MaximumBarrier);
 
         float appliedDamage = previousBarrier - CurrentBarrier;
         if (appliedDamage > 0f)
