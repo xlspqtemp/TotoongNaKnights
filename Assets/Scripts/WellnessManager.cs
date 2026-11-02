@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.Video;
 
 /// <summary>Owns wellness, connects existing routine and random-event broadcasts, and resolves the run outcome.</summary>
 public class WellnessManager : MonoBehaviour
@@ -131,6 +132,12 @@ public class WellnessManager : MonoBehaviour
     private const float DefaultWellnessShieldDurationSeconds = 15f;
     private const string WellnessShieldIconResourcePath = "UI/Shield Perk";
     private const string WellnessShieldIconName = "Wellness Shield Timer";
+    private const string CriticalWellnessOverlayObjectName = "Critical Wellness Video Overlay";
+    private const string CriticalWellnessOverlayVideoResourcePath = "Critical wellness state";
+    private const string CriticalWellnessOverlayMaterialResourcePath = "UI/Wellness Shield Additive";
+    private const int CriticalWellnessOverlayTextureWidth = 1920;
+    private const int CriticalWellnessOverlayTextureHeight = 1080;
+    private const int TransparentOverlayRenderQueue = 3000;
     private const int OutcomeButtonWidth = 300;
     private const int OutcomeButtonHeight = 76;
     private const float OutcomeButtonFontSize = 28f;
@@ -144,6 +151,11 @@ public class WellnessManager : MonoBehaviour
     private AudioSource wellnessAudioSource;
     private Image wellnessShieldImage;
     private Sprite wellnessShieldSprite;
+    private RawImage criticalWellnessOverlayImage;
+    private VideoPlayer criticalWellnessOverlayVideoPlayer;
+    private RenderTexture criticalWellnessOverlayTexture;
+    private Material criticalWellnessOverlayRuntimeMaterial;
+    private bool criticalWellnessOverlayIsPlaying;
     private Coroutine wellnessShieldCoroutine;
     private GameObject outcomePanel;
     private TextMeshProUGUI outcomeLabel;
@@ -202,6 +214,131 @@ public class WellnessManager : MonoBehaviour
         hudCanvas = GetComponentInParent<Canvas>();
         currentWellness = Mathf.Clamp(currentWellness, 0f, Mathf.Max(1f, maxWellness));
         CreateWellnessShieldIcon();
+        InitializeCriticalWellnessOverlay();
+    }
+
+    private void InitializeCriticalWellnessOverlay()
+    {
+        if (hudCanvas == null)
+        {
+            Debug.LogWarning("[WELLNESS] HUD Canvas was not found; the critical wellness overlay cannot be initialized.", this);
+            return;
+        }
+
+        Transform overlayTransform = hudCanvas.transform.Find(CriticalWellnessOverlayObjectName);
+        if (overlayTransform == null)
+        {
+            Debug.LogWarning($"[WELLNESS] {CriticalWellnessOverlayObjectName} was not found under the HUD Canvas.", this);
+            return;
+        }
+
+        GameObject overlayObject = overlayTransform.gameObject;
+        criticalWellnessOverlayImage = overlayObject.GetComponent<RawImage>();
+        criticalWellnessOverlayVideoPlayer = overlayObject.GetComponent<VideoPlayer>();
+        VideoClip videoClip = Resources.Load<VideoClip>(CriticalWellnessOverlayVideoResourcePath);
+        Material additiveMaterial = Resources.Load<Material>(CriticalWellnessOverlayMaterialResourcePath);
+        if (criticalWellnessOverlayImage == null || criticalWellnessOverlayVideoPlayer == null || videoClip == null || additiveMaterial == null)
+        {
+            Debug.LogWarning("[WELLNESS] Critical wellness overlay components, video clip, or additive material are missing.", this);
+            return;
+        }
+
+        criticalWellnessOverlayTexture = new RenderTexture(
+            CriticalWellnessOverlayTextureWidth,
+            CriticalWellnessOverlayTextureHeight,
+            0,
+            RenderTextureFormat.ARGB32)
+        {
+            name = "CriticalWellnessOverlayRenderTexture",
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp
+        };
+        if (!criticalWellnessOverlayTexture.Create())
+        {
+            Debug.LogError("[WELLNESS] Could not create the critical wellness overlay RenderTexture.", this);
+            Destroy(criticalWellnessOverlayTexture);
+            criticalWellnessOverlayTexture = null;
+            return;
+        }
+
+        criticalWellnessOverlayRuntimeMaterial = new Material(additiveMaterial)
+        {
+            name = additiveMaterial.name + " (Critical Runtime)",
+            renderQueue = TransparentOverlayRenderQueue
+        };
+        criticalWellnessOverlayRuntimeMaterial.SetTexture("_MainTex", criticalWellnessOverlayTexture);
+        criticalWellnessOverlayRuntimeMaterial.SetColor("_Color", Color.white);
+        criticalWellnessOverlayImage.texture = criticalWellnessOverlayTexture;
+        criticalWellnessOverlayImage.material = criticalWellnessOverlayRuntimeMaterial;
+        criticalWellnessOverlayImage.color = Color.white;
+        criticalWellnessOverlayImage.raycastTarget = false;
+        criticalWellnessOverlayImage.enabled = false;
+
+        criticalWellnessOverlayVideoPlayer.Stop();
+        criticalWellnessOverlayVideoPlayer.source = VideoSource.VideoClip;
+        criticalWellnessOverlayVideoPlayer.clip = videoClip;
+        criticalWellnessOverlayVideoPlayer.playOnAwake = false;
+        criticalWellnessOverlayVideoPlayer.waitForFirstFrame = true;
+        criticalWellnessOverlayVideoPlayer.isLooping = true;
+        criticalWellnessOverlayVideoPlayer.skipOnDrop = true;
+        criticalWellnessOverlayVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
+        criticalWellnessOverlayVideoPlayer.targetTexture = criticalWellnessOverlayTexture;
+        criticalWellnessOverlayVideoPlayer.aspectRatio = VideoAspectRatio.Stretch;
+        criticalWellnessOverlayVideoPlayer.timeUpdateMode = VideoTimeUpdateMode.UnscaledGameTime;
+        criticalWellnessOverlayVideoPlayer.audioOutputMode = VideoAudioOutputMode.None;
+        overlayObject.SetActive(true);
+        criticalWellnessOverlayVideoPlayer.Prepare();
+    }
+
+    private void UpdateCriticalWellnessOverlay()
+    {
+        if (criticalWellnessOverlayImage == null || criticalWellnessOverlayVideoPlayer == null)
+            return;
+
+        if (currentWellness < criticalThreshold)
+        {
+            if (criticalWellnessOverlayIsPlaying)
+                return;
+
+            criticalWellnessOverlayImage.enabled = true;
+            criticalWellnessOverlayVideoPlayer.Play();
+            criticalWellnessOverlayIsPlaying = true;
+        }
+        else if (currentWellness > criticalThreshold && criticalWellnessOverlayIsPlaying)
+        {
+            criticalWellnessOverlayVideoPlayer.Stop();
+            criticalWellnessOverlayImage.enabled = false;
+            criticalWellnessOverlayIsPlaying = false;
+        }
+    }
+
+    private void ReleaseCriticalWellnessOverlay()
+    {
+        if (criticalWellnessOverlayVideoPlayer != null)
+        {
+            criticalWellnessOverlayVideoPlayer.Stop();
+            criticalWellnessOverlayVideoPlayer.targetTexture = null;
+        }
+
+        if (criticalWellnessOverlayImage != null)
+        {
+            criticalWellnessOverlayImage.enabled = false;
+            criticalWellnessOverlayImage.texture = null;
+            criticalWellnessOverlayImage.material = null;
+        }
+
+        if (criticalWellnessOverlayTexture != null)
+        {
+            criticalWellnessOverlayTexture.Release();
+            Destroy(criticalWellnessOverlayTexture);
+            criticalWellnessOverlayTexture = null;
+        }
+
+        if (criticalWellnessOverlayRuntimeMaterial != null)
+        {
+            Destroy(criticalWellnessOverlayRuntimeMaterial);
+            criticalWellnessOverlayRuntimeMaterial = null;
+        }
     }
 
     private void OnEnable()
@@ -222,6 +359,7 @@ public class WellnessManager : MonoBehaviour
 
         CreateOutcomePanel();
         PublishWellnessChanged();
+        UpdateCriticalWellnessOverlay();
 
         if (currentWellness <= criticalThreshold)
             EnterCriticalState();
@@ -241,6 +379,7 @@ public class WellnessManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        ReleaseCriticalWellnessOverlay();
         if (wellnessShieldSprite != null)
             Destroy(wellnessShieldSprite);
 
@@ -262,6 +401,7 @@ public class WellnessManager : MonoBehaviour
 
     private void Update()
     {
+        UpdateCriticalWellnessOverlay();
         if (!bacteremiaIsActive || runHasEnded)
             return;
 
