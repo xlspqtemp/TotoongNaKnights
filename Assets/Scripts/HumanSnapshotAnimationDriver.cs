@@ -25,6 +25,9 @@ public sealed class HumanSnapshotAnimationDriver : MonoBehaviour
         if (characterAnimator == null)
             characterAnimator = GetComponent<Animator>();
 
+        if (GetComponent<ToonMaterialSwapper>() == null)
+            gameObject.AddComponent<ToonMaterialSwapper>();
+
         ApplyGameplaySpeed();
     }
 
