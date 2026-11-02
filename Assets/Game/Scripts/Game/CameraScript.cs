@@ -828,6 +828,9 @@ public class CameraScript : MonoBehaviour
     /// </summary>
     public void SelectLayer(int layerNumber)
     {
+        if (layerNumber == selectedLayer)
+            return;
+
         SetSelectedLayer(layerNumber, true);
     }
 
