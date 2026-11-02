@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using TMPro;
 using UnityEngine;
 using UnityEngine.AI;
@@ -45,6 +46,12 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float ContainedDendriticIdleBobSpeed = 2f;
     private const string AntigenIconResourcePath = "UI/Dentritic message pop up";
     private const string AntigenScaleReferenceIconResourcePath = "UI/Blue virus icon";
+    private const string AntigenCollectedTitle = "ANTIGEN COLLECTED";
+    private const string AntigenCollectedSubtitleFormat = "{0} antigen acquired. T-Cell training unlocked.";
+    private const string AntigenAlreadyAcquiredTitle = "ANTIGEN ALREADY ACQUIRED";
+    private const string AntigenAlreadyAcquiredSubtitleFormat = "{0} T-Cell is already unlocked in the Lymphatic Factory.";
+    private const string AdaptiveResponsePopupEnqueueMessageMethodName = "EnqueueMessage";
+    private const BindingFlags AdaptiveResponsePopupMessageMethodFlags = BindingFlags.Instance | BindingFlags.NonPublic;
     private const int NotificationSpritePixelsPerUnit = 1024;
     private const float AntigenNotificationIconScale = 0.65f;
     private const float AntigenIconHeightOffset = 2f;
@@ -1659,13 +1666,25 @@ public sealed class InfectionSpawner : MonoBehaviour
         return true;
     }
 
+    private static Quaternion GetDendriticSpawnRotation(GameObject prefab, Vector3 lookDirection)
+    {
+        lookDirection.y = 0f;
+        Quaternion prefabRotation = prefab.transform.localRotation;
+        return lookDirection.sqrMagnitude > 0.001f
+            ? Quaternion.LookRotation(lookDirection) * prefabRotation
+            : prefabRotation;
+    }
+
     private GameObject SpawnDendriticCell(InfectionMarker infectionTarget, Vector3 spawnPosition, out GameObject destinationObject)
     {
         destinationObject = null;
         if (dendriticPrefab == null || infectionTarget == null)
             return null;
 
-        GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, Quaternion.identity);
+        Vector3 lookDirection = infectionTarget.worldPosition - spawnPosition;
+        Quaternion spawnRotation = GetDendriticSpawnRotation(dendriticPrefab, lookDirection);
+
+        GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, spawnRotation);
         NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
         CirculatoryCellRoute route = dendriticCell.GetComponent<CirculatoryCellRoute>();
         if (agent == null || route == null || !agent.enabled)
@@ -1674,6 +1693,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             Destroy(dendriticCell);
             return null;
         }
+
+        agent.updateRotation = false;
 
         NavMeshQueryFilter filter = new NavMeshQueryFilter
         {
@@ -1775,10 +1796,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         Vector3 spawnPosition = marker.worldPosition + Vector3.right * 1.5f;
         Vector3 lookDirection = marker.worldPosition - spawnPosition;
-        lookDirection.y = 0f;
-        Quaternion spawnRotation = lookDirection.sqrMagnitude > 0.001f
-            ? Quaternion.LookRotation(lookDirection)
-            : Quaternion.identity;
+        Quaternion spawnRotation = GetDendriticSpawnRotation(dendriticPrefab, lookDirection);
 
         GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, spawnRotation);
         marker.containedDendriticCell = dendriticCell;
@@ -1787,6 +1805,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
         if (agent != null && agent.enabled)
         {
+            agent.updateRotation = false;
             if (agent.isOnNavMesh)
             {
                 agent.ResetPath();
@@ -2013,13 +2032,29 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (collection == null)
             return;
 
-        Databank.AddAntigen(collection.antigenName);
-        ShowAntigenPopup(collection.antigenName);
+        bool antigenAlreadyUnlocked = IsAntigenUnlocked(collection.antigenName);
+        if (!antigenAlreadyUnlocked)
+            Databank.AddAntigen(collection.antigenName);
+        ShowAntigenPopup(collection.antigenName, antigenAlreadyUnlocked);
         if (collection.dendriticCell != null)
             Destroy(collection.dendriticCell);
         if (collection.icon != null)
             Destroy(collection.icon);
         pendingAntigenCollections.Remove(collection);
+    }
+
+    private static bool IsAntigenUnlocked(string antigenName)
+    {
+        if (string.IsNullOrWhiteSpace(antigenName) || Databank.UnlockedAntigens == null)
+            return false;
+
+        foreach (string unlockedAntigen in Databank.UnlockedAntigens)
+        {
+            if (string.Equals(unlockedAntigen, antigenName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private void DespawnDendriticCell(DispatchedDendriticCell dispatchedCell)
@@ -3551,7 +3586,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         return text;
     }
 
-    private void ShowAntigenPopup(string virusName)
+    private void ShowAntigenPopup(string virusName, bool antigenAlreadyUnlocked)
     {
         if (adaptiveResponsePopup == null)
             CreateAdaptiveResponsePopup();
@@ -3562,7 +3597,20 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        adaptiveResponsePopup.ShowAntigenCollected(virusName);
+        string resolvedName = string.IsNullOrWhiteSpace(virusName) ? "Virus" : virusName;
+        string title = antigenAlreadyUnlocked ? AntigenAlreadyAcquiredTitle : AntigenCollectedTitle;
+        string subtitle = antigenAlreadyUnlocked
+            ? string.Format(AntigenAlreadyAcquiredSubtitleFormat, resolvedName)
+            : string.Format(AntigenCollectedSubtitleFormat, resolvedName);
+        MethodInfo enqueueMessageMethod = typeof(AdaptiveResponsePopup).GetMethod(
+            AdaptiveResponsePopupEnqueueMessageMethodName, AdaptiveResponsePopupMessageMethodFlags);
+        if (enqueueMessageMethod == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot show the antigen collection banner because its message queue is unavailable.", this);
+            return;
+        }
+
+        enqueueMessageMethod.Invoke(adaptiveResponsePopup, new object[] { title, subtitle });
     }
 
     private void UpdateSelectedInfectionPopup()
