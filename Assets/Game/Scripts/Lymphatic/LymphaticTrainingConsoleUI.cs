@@ -64,9 +64,9 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
             "An adaptive immune lymphocyte that recognizes infected cells and coordinates or carries out a targeted cellular response.",
             "High speed and damage", "Specialized pathogen response", "Longer training time", "Less durable than a macrophage")),
         new TrainingSlot(new UnitDefinition(
-            "B Cell", BCellTrainingSeconds, "Slow", "High", "High",
-            "An adaptive immune lymphocyte that produces antibodies and can form memory responses against recognized pathogens.",
-            "High durability and damage", "Can be specialized to a pathogen", "Slow movement", "Longest training time"))
+            "B Cell", BCellTrainingSeconds, "Slow", "No direct damage", "High",
+            "An adaptive immune lymphocyte that releases antibody drones to tag bacterial and fungal pathogens for opsonization, making them ready for innate-cell destruction.",
+            "Enables opsonization for innate cells", "Can be specialized to a pathogen", "Does not attack pathogens directly", "Longest training time"))
     };
 
     private RectTransform consoleRect;
@@ -366,7 +366,7 @@ public sealed class LymphaticTrainingConsoleUI : MonoBehaviour
         modalPanelRect = CreateModalPanel("VariantSelection", DefaultModalPanelWidth, VariantModalPanelHeight);
         CreateModalHeader(modalPanelRect, "SELECT " + unit.Name.ToUpperInvariant() + " VARIANT", "BACK", CloseModal);
 
-        CreateText("VariantInstructions", modalPanelRect, "Choose a named bacterial or viral profile, then confirm training.", 14f, MutedTextColor,
+        CreateText("VariantInstructions", modalPanelRect, "Choose a pathogen profile; viral variants require a matching infection. B Cells can tag bacterial and fungal targets.", 14f, MutedTextColor,
             TextAlignmentOptions.MidlineLeft, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f),
             new Vector2(32f, -74f), new Vector2(-64f, 28f));
 
