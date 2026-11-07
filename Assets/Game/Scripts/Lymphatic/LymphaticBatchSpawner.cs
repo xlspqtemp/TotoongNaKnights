@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
@@ -10,6 +11,7 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
     private const int UnitsPerBatch = 5;
     private const string TCellUnitName = "T Cell";
     private const string BCellUnitName = "B Cell";
+    private const string MacrophageUnitName = "Macrophage";
     private const float DefaultNavMeshSampleRadius = 2f;
     private const float FormationSpacing = 1.3f;
     private const float MinimumFormationSeparation = 0.9f;
@@ -631,6 +633,18 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             {
                 StopBatchAgents(batch);
                 batch.MarkWorking();
+                if (string.Equals(batch.UnitType, MacrophageUnitName, StringComparison.OrdinalIgnoreCase) && batch.Members != null)
+                {
+                    foreach (GameObject member in batch.Members)
+                    {
+                        if (member == null || !member.activeInHierarchy)
+                            continue;
+
+                        MacrophageScript macrophage = member.GetComponent<MacrophageScript>();
+                        if (macrophage != null)
+                            macrophage.TriggerArrivalAnimation();
+                    }
+                }
             }
             else if (AllAgentsStoppedWithoutPath(batch))
             {

@@ -2311,7 +2311,12 @@ public sealed class InfectionSpawner : MonoBehaviour
                     float multiplier = marker.infection.pathogenType == InfectionPathogenType.Viral
                         ? stats.wbcDamageMultiplierVsVirus
                         : stats.wbcDamageMultiplierVsBacteria;
-                    TryApplyCombatHit(wbc, nearestPathogen, wbcHealth, stats.wbcAttack * multiplier, stats.attackIntervalSeconds);
+                    MacrophageScript macrophage = wbc.GetComponent<MacrophageScript>();
+                    if (TryApplyCombatHit(wbc, nearestPathogen, wbcHealth, stats.wbcAttack * multiplier, stats.attackIntervalSeconds)
+                        && macrophage != null)
+                    {
+                        macrophage.TriggerAttackAnimation();
+                    }
                 }
                 else
                 {
@@ -2450,7 +2455,11 @@ public sealed class InfectionSpawner : MonoBehaviour
                     agent.isStopped = true;
                 }
 
-                TryApplyCombatHit(member, nearestPathogen, memberHealth, attackDamage, stats.attackIntervalSeconds);
+                if (TryApplyCombatHit(member, nearestPathogen, memberHealth, attackDamage, stats.attackIntervalSeconds)
+                    && macrophage != null)
+                {
+                    macrophage.TriggerAttackAnimation();
+                }
             }
         }
     }
@@ -2726,6 +2735,10 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (unit == null)
             return;
 
+        MacrophageScript macrophage = unit.GetComponent<MacrophageScript>();
+        if (macrophage != null && macrophage.enabled)
+            return;
+
         Animator animator = unit.GetComponentInChildren<Animator>(true);
         if (animator == null)
             return;
@@ -2748,6 +2761,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (unit == null)
             return;
 
+        if (unit.GetComponent<MacrophageScript>() != null)
+            return;
+
         Animator animator = unit.GetComponentInChildren<Animator>(true);
         if (animator == null)
             return;
@@ -2765,10 +2781,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (animator == null || animator.runtimeAnimatorController == null)
             return false;
 
-        int parameterHash = Animator.StringToHash(parameterName);
         foreach (AnimatorControllerParameter parameter in animator.parameters)
         {
-            if (parameter.nameHash == parameterHash && parameter.type == parameterType)
+            if (parameter.name == parameterName && parameter.type == parameterType)
                 return true;
         }
 
@@ -2776,18 +2791,19 @@ public sealed class InfectionSpawner : MonoBehaviour
     }
 
 
-    private void TryApplyCombatHit(GameObject attacker, GameObject target, Health attackerHealth, float damage, float attackInterval)
+    private bool TryApplyCombatHit(GameObject attacker, GameObject target, Health attackerHealth, float damage, float attackInterval)
     {
         if (attacker == null || target == null || attackerHealth == null || damage <= 0f || !attackerHealth.TryStartAttack(attackInterval))
-            return;
+            return false;
 
         Health targetHealth = target.GetComponent<Health>();
         if (targetHealth == null || targetHealth.IsDead)
-            return;
+            return false;
 
         targetHealth.TakeDamage(damage);
         if (verboseCombatLogging)
             Debug.Log($"[Combat] {attacker.name} hit {target.name} for {damage:0.##} damage; remaining HP={targetHealth.CurrentHp:0.##}.", this);
+        return true;
     }
 
     private void FadeOutAndDespawnWbcSquad(int squadIndex)
@@ -3018,13 +3034,26 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private static void PlaySquadArrivalAnimation(GameObject unit, bool attackOnArrival)
     {
-        Animator animator = unit.GetComponentInChildren<Animator>();
+        if (unit == null)
+            return;
+
+        MacrophageScript macrophage = unit.GetComponent<MacrophageScript>();
+        if (macrophage != null)
+        {
+            macrophage.TriggerArrivalAnimation();
+            return;
+        }
+
+        Animator animator = unit.GetComponentInChildren<Animator>(true);
         if (animator == null)
             return;
 
-        animator.SetBool("IsMoving", false);
-        if (attackOnArrival)
-            animator.SetTrigger("Attack");
+        if (!animator.enabled)
+            animator.enabled = true;
+        if (HasAnimatorParameter(animator, AnimatorMovingParameter, AnimatorControllerParameterType.Bool))
+            animator.SetBool(AnimatorMovingParameter, false);
+        if (attackOnArrival && HasAnimatorParameter(animator, AnimatorAttackParameter, AnimatorControllerParameterType.Trigger))
+            animator.SetTrigger(AnimatorAttackParameter);
     }
 
     private void DespawnWbcSquad(int squadIndex)

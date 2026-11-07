@@ -1,5 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,6 +32,12 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const int TransparentRenderQueue = 3000;
     private const float FibrinNetSuccessHoldSeconds = 2f;
     private const float FibrinNetFadeOutSeconds = 0.75f;
+    private const int PlateletDroneSwarmSize = 4;
+    private const float PlateletDroneSwarmRadius = 0.8f;
+    private const float PlateletDroneHoverHeight = 0.15f;
+    private const float PlateletDroneTargetHeight = 2.945f;
+    private const string PlateletDronePrefabAssetPath = "Assets/Models/Platelet drone static fixed 3 fbx.prefab";
+    private const string DefaultPlateletDroneWeavingStateName = "Base Layer.Weaving";
     private const float FibrinNetModelScale = 3f;
     private const float FibrinNetModelRotationX = 270f;
     private const float RepairProgressCanvasScale = 0.04f;
@@ -103,7 +112,10 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private Button repairButton;
     private Canvas repairProgressCanvas;
     [SerializeField] private GameObject fibrinNetPrefab;
+    [SerializeField] private GameObject plateletDronePrefab;
+    [SerializeField] private string plateletDroneWeavingStateName = DefaultPlateletDroneWeavingStateName;
     private GameObject fibrinNetInstance;
+    private readonly List<GameObject> plateletDroneInstances = new List<GameObject>();
     private Material[] fibrinNetMaterials;
     private Coroutine fibrinNetCleanupRoutine;
     private Coroutine infectionClearRoutine;
@@ -194,6 +206,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
             repairProgressCanvas.gameObject.SetActive(false);
         }
 
+        ClearPlateletDrone();
         ClearFibrinNet();
     }
 
@@ -490,6 +503,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         breachElapsed = 0f;
         repairProgress = 0f;
         repairAttemptElapsed = 0f;
+        ClearPlateletDrone();
         ClearFibrinNet();
         infectionPoints = MaximumInfectionPoints;
         infectionGrowthTimer = 0f;
@@ -518,6 +532,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         repairAttemptElapsed = 0f;
         floatingCanvas.gameObject.SetActive(false);
         repairProgressCanvas.gameObject.SetActive(true);
+        SpawnPlateletDrone();
         if (fibrinNetInstance == null)
         {
             SpawnFibrinNet();
@@ -536,6 +551,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
         isRepairing = false;
         isWaitingForInfectionClear = true;
+        ClearPlateletDrone();
         breachElapsed = 0f;
         repairProgress = 0f;
         repairAttemptElapsed = 0f;
@@ -655,6 +671,131 @@ public sealed class WoundRepairPoint : MonoBehaviour
         NotifySkinBreachStateChanged();
         infectionClearRoutine = null;
         Debug.Log($"[Wound] Infection cleared at {gameObject.name}. Repair is available again.", this);
+    }
+
+    private void SpawnPlateletDrone()
+    {
+        ClearPlateletDrone();
+
+        GameObject prefabToInstantiate = plateletDronePrefab;
+#if UNITY_EDITOR
+        if (prefabToInstantiate == null)
+        {
+            prefabToInstantiate = AssetDatabase.LoadAssetAtPath<GameObject>(PlateletDronePrefabAssetPath);
+        }
+#endif
+        if (prefabToInstantiate == null)
+        {
+            Debug.LogError($"[WOUND REPAIR] Platelet drone prefab is not assigned and could not be loaded from '{PlateletDronePrefabAssetPath}'.", this);
+            return;
+        }
+
+        for (int droneIndex = 0; droneIndex < PlateletDroneSwarmSize; droneIndex++)
+        {
+            Vector3 radialOffset;
+            switch (droneIndex)
+            {
+                case 0:
+                    radialOffset = transform.right * PlateletDroneSwarmRadius;
+                    break;
+                case 1:
+                    radialOffset = -transform.right * PlateletDroneSwarmRadius;
+                    break;
+                case 2:
+                    radialOffset = transform.forward * PlateletDroneSwarmRadius;
+                    break;
+                default:
+                    radialOffset = -transform.forward * PlateletDroneSwarmRadius;
+                    break;
+            }
+
+            GameObject drone = Instantiate(prefabToInstantiate, transform.position + radialOffset, transform.rotation);
+            drone.name = $"Platelet Drone (Wound Repair {droneIndex + 1})";
+            drone.transform.localScale *= PlateletDroneTargetHeight / GetRendererBoundsHeight(drone);
+            CenterDroneOverWound(drone, radialOffset);
+            SetLayerRecursively(drone, gameObject.layer);
+            ToonMaterialSwapper.ApplyToPlateletDrone(drone, prefabToInstantiate.name);
+            PlayPlateletDroneWeavingAnimation(drone);
+            plateletDroneInstances.Add(drone);
+        }
+    }
+
+    private static float GetRendererBoundsHeight(GameObject drone)
+    {
+        Renderer[] renderers = drone.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+        {
+            return 1f;
+        }
+
+        Bounds combinedBounds = renderers[0].bounds;
+        for (int index = 1; index < renderers.Length; index++)
+        {
+            combinedBounds.Encapsulate(renderers[index].bounds);
+        }
+
+        return Mathf.Max(combinedBounds.size.y, 0.01f);
+    }
+
+    private void CenterDroneOverWound(GameObject drone, Vector3 radialOffset)
+    {
+        Renderer[] renderers = drone.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+        {
+            drone.transform.position = transform.position + radialOffset + Vector3.up * PlateletDroneHoverHeight;
+            return;
+        }
+
+        Bounds combinedBounds = renderers[0].bounds;
+        for (int index = 1; index < renderers.Length; index++)
+        {
+            combinedBounds.Encapsulate(renderers[index].bounds);
+        }
+
+        Vector3 targetBoundsCenter = transform.position + radialOffset +
+            Vector3.up * (PlateletDroneTargetHeight * 0.5f + PlateletDroneHoverHeight);
+        drone.transform.position += targetBoundsCenter - combinedBounds.center;
+    }
+
+    private static void SetLayerRecursively(GameObject target, int layer)
+    {
+        Transform[] childTransforms = target.GetComponentsInChildren<Transform>(true);
+        foreach (Transform childTransform in childTransforms)
+        {
+            childTransform.gameObject.layer = layer;
+        }
+    }
+
+    private void PlayPlateletDroneWeavingAnimation(GameObject drone)
+    {
+        Animator droneAnimator = drone.GetComponentInChildren<Animator>(true);
+        if (droneAnimator == null || droneAnimator.runtimeAnimatorController == null)
+        {
+            return;
+        }
+
+        string stateName = string.IsNullOrWhiteSpace(plateletDroneWeavingStateName)
+            ? DefaultPlateletDroneWeavingStateName
+            : plateletDroneWeavingStateName.Trim();
+        int stateHash = Animator.StringToHash(stateName);
+        if (droneAnimator.HasState(0, stateHash))
+        {
+            droneAnimator.Play(stateHash, 0, 0f);
+            droneAnimator.Update(0f);
+        }
+    }
+
+    private void ClearPlateletDrone()
+    {
+        foreach (GameObject drone in plateletDroneInstances)
+        {
+            if (drone != null)
+            {
+                Destroy(drone);
+            }
+        }
+
+        plateletDroneInstances.Clear();
     }
 
     private void SpawnFibrinNet()
@@ -812,6 +953,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         isRepairing = false;
         repairProgress = 100f;
         repairAttemptElapsed = 0f;
+        ClearPlateletDrone();
         UpdateFibrinNetAlpha(1f);
         if (fibrinNetInstance != null)
         {

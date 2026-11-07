@@ -1,12 +1,14 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-/// <summary>Applies runtime Unity Toon Shader variants to the four system-layer meshes.</summary>
+/// <summary>Applies runtime Unity Toon Shader variants to system-layer meshes and Platelet drone instances.</summary>
 [DisallowMultipleComponent]
 public sealed class ToonMaterialSwapper : MonoBehaviour
 {
     private const string ToonShaderName = "Toon/Toon";
+    private const string PlateletDronePrefabName = "Platelet drone static fixed 3 fbx";
     private const string LayersRootName = "Layers";
     private const int TransparentRenderQueue = (int)RenderQueue.Transparent;
     private const int OpaqueRenderQueue = (int)RenderQueue.Geometry;
@@ -57,8 +59,30 @@ public sealed class ToonMaterialSwapper : MonoBehaviour
         {
             if (runtimeMaterials[index] != null)
                 Destroy(runtimeMaterials[index]);
+
+    
         }
     }
+    /// <summary>Applies the runtime Toon Shader to instances of the Platelet drone static prefab.</summary>
+    public static void ApplyToPlateletDrone(GameObject plateletDrone, string sourcePrefabName)
+    {
+        if (plateletDrone == null ||
+            !string.Equals(sourcePrefabName, PlateletDronePrefabName, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        ToonMaterialSwapper swapper = plateletDrone.GetComponent<ToonMaterialSwapper>();
+        if (swapper == null)
+        {
+            plateletDrone.AddComponent<ToonMaterialSwapper>();
+        }
+        else
+        {
+            swapper.ApplyToRenderers();
+        }
+    }
+
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void ApplyToSystemLayerMeshes()
