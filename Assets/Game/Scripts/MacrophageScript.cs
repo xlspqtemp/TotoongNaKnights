@@ -8,7 +8,10 @@ public class MacrophageScript : MonoBehaviour
     private const string AnimatorAttackParameter = "Attack";
     private const string AnimatorCrossPunchParameter = "CrossPunch";
     private const string AnimatorTauntParameter = "Taunt";
+    private const string LeftHoloarmName = "L holoarm";
+    private const string RightHoloarmName = "R holoarm";
     private const float AnimatorMovementThreshold = 0.1f;
+    private const float HoloarmActiveDurationSeconds = 1f;
 
     public NavMeshAgent agent;
     public Transform target;
@@ -22,6 +25,10 @@ public class MacrophageScript : MonoBehaviour
     private Animator cachedAnimator;
     private RuntimeAnimatorController cachedAnimatorController;
     private AnimatorControllerParameter[] cachedAnimatorParameters;
+    private GameObject leftHoloarm;
+    private GameObject rightHoloarm;
+    private float holoarmDeactivateTime;
+    private bool holoarmsActiveForAttack;
     private int attackAnimationIndex;
 
     /*private void OnTriggerEnter(Collider other)
@@ -39,6 +46,7 @@ public class MacrophageScript : MonoBehaviour
             agent = GetComponent<NavMeshAgent>();
 
         EnsureAnimator();
+        CacheHoloarms();
 
 /*
         InvokeRepeating(nameof(AttackBacteria), 1f, 1f);
@@ -49,9 +57,10 @@ public class MacrophageScript : MonoBehaviour
     private void Update()
     {
         UpdateMovementAnimation();
+        UpdateHoloarmVisibility();
     }
 
-    /// <summary>Triggers the macrophage arrival animation when the Animator has the matching trigger.</summary>
+    /// <summary>Triggers the macrophage jump-attack arrival animation and materializes its holoarms.</summary>
     public void TriggerArrivalAnimation()
     {
         EnsureAnimator();
@@ -60,7 +69,10 @@ public class MacrophageScript : MonoBehaviour
 
         SetMovingAnimation(false);
         if (HasAnimatorParameter(AnimatorArrivalParameter, AnimatorControllerParameterType.Trigger))
+        {
             animator.SetTrigger(AnimatorArrivalParameter);
+            ShowHoloarmsForAttack();
+        }
     }
 
     /// <summary>Triggers three Attack swipes for each CrossPunch animation on this macrophage.</summary>
@@ -75,7 +87,10 @@ public class MacrophageScript : MonoBehaviour
         SetMovingAnimation(false);
         string parameterName = useCrossPunch ? AnimatorCrossPunchParameter : AnimatorAttackParameter;
         if (HasAnimatorParameter(parameterName, AnimatorControllerParameterType.Trigger))
+        {
             animator.SetTrigger(parameterName);
+            ShowHoloarmsForAttack();
+        }
     }
 
     /// <summary>Triggers the macrophage taunt when it clears a pathogen.</summary>
@@ -106,6 +121,49 @@ public class MacrophageScript : MonoBehaviour
         bool isMoving = hasActivePath && !agent.isStopped &&
             planarVelocity.sqrMagnitude > AnimatorMovementThreshold * AnimatorMovementThreshold;
         SetMovingAnimation(isMoving);
+    }
+
+    private void CacheHoloarms()
+    {
+        if (leftHoloarm != null && rightHoloarm != null)
+            return;
+
+        Transform[] childTransforms = GetComponentsInChildren<Transform>(true);
+        foreach (Transform childTransform in childTransforms)
+        {
+            if (leftHoloarm == null && childTransform.name == LeftHoloarmName)
+                leftHoloarm = childTransform.gameObject;
+            else if (rightHoloarm == null && childTransform.name == RightHoloarmName)
+                rightHoloarm = childTransform.gameObject;
+
+            if (leftHoloarm != null && rightHoloarm != null)
+                return;
+        }
+    }
+
+    private void ShowHoloarmsForAttack()
+    {
+        CacheHoloarms();
+        if (leftHoloarm != null)
+            leftHoloarm.SetActive(true);
+        if (rightHoloarm != null)
+            rightHoloarm.SetActive(true);
+
+        holoarmDeactivateTime = Time.time + HoloarmActiveDurationSeconds;
+        holoarmsActiveForAttack = leftHoloarm != null || rightHoloarm != null;
+    }
+
+    private void UpdateHoloarmVisibility()
+    {
+        if (!holoarmsActiveForAttack || Time.time < holoarmDeactivateTime)
+            return;
+
+        if (leftHoloarm != null)
+            leftHoloarm.SetActive(false);
+        if (rightHoloarm != null)
+            rightHoloarm.SetActive(false);
+
+        holoarmsActiveForAttack = false;
     }
 
     private void SetMovingAnimation(bool isMoving)
