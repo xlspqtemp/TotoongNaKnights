@@ -38,7 +38,10 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float InfectionPopupFadeDuration = 0.3f;
     private const string AnimatorMovingParameter = "IsMoving";
     private const string AnimatorAttackParameter = "Attack";
+    private const string AnimatorVictoryParameter = "Victory";
     private const float AnimatorMovementThreshold = 0.1f;
+    private const float KillerTCellAttackDurationSeconds = 1.1f;
+    private const float KillerTCellWarCryDurationSeconds = 2.8333335f;
     private const int MinimumViralContainmentDays = 2;
     private const int MaximumViralContainmentDays = 3;
     private const string TCellUnitName = "T Cell";
@@ -2705,8 +2708,13 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (batch == null)
                 continue;
 
+            InfectionMarker target = batch.TargetInfection;
+            bool isKillerTCellViralClash = target != null && target.infection != null &&
+                target.infection.pathogenType == InfectionPathogenType.Viral &&
+                string.Equals(batch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(batch.PathogenVariant, target.infection.displayName, StringComparison.OrdinalIgnoreCase);
             bool isMovingBatch = batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing ||
-                batch.Status == LymphaticBatchGroup.BatchStatus.Working;
+                (batch.Status == LymphaticBatchGroup.BatchStatus.Working && !isKillerTCellViralClash);
             foreach (GameObject member in batch.Members)
             {
                 if (member == null || !member.activeInHierarchy)
@@ -2715,10 +2723,10 @@ public sealed class InfectionSpawner : MonoBehaviour
                 UpdateUnitMovementAnimation(member, member.GetComponent<NavMeshAgent>(), isMovingBatch);
             }
 
-            InfectionMarker target = batch.TargetInfection;
             bool isBacterialClash = target != null && target.infection != null &&
                 target.infection.pathogenType != InfectionPathogenType.Viral;
-            if (batch.Status == LymphaticBatchGroup.BatchStatus.Working && isBacterialClash &&
+            if (batch.Status == LymphaticBatchGroup.BatchStatus.Working &&
+                (isBacterialClash || isKillerTCellViralClash) &&
                 lymphaticBatchAttackAnimationsTriggered.Add(batch))
             {
                 foreach (GameObject member in batch.Members)
@@ -2774,6 +2782,25 @@ public sealed class InfectionSpawner : MonoBehaviour
             animator.SetBool(AnimatorMovingParameter, false);
         if (HasAnimatorParameter(animator, AnimatorAttackParameter, AnimatorControllerParameterType.Trigger))
             animator.SetTrigger(AnimatorAttackParameter);
+    }
+
+    private static void TriggerUnitVictoryAnimation(GameObject unit)
+    {
+        if (unit == null)
+            return;
+
+        Animator animator = unit.GetComponentInChildren<Animator>(true);
+        if (animator == null)
+            return;
+
+        if (!animator.enabled)
+            animator.enabled = true;
+        if (HasAnimatorParameter(animator, AnimatorMovingParameter, AnimatorControllerParameterType.Bool))
+            animator.SetBool(AnimatorMovingParameter, false);
+        if (HasAnimatorParameter(animator, AnimatorAttackParameter, AnimatorControllerParameterType.Trigger))
+            animator.ResetTrigger(AnimatorAttackParameter);
+        if (HasAnimatorParameter(animator, AnimatorVictoryParameter, AnimatorControllerParameterType.Trigger))
+            animator.SetTrigger(AnimatorVictoryParameter);
     }
 
     private static bool HasAnimatorParameter(Animator animator, string parameterName, AnimatorControllerParameterType parameterType)
@@ -2858,9 +2885,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             }
 
             marker.resolutionPending = true;
-            Debug.Log($"[Resolution] Killer T-Cell induced apoptosis in {marker.infection.displayName}. Infection cleared.", this);
-            ApplyWellnessGainOnResolve(marker);
-            BeginRemovingInfectionMarker(marker);
+            StartCoroutine(ResolveViralInfectionByKillerTCell(marker, sourceBatch));
             return;
         }
 
@@ -2885,6 +2910,28 @@ public sealed class InfectionSpawner : MonoBehaviour
         LogWbcSquadMessage($"WBC contained {marker.infection.displayName}, but the virus is hiding inside cells. Adaptive response is building.", ConsoleLogUI.LogType.Warning);
         ApplyWellnessGainOnResolve(marker);
     }
+
+    private IEnumerator ResolveViralInfectionByKillerTCell(InfectionMarker marker, LymphaticBatchGroup sourceBatch)
+    {
+        yield return GameplaySpeed.WaitForGameplaySeconds(KillerTCellAttackDurationSeconds);
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            yield break;
+
+        foreach (GameObject member in sourceBatch.Members)
+        {
+            if (member != null && member.activeInHierarchy)
+                TriggerUnitVictoryAnimation(member);
+        }
+
+        yield return GameplaySpeed.WaitForGameplaySeconds(KillerTCellWarCryDurationSeconds);
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            yield break;
+
+        Debug.Log($"[Resolution] Killer T-Cell induced apoptosis in {marker.infection.displayName}. Infection cleared.", this);
+        ApplyWellnessGainOnResolve(marker);
+        BeginRemovingInfectionMarker(marker);
+    }
+
 
     private IEnumerator ResolveBacterialInfection(InfectionMarker marker)
     {
