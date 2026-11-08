@@ -2315,7 +2315,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                     if (TryApplyCombatHit(wbc, nearestPathogen, wbcHealth, stats.wbcAttack * multiplier, stats.attackIntervalSeconds)
                         && macrophage != null)
                     {
-                        macrophage.TriggerAttackAnimation();
+                        TriggerMacrophageCombatAnimation(macrophage, nearestPathogen);
                     }
                 }
                 else
@@ -2458,7 +2458,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 if (TryApplyCombatHit(member, nearestPathogen, memberHealth, attackDamage, stats.attackIntervalSeconds)
                     && macrophage != null)
                 {
-                    macrophage.TriggerAttackAnimation();
+                    TriggerMacrophageCombatAnimation(macrophage, nearestPathogen);
                 }
             }
         }
@@ -2804,6 +2804,18 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (verboseCombatLogging)
             Debug.Log($"[Combat] {attacker.name} hit {target.name} for {damage:0.##} damage; remaining HP={targetHealth.CurrentHp:0.##}.", this);
         return true;
+    }
+
+    private static void TriggerMacrophageCombatAnimation(MacrophageScript macrophage, GameObject pathogen)
+    {
+        if (macrophage == null)
+            return;
+
+        Health pathogenHealth = pathogen != null ? pathogen.GetComponent<Health>() : null;
+        if (pathogenHealth != null && pathogenHealth.IsDead)
+            macrophage.TriggerTauntAnimation();
+        else
+            macrophage.TriggerAttackAnimation();
     }
 
     private void FadeOutAndDespawnWbcSquad(int squadIndex)

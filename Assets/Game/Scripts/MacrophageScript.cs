@@ -7,6 +7,7 @@ public class MacrophageScript : MonoBehaviour
     private const string AnimatorArrivalParameter = "Arrival";
     private const string AnimatorAttackParameter = "Attack";
     private const string AnimatorCrossPunchParameter = "CrossPunch";
+    private const string AnimatorTauntParameter = "Taunt";
     private const float AnimatorMovementThreshold = 0.1f;
 
     public NavMeshAgent agent;
@@ -75,6 +76,18 @@ public class MacrophageScript : MonoBehaviour
         string parameterName = useCrossPunch ? AnimatorCrossPunchParameter : AnimatorAttackParameter;
         if (HasAnimatorParameter(parameterName, AnimatorControllerParameterType.Trigger))
             animator.SetTrigger(parameterName);
+    }
+
+    /// <summary>Triggers the macrophage taunt when it clears a pathogen.</summary>
+    public void TriggerTauntAnimation()
+    {
+        EnsureAnimator();
+        if (animator == null)
+            return;
+
+        SetMovingAnimation(false);
+        if (HasAnimatorParameter(AnimatorTauntParameter, AnimatorControllerParameterType.Trigger))
+            animator.SetTrigger(AnimatorTauntParameter);
     }
 
     private void UpdateMovementAnimation()

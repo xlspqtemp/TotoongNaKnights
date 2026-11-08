@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &2458103829604957162
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2188.9006
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.66693
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -572.32697
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -1526964690268444965, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: f76b67e4ac3204a469c372f5faf0c832, type: 2}
+    - target: {fileID: -605401249411505660, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 376402e093dabcd46833361aea025fa3, type: 2}
+    - target: {fileID: -236412653614841994, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 895d4e68227247049921ef61bad8a842, type: 2}
+    - target: {fileID: 919132149155446097, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: m_Name
+      value: Jab Cross
+      objectReference: {fileID: 0}
+    - target: {fileID: 1602564128540957456, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 591c1a45400030848938eb8da00ba2f0, type: 2}
+    - target: {fileID: 7205140776170859923, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 57cc4f2982c81c34295672874d56292e, type: 2}
+    - target: {fileID: 8417361359673230750, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 3f3a225eb5d39494c88654229b0d152d, type: 2}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 8c6f19a5c6385c14097ec7d72984e9ec, type: 3}
