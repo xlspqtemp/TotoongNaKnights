@@ -10,8 +10,17 @@ public class MacrophageScript : MonoBehaviour
     private const string AnimatorTauntParameter = "Taunt";
     private const string LeftHoloarmName = "L holoarm";
     private const string RightHoloarmName = "R holoarm";
+    private const string IntegratedHoloarmName = "Right holoarm";
+    private const string JumpAttackStateName = "Base Layer.Jump attack";
+    private const string MutantSwingStateName = "Base Layer.Mutant swiping";
+    private const string CrossPunchStateName = "Base Layer.Cross punch";
+    private const string TauntStateName = "Base Layer.Taunt";
     private const float AnimatorMovementThreshold = 0.1f;
-    private const float HoloarmActiveDurationSeconds = 1f;
+    private const float HoloarmFallbackDurationSeconds = 4f;
+    private static readonly int JumpAttackStateHash = Animator.StringToHash("Jump attack");
+    private static readonly int MutantSwingStateHash = Animator.StringToHash("Mutant swiping");
+    private static readonly int CrossPunchStateHash = Animator.StringToHash("Cross punch");
+    private static readonly int TauntStateHash = Animator.StringToHash("Taunt");
 
     public NavMeshAgent agent;
     public Transform target;
@@ -27,8 +36,8 @@ public class MacrophageScript : MonoBehaviour
     private AnimatorControllerParameter[] cachedAnimatorParameters;
     private GameObject leftHoloarm;
     private GameObject rightHoloarm;
-    private float holoarmDeactivateTime;
-    private bool holoarmsActiveForAttack;
+    private GameObject integratedHoloarm;
+    private float holoarmFallbackDeactivateTime;
     private int attackAnimationIndex;
 
     /*private void OnTriggerEnter(Collider other)
@@ -71,7 +80,7 @@ public class MacrophageScript : MonoBehaviour
         if (HasAnimatorParameter(AnimatorArrivalParameter, AnimatorControllerParameterType.Trigger))
         {
             animator.SetTrigger(AnimatorArrivalParameter);
-            ShowHoloarmsForAttack();
+            RequestHoloarmsForCombat();
         }
     }
 
@@ -89,7 +98,7 @@ public class MacrophageScript : MonoBehaviour
         if (HasAnimatorParameter(parameterName, AnimatorControllerParameterType.Trigger))
         {
             animator.SetTrigger(parameterName);
-            ShowHoloarmsForAttack();
+            RequestHoloarmsForCombat();
         }
     }
 
@@ -102,7 +111,10 @@ public class MacrophageScript : MonoBehaviour
 
         SetMovingAnimation(false);
         if (HasAnimatorParameter(AnimatorTauntParameter, AnimatorControllerParameterType.Trigger))
+        {
             animator.SetTrigger(AnimatorTauntParameter);
+            RequestHoloarmsForCombat();
+        }
     }
 
     private void UpdateMovementAnimation()
@@ -125,45 +137,64 @@ public class MacrophageScript : MonoBehaviour
 
     private void CacheHoloarms()
     {
-        if (leftHoloarm != null && rightHoloarm != null)
+        if (integratedHoloarm != null || (leftHoloarm != null && rightHoloarm != null))
             return;
 
         Transform[] childTransforms = GetComponentsInChildren<Transform>(true);
         foreach (Transform childTransform in childTransforms)
         {
-            if (leftHoloarm == null && childTransform.name == LeftHoloarmName)
+            if (childTransform.name == LeftHoloarmName)
                 leftHoloarm = childTransform.gameObject;
-            else if (rightHoloarm == null && childTransform.name == RightHoloarmName)
+            else if (childTransform.name == RightHoloarmName)
                 rightHoloarm = childTransform.gameObject;
-
-            if (leftHoloarm != null && rightHoloarm != null)
-                return;
+            else if (childTransform.name == IntegratedHoloarmName)
+                integratedHoloarm = childTransform.gameObject;
         }
     }
 
-    private void ShowHoloarmsForAttack()
+    private void RequestHoloarmsForCombat()
+    {
+        holoarmFallbackDeactivateTime = Time.time + HoloarmFallbackDurationSeconds;
+        SetHoloarmsActive(true);
+    }
+
+    private void SetHoloarmsActive(bool isActive)
     {
         CacheHoloarms();
-        if (leftHoloarm != null)
-            leftHoloarm.SetActive(true);
-        if (rightHoloarm != null)
-            rightHoloarm.SetActive(true);
-
-        holoarmDeactivateTime = Time.time + HoloarmActiveDurationSeconds;
-        holoarmsActiveForAttack = leftHoloarm != null || rightHoloarm != null;
+        if (leftHoloarm != null && leftHoloarm.activeSelf != isActive)
+            leftHoloarm.SetActive(isActive);
+        if (rightHoloarm != null && rightHoloarm.activeSelf != isActive)
+            rightHoloarm.SetActive(isActive);
+        if (integratedHoloarm != null && integratedHoloarm.activeSelf != isActive)
+            integratedHoloarm.SetActive(isActive);
     }
 
     private void UpdateHoloarmVisibility()
     {
-        if (!holoarmsActiveForAttack || Time.time < holoarmDeactivateTime)
+        EnsureAnimator();
+        if (animator == null || animator.layerCount == 0)
+        {
+            SetHoloarmsActive(false);
             return;
+        }
 
-        if (leftHoloarm != null)
-            leftHoloarm.SetActive(false);
-        if (rightHoloarm != null)
-            rightHoloarm.SetActive(false);
+        bool isCombatAnimationActive = IsCombatAnimationState(animator.GetCurrentAnimatorStateInfo(0));
+        if (animator.IsInTransition(0))
+            isCombatAnimationActive |= IsCombatAnimationState(animator.GetNextAnimatorStateInfo(0));
 
-        holoarmsActiveForAttack = false;
+        SetHoloarmsActive(isCombatAnimationActive || Time.time < holoarmFallbackDeactivateTime);
+    }
+
+    private static bool IsCombatAnimationState(AnimatorStateInfo stateInfo)
+    {
+        return stateInfo.shortNameHash == JumpAttackStateHash ||
+            stateInfo.shortNameHash == MutantSwingStateHash ||
+            stateInfo.shortNameHash == CrossPunchStateHash ||
+            stateInfo.shortNameHash == TauntStateHash ||
+            stateInfo.IsName(JumpAttackStateName) ||
+            stateInfo.IsName(MutantSwingStateName) ||
+            stateInfo.IsName(CrossPunchStateName) ||
+            stateInfo.IsName(TauntStateName);
     }
 
     private void SetMovingAnimation(bool isMoving)
