@@ -4075,6 +4075,63 @@ public sealed class InfectionSpawner : MonoBehaviour
         DispatchIdleSquadTo(infectionWorldPosition, marker, marker.bodyPartName);
     }
 
+    /// <summary>Dispatches a ready Neutrophil batch with the selected innate-cell variant identity.</summary>
+    public bool DispatchNeutrophilVariantBatch(int batchId, string variantName, InfectionMarker marker, out string failureReason)
+    {
+        failureReason = null;
+        if (!string.Equals(variantName, "NEUTROPHIL", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(variantName, "EOSINOPHIL", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(variantName, "BASOPHIL", StringComparison.OrdinalIgnoreCase))
+        {
+            failureReason = "The selected Neutrophil variant is not supported.";
+            return false;
+        }
+
+        if (lymphaticBatchSpawner == null)
+            lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        LymphaticBatchGroup batch = lymphaticBatchSpawner != null ? lymphaticBatchSpawner.GetBatch(batchId) : null;
+        if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Ready ||
+            !string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase))
+        {
+            failureReason = "The selected Neutrophil batch is no longer ready to deploy.";
+            return false;
+        }
+
+        if (marker == null || marker.infection == null)
+        {
+            failureReason = "Select a live infection before deploying the Neutrophil batch.";
+            return false;
+        }
+
+        if (!lymphaticBatchSpawner.DispatchBatch(batchId, marker, out failureReason))
+            return false;
+
+        string displayName = GetNeutrophilVariantDisplayName(variantName);
+        foreach (GameObject member in batch.Members)
+        {
+            if (member == null)
+                continue;
+
+            SelectableUnit selectable = member.GetComponent<SelectableUnit>();
+            if (selectable == null)
+                selectable = member.AddComponent<SelectableUnit>();
+            selectable.Initialize(displayName);
+        }
+
+        Debug.Log($"[Lymphatic Dispatch] {displayName} batch {batchId} dispatched to {marker.infection.displayName} using the current Neutrophil prefab.", this);
+        return true;
+    }
+
+    private static string GetNeutrophilVariantDisplayName(string variantName)
+    {
+        if (string.Equals(variantName, "EOSINOPHIL", StringComparison.OrdinalIgnoreCase))
+            return "Eosinophil";
+        if (string.Equals(variantName, "BASOPHIL", StringComparison.OrdinalIgnoreCase))
+            return "Basophil";
+        return "Neutrophil";
+    }
+
+
     public void RequestDispatchToInfection(InfectionMarker marker)
     {
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))

@@ -1,6 +1,7 @@
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 /// <summary>Displays ten batch slots and the command controls for the selected lymphatic batch.</summary>
@@ -71,6 +72,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private GameObject neutrophilVariantPanelRoot;
     private readonly Image[] neutrophilVariantRowBackgrounds = new Image[NeutrophilVariantCount];
     private int selectedNeutrophilVariantIndex = -1;
+    private string selectedNeutrophilVariantName;
     private TextMeshProUGUI selectionHintLabel;
     private Button followButton;
     private Button abortButton;
@@ -270,7 +272,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         rowButton.transition = Selectable.Transition.ColorTint;
         rowButton.colors = CreateButtonColors(ActiveSlotColor, SelectedSlotColor);
         int rowIndex = index;
-        rowButton.onClick.AddListener(() => SelectNeutrophilVariantShell(rowIndex));
+        rowButton.onClick.AddListener(() => DeployNeutrophilVariant(rowIndex));
         neutrophilVariantRowBackgrounds[index] = rowBackground;
 
         GameObject iconObject = new GameObject("VariantIcon_" + option.Name,
@@ -303,6 +305,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             return;
 
         selectedNeutrophilVariantIndex = -1;
+        selectedNeutrophilVariantName = null;
         RefreshNeutrophilVariantSelection();
         panelCanvasGroup.interactable = false;
         panelCanvasGroup.blocksRaycasts = false;
@@ -317,6 +320,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
         selectedNeutrophilVariantIndex = -1;
         selectedBatchId = -1;
+        selectedNeutrophilVariantName = null;
         awaitingTargetSelection = false;
         if (panelCanvasGroup != null)
         {
@@ -333,6 +337,47 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
         selectedNeutrophilVariantIndex = index;
         RefreshNeutrophilVariantSelection();
+    }
+
+    private void DeployNeutrophilVariant(int index)
+    {
+        if (!layerAvailable || index < 0 || index >= NeutrophilVariantOptions.Length || selectedBatchId < 1)
+            return;
+
+        LymphaticBatchGroup batch = batchSpawner != null ? batchSpawner.GetBatch(selectedBatchId) : null;
+        if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Ready ||
+            !string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        NeutrophilVariantOption option = NeutrophilVariantOptions[index];
+        selectedNeutrophilVariantIndex = index;
+        selectedNeutrophilVariantName = option.Name;
+        neutrophilVariantPanelRoot.SetActive(false);
+        panelCanvasGroup.interactable = layerAvailable;
+        panelCanvasGroup.blocksRaycasts = layerAvailable;
+        awaitingTargetSelection = true;
+        if (selectionHintLabel != null)
+            selectionHintLabel.text = option.Name + " selected — choose an infection to deploy.";
+        RefreshSlots();
+    }
+
+    private void HandleBatchSlotPointerClick(int slotIndex, BaseEventData eventData)
+    {
+        PointerEventData pointerEvent = eventData as PointerEventData;
+        if (!layerAvailable || pointerEvent == null || pointerEvent.button != PointerEventData.InputButton.Right)
+            return;
+
+        int batchId = slotIndex + 1;
+        LymphaticBatchGroup batch = batchSpawner != null ? batchSpawner.GetBatch(batchId) : null;
+        if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Ready ||
+            !string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        selectedBatchId = batchId;
+        awaitingTargetSelection = false;
+        selectedNeutrophilVariantName = null;
+        ShowNeutrophilVariantPanel();
+        RefreshSlots();
     }
 
     private void RefreshNeutrophilVariantSelection()
@@ -371,6 +416,10 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         button.colors = slotColors;
         int slotIndex = index;
         button.onClick.AddListener(() => SelectSlot(slotIndex));
+        EventTrigger pointerClickTrigger = iconObject.AddComponent<EventTrigger>();
+        EventTrigger.Entry pointerClickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+        pointerClickEntry.callback.AddListener(eventData => HandleBatchSlotPointerClick(slotIndex, eventData));
+        pointerClickTrigger.triggers.Add(pointerClickEntry);
 
         TextMeshProUGUI travelLabel = CreateText("TravelTime_" + (index + 1), panelRect, string.Empty, 9f, MobilizingColor,
             TextAlignmentOptions.Center, new Vector2(anchorX, 0.5f), new Vector2(anchorX, 0.5f), new Vector2(0.5f, 0f),
@@ -409,6 +458,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         if (neutrophilVariantPanelRoot != null)
             neutrophilVariantPanelRoot.SetActive(false);
         selectedNeutrophilVariantIndex = -1;
+        selectedNeutrophilVariantName = null;
         awaitingTargetSelection = false;
         selectedBatchId = -1;
         if (isFollowingBatch && cameraScript != null)
@@ -485,7 +535,9 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
         if (selectionHintLabel != null)
         {
-            if (awaitingTargetSelection)
+            if (awaitingTargetSelection && !string.IsNullOrEmpty(selectedNeutrophilVariantName))
+                selectionHintLabel.text = selectedNeutrophilVariantName + " selected — choose an infection icon or pending infection.";
+            else if (awaitingTargetSelection)
                 selectionHintLabel.text = "Batch " + selectedBatchId + " selected — choose an infection icon or pending infection.";
             else if (selectedBatch != null && selectedBatch.Status != LymphaticBatchGroup.BatchStatus.Ready)
                 selectionHintLabel.text = "Batch " + selectedBatchId + " selected — follow, abort target, or destroy.";
@@ -507,15 +559,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             return;
 
         selectedBatchId = batchId;
-        if (batch.Status == LymphaticBatchGroup.BatchStatus.Ready &&
-            string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase))
-        {
-            awaitingTargetSelection = false;
-            ShowNeutrophilVariantPanel();
-            RefreshSlots();
-            return;
-        }
-
+        selectedNeutrophilVariantName = null;
         awaitingTargetSelection = batch.Status == LymphaticBatchGroup.BatchStatus.Ready;
         RefreshSlots();
     }
@@ -526,7 +570,14 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             !awaitingTargetSelection || selectedBatchId < 1 || batchSpawner == null || marker == null)
             return;
 
-        if (!batchSpawner.DispatchBatch(selectedBatchId, marker, out string failureReason))
+        string failureReason = null;
+        bool dispatched;
+        if (selectedNeutrophilVariantName != null)
+            dispatched = infectionSpawner != null && infectionSpawner.DispatchNeutrophilVariantBatch(selectedBatchId, selectedNeutrophilVariantName, marker, out failureReason);
+        else
+            dispatched = batchSpawner.DispatchBatch(selectedBatchId, marker, out failureReason);
+
+        if (!dispatched)
         {
             if (ConsoleLogUI.Instance != null)
             {
@@ -538,9 +589,16 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             return;
         }
 
+        string deployedVariant = selectedNeutrophilVariantName;
         awaitingTargetSelection = false;
+        selectedNeutrophilVariantName = null;
         if (ConsoleLogUI.Instance != null)
-            ConsoleLogUI.Instance.Log("Batch " + selectedBatchId + " mobilizing to " + marker.infection.displayName + ".", ConsoleLogUI.LogType.Success);
+        {
+            string deploymentMessage = deployedVariant == null
+                ? "Batch " + selectedBatchId + " mobilizing to " + marker.infection.displayName + "."
+                : deployedVariant + " batch " + selectedBatchId + " mobilizing to " + marker.infection.displayName + ".";
+            ConsoleLogUI.Instance.Log(deploymentMessage, ConsoleLogUI.LogType.Success);
+        }
         RefreshSlots();
     }
 
