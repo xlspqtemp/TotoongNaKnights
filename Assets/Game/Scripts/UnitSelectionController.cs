@@ -264,12 +264,18 @@ public sealed class UnitSelectionController : MonoBehaviour
         MacrophageScript macrophage = selectedUnit != null
             ? selectedUnit.GetComponentInParent<MacrophageScript>()
             : (selectedHealth != null ? selectedHealth.GetComponentInParent<MacrophageScript>() : null);
+        KillerTCellCombatStats killerTCell = selectedUnit != null
+            ? selectedUnit.GetComponentInParent<KillerTCellCombatStats>()
+            : (selectedHealth != null ? selectedHealth.GetComponentInParent<KillerTCellCombatStats>() : null);
         bool isMacrophage = !isPathogen && macrophage != null;
+        bool isTCell = !isPathogen && (killerTCell != null || displayName.StartsWith("T Cell", System.StringComparison.OrdinalIgnoreCase));
         bool isWbc = !isPathogen && string.Equals(displayName, "WBC", System.StringComparison.OrdinalIgnoreCase);
         if (isPathogen)
             attack = selectedHealth.PathogenType == InfectionPathogenType.Viral ? stats.virusAttack : stats.bacteriaAttack;
         else if (isMacrophage)
             attack = macrophage.damage;
+        else if (isTCell)
+            attack = killerTCell != null ? killerTCell.AttackDamage : 0f;
         else
             attack = isWbc ? stats.wbcAttack : 0f;
         lines.Add($"Attack: {attack:0.##}");
