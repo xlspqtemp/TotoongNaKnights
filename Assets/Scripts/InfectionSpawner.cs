@@ -46,6 +46,13 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const int MaximumViralContainmentDays = 3;
     private const string TCellUnitName = "T Cell";
     private const string BCellUnitName = "B Cell";
+    private const string NeutrophilUnitName = "Neutrophil";
+    private const string NeutrophilDisplayName = "Neutrophil";
+    private const string EosinophilDisplayName = "Eosinophil";
+    private const string BasophilDisplayName = "Basophil";
+    private const string NeutrophilVariantName = "NEUTROPHIL";
+    private const string EosinophilVariantName = "EOSINOPHIL";
+    private const string BasophilVariantName = "BASOPHIL";
     private const float AntibodyDroneFlightDurationSeconds = 1.2f;
     private const float AntibodyDroneDiameter = 0.18f;
     private static readonly Color AntibodyGoldColor = new Color(1f, 0.72f, 0.12f, 1f);
@@ -76,6 +83,15 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float NormalDifficultyWbcHp = 100f;
     private const float NormalDifficultyWbcAttack = 10f;
     private const float MacrophageAttackRange = 2f;
+    private const float NeutrophilBaseDamage = 10f;
+    private const float EosinophilBaseDamage = 15f;
+    private const float BasophilBaseDamage = 12f;
+    private const float InnateVariantSpecialistDamageMultiplier = 3f;
+    private static readonly Color NeutrophilBaseColor = new Color(0.906f, 0.877f, 0.857f, 1f);
+    private static readonly Color EosinophilTint = new Color(1f, 0.28f, 0.14f, 1f);
+    private static readonly Color BasophilTint = new Color(0.48f, 0.32f, 1f, 1f);
+    private static readonly string[] ParasiteCategoryKeywords = { "parasite", "parasitic", "malaria", "protozoa", "helminth", "worm" };
+    private static readonly string[] AllergenCategoryKeywords = { "allergen", "allergy", "pollen", "dust mite", "pet dander", "ragweed" };
     private const float OxygenBuffMovementMultiplier = 2f;
     private const float OxygenBuffAgentRefreshIntervalSeconds = 0.2f;
     private static readonly InfectionRarity[] GenericPathogenRarities =
@@ -2435,6 +2451,19 @@ public sealed class InfectionSpawner : MonoBehaviour
                     float macrophageDamageScale = Mathf.Max(0f, stats.wbcAttack) / NormalDifficultyWbcAttack;
                     attackDamage = baseMacrophageDamage * macrophageDamageScale;
                 }
+                else
+                {
+                    NeutrophilScript neutrophil = member.GetComponent<NeutrophilScript>();
+                    if (neutrophil != null)
+                    {
+                        string neutrophilVariant = GetNeutrophilVariantName(member);
+                        attackDamage = Mathf.Max(0f, neutrophil.damage);
+                        if (string.Equals(neutrophilVariant, EosinophilVariantName, StringComparison.OrdinalIgnoreCase) && IsParasiteInfection(marker.infection))
+                            attackDamage *= InnateVariantSpecialistDamageMultiplier;
+                        else if (string.Equals(neutrophilVariant, BasophilVariantName, StringComparison.OrdinalIgnoreCase) && IsAllergenInfection(marker.infection))
+                            attackDamage *= InnateVariantSpecialistDamageMultiplier;
+                    }
+                }
 
                 GameObject nearestPathogen = FindNearestLivingUnit(activeBatchPathogens, member.transform.position, out float distance);
                 if (nearestPathogen == null || distance > combatDetectionRange)
@@ -4079,9 +4108,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     public bool DispatchNeutrophilVariantBatch(int batchId, string variantName, InfectionMarker marker, out string failureReason)
     {
         failureReason = null;
-        if (!string.Equals(variantName, "NEUTROPHIL", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(variantName, "EOSINOPHIL", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(variantName, "BASOPHIL", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(variantName, NeutrophilVariantName, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(variantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(variantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
         {
             failureReason = "The selected Neutrophil variant is not supported.";
             return false;
@@ -4091,7 +4120,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
         LymphaticBatchGroup batch = lymphaticBatchSpawner != null ? lymphaticBatchSpawner.GetBatch(batchId) : null;
         if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Ready ||
-            !string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(batch.UnitType, NeutrophilUnitName, StringComparison.OrdinalIgnoreCase))
         {
             failureReason = "The selected Neutrophil batch is no longer ready to deploy.";
             return false;
@@ -4112,24 +4141,126 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (member == null)
                 continue;
 
+            ConfigureNeutrophilVariant(member, variantName);
             SelectableUnit selectable = member.GetComponent<SelectableUnit>();
             if (selectable == null)
                 selectable = member.AddComponent<SelectableUnit>();
             selectable.Initialize(displayName);
         }
 
-        Debug.Log($"[Lymphatic Dispatch] {displayName} batch {batchId} dispatched to {marker.infection.displayName} using the current Neutrophil prefab.", this);
+        Debug.Log($"[Lymphatic Dispatch] {displayName} batch {batchId} dispatched to {marker.infection.displayName} with base damage {GetNeutrophilVariantDamage(variantName):0.##}.", this);
         return true;
+    }
+
+    private static void ConfigureNeutrophilVariant(GameObject unit, string variantName)
+    {
+        if (unit == null)
+            return;
+
+        NeutrophilScript neutrophil = unit.GetComponent<NeutrophilScript>();
+        if (neutrophil != null)
+            neutrophil.damage = GetNeutrophilVariantDamage(variantName);
+
+        if (string.Equals(variantName, NeutrophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        Color tint = GetNeutrophilVariantTint(variantName);
+        Renderer[] renderers = unit.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null)
+                continue;
+
+            foreach (Material material in renderer.materials)
+            {
+                if (material == null)
+                    continue;
+
+                if (material.HasProperty(BaseColorPropertyId))
+                    material.SetColor(BaseColorPropertyId, tint);
+                if (material.HasProperty(ColorPropertyId))
+                    material.SetColor(ColorPropertyId, tint);
+                SetTintIfSupported(material, "_1st_ShadeColor", ScaleTint(tint, 0.62f));
+                SetTintIfSupported(material, "_2nd_ShadeColor", ScaleTint(tint, 0.36f));
+                SetTintIfSupported(material, "_RimLightColor", tint);
+            }
+        }
+    }
+
+    private static void SetTintIfSupported(Material material, string propertyName, Color tint)
+    {
+        if (material.HasProperty(propertyName))
+            material.SetColor(propertyName, tint);
+    }
+
+    private static Color ScaleTint(Color tint, float scale)
+    {
+        return new Color(tint.r * scale, tint.g * scale, tint.b * scale, tint.a);
+    }
+
+    private static float GetNeutrophilVariantDamage(string variantName)
+    {
+        if (string.Equals(variantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return EosinophilBaseDamage;
+        if (string.Equals(variantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return BasophilBaseDamage;
+        return NeutrophilBaseDamage;
+    }
+
+    private static Color GetNeutrophilVariantTint(string variantName)
+    {
+        if (string.Equals(variantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return EosinophilTint;
+        if (string.Equals(variantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return BasophilTint;
+        return NeutrophilBaseColor;
+    }
+
+    private static string GetNeutrophilVariantName(GameObject unit)
+    {
+        SelectableUnit selectable = unit != null ? unit.GetComponent<SelectableUnit>() : null;
+        string displayName = selectable != null ? selectable.DisplayName : unit != null ? unit.name : string.Empty;
+        if (displayName.IndexOf(EosinophilVariantName, StringComparison.OrdinalIgnoreCase) >= 0)
+            return EosinophilVariantName;
+        if (displayName.IndexOf(BasophilVariantName, StringComparison.OrdinalIgnoreCase) >= 0)
+            return BasophilVariantName;
+        return NeutrophilVariantName;
+    }
+
+    private static bool IsParasiteInfection(InfectionData infection)
+    {
+        return InfectionMatchesCategory(infection, ParasiteCategoryKeywords);
+    }
+
+    private static bool IsAllergenInfection(InfectionData infection)
+    {
+        return InfectionMatchesCategory(infection, AllergenCategoryKeywords);
+    }
+
+    private static bool InfectionMatchesCategory(InfectionData infection, string[] categoryKeywords)
+    {
+        if (infection == null || categoryKeywords == null)
+            return false;
+
+        string searchableInfection = string.Join(" ", infection.displayName, infection.pathogenDatabaseName, infection.entryCause);
+        foreach (string keyword in categoryKeywords)
+        {
+            if (!string.IsNullOrWhiteSpace(keyword) && searchableInfection.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        }
+
+        return false;
     }
 
     private static string GetNeutrophilVariantDisplayName(string variantName)
     {
-        if (string.Equals(variantName, "EOSINOPHIL", StringComparison.OrdinalIgnoreCase))
-            return "Eosinophil";
-        if (string.Equals(variantName, "BASOPHIL", StringComparison.OrdinalIgnoreCase))
-            return "Basophil";
-        return "Neutrophil";
+        if (string.Equals(variantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return EosinophilDisplayName;
+        if (string.Equals(variantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return BasophilDisplayName;
+        return NeutrophilDisplayName;
     }
+
 
 
     public void RequestDispatchToInfection(InfectionMarker marker)
