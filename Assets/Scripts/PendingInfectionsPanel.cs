@@ -14,6 +14,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     {
         Pending,
         Ongoing,
+        Tagged,
         Contained,
         Resolved,
         Failed
@@ -42,6 +43,7 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private static readonly Color DefaultRowColor = new Color(0.055f, 0.09f, 0.115f, 0.98f);
     private static readonly Color OngoingRowColor = new Color(0.035f, 0.24f, 0.29f, 0.98f);
     private static readonly Color AccentColor = new Color(0.18f, 0.83f, 0.78f, 1f);
+    private static readonly Color TaggedColor = new Color(1f, 0.843f, 0f, 1f);
     private static readonly Color BacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
     private static readonly Color ViralColor = new Color(0.2f, 0.55f, 1f, 1f);
     private static readonly Color FungalColor = new Color(0.3f, 0.85f, 0.35f, 1f);
@@ -323,9 +325,11 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 ApplyRowStatusVisuals(row);
             }
 
-            SetRowStatus(row, marker.isContained
-                ? RowStatus.Contained
-                : infectionSpawner.IsSquadDispatchedTo(marker) ? RowStatus.Ongoing : RowStatus.Pending);
+            SetRowStatus(row, marker.isTagged
+                ? RowStatus.Tagged
+                : marker.isContained
+                    ? RowStatus.Contained
+                    : infectionSpawner.IsSquadDispatchedTo(marker) ? RowStatus.Ongoing : RowStatus.Pending);
         }
 
         foreach (RowView row in rows)
@@ -686,6 +690,12 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 row.backgroundImage.color = OngoingRowColor;
                 row.swatchImage.color = pathogenColor;
                 row.statusLabel.color = AccentColor;
+                break;
+            case RowStatus.Tagged:
+                row.statusLabel.text = "TAGGED";
+                row.backgroundImage.color = DefaultRowColor;
+                row.swatchImage.color = TaggedColor;
+                row.statusLabel.color = TaggedColor;
                 break;
             case RowStatus.Contained:
                 row.statusLabel.text = "CONTAINED";
