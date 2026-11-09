@@ -24,6 +24,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     [SerializeField] private CameraScript cameraScript;
     [SerializeField] private Camera gameplayCamera;
     [SerializeField] private GameObject notificationPrefab;
+    private InfectionIntelPopup infectionIntelPopup;
     private LymphaticBatchConsoleUI batchConsoleUI;
     public Sprite fungalIcon;
     [SerializeField, HideInInspector] private Texture2D bacteriaSprite;
@@ -82,6 +83,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     private void Awake()
     {
         ResolveReferences();
+        EnsureIntelPopup();
     }
 
     private void OnEnable()
@@ -92,6 +94,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         cameraScript = null;
         gameplayCamera = null;
         ResolveReferences();
+        EnsureIntelPopup();
         SyncNotifications();
     }
 
@@ -111,6 +114,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         cameraScript = null;
         gameplayCamera = null;
         ResolveReferences();
+        EnsureIntelPopup();
         SyncNotifications();
     }
 
@@ -121,8 +125,16 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             return;
 
         SyncNotifications();
-        if (IsCirculatoryLayerActive() && IsTargetPickerActive() && GameplaySpeed.DeltaTime > 0f)
+        if (IsCirculatoryLayerActive())
             HandlePickerClick();
+    }
+
+    private void EnsureIntelPopup()
+    {
+        if (infectionIntelPopup == null)
+            infectionIntelPopup = GetComponent<InfectionIntelPopup>();
+        if (infectionIntelPopup == null)
+            infectionIntelPopup = gameObject.AddComponent<InfectionIntelPopup>();
     }
 
     private void SyncNotifications()
@@ -131,7 +143,6 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             return;
 
         bool circulatoryActive = IsCirculatoryLayerActive();
-        bool targetPickerActive = IsTargetPickerActive();
         IReadOnlyList<InfectionSpawner.InfectionMarker> activeInfections = infectionSpawner.ActiveInfections;
         foreach (NotificationState state in notifications.Values)
             state.desired = false;
@@ -167,7 +178,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             if (!state.desired)
                 state.fadingOut = true;
 
-            UpdateNotification(state, circulatoryActive, targetPickerActive, GameplaySpeed.DeltaTime);
+            UpdateNotification(state, circulatoryActive, GameplaySpeed.DeltaTime);
             if (state.fadingOut && state.alpha <= 0f)
             {
                 if (state.gameObject != null)
@@ -354,7 +365,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             spriteRenderer.color = MutatedColor;
     }
 
-    private void UpdateNotification(NotificationState state, bool circulatoryActive, bool targetPickerActive, float gameplayDeltaTime)
+    private void UpdateNotification(NotificationState state, bool circulatoryActive, float gameplayDeltaTime)
     {
         if (state.gameObject == null || state.spriteRenderer == null || state.boxCollider == null)
             return;
@@ -365,7 +376,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             state.alpha = fadeDuration > 0f ? Mathf.MoveTowards(state.alpha, 1f, gameplayDeltaTime / fadeDuration) : 1f;
 
         state.spriteRenderer.enabled = circulatoryActive;
-        state.boxCollider.enabled = circulatoryActive && targetPickerActive && !state.fadingOut;
+        state.boxCollider.enabled = circulatoryActive && !state.fadingOut;
         Color displayColor = state.marker != null && state.marker.wasBarrierMutated
             ? MutatedColor
             : state.marker != null && state.marker.infection != null &&
@@ -486,8 +497,17 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             }
         }
 
-        if (nearestNotification != null && infectionSpawner != null && IsTargetPickerActive())
+        if (nearestNotification == null || infectionSpawner == null)
+            return;
+
+        if (IsTargetPickerActive())
+        {
             infectionSpawner.NotifyInfectionTargetClicked(nearestNotification.marker);
+            return;
+        }
+
+        EnsureIntelPopup();
+        infectionIntelPopup.Show(nearestNotification.marker, infectionSpawner);
     }
 
     private bool IsTargetPickerActive()
