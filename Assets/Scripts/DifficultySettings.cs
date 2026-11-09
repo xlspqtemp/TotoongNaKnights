@@ -96,9 +96,54 @@ public static class DifficultySettings
         new[] { 20f, 30f, 30f, 20f },
         new[] { 5f, 5f, 10f, 80f }
     };
+    private static readonly string[] AllergenProfileNames = { "Pollen", "Dust Mites", "Pet Dander", "Mold Spores", "Peanut" };
+    private static readonly float[][] AllergenProfileWeightsByDifficulty =
+    {
+        new[] { 60f, 30f, 10f, 0f, 0f },
+        new[] { 40f, 30f, 20f, 10f, 0f },
+        new[] { 30f, 30f, 20f, 15f, 5f },
+        new[] { 20f, 20f, 20f, 20f, 20f }
+    };
+    private static readonly string[] ParasiteProfileNames = { "Pinworm", "Giardia", "Tapeworm", "Ascaris", "Malaria" };
+    private static readonly float[][] ParasiteProfileWeightsByDifficulty =
+    {
+        new[] { 60f, 30f, 10f, 0f, 0f },
+        new[] { 40f, 30f, 20f, 10f, 0f },
+        new[] { 30f, 30f, 20f, 15f, 5f },
+        new[] { 20f, 20f, 20f, 20f, 20f }
+    };
     private static DifficultyStats[] configuredPresets;
 
     public static int SelectedDifficultyIndex => Mathf.Clamp(PlayerPrefs.GetInt(SelectedPresetKey, 1), 0, DifficultyPresetCount - 1);
+
+    /// <summary>Returns the configured per-difficulty selection weight for a named Allergen or Parasite profile.</summary>
+    public static float GetNewPathogenProfileWeightPercent(InfectionPathogenType pathogenType, string profileName, int difficultyIndex)
+    {
+        if (string.IsNullOrWhiteSpace(profileName))
+            return 0f;
+
+        int clampedDifficultyIndex = Mathf.Clamp(difficultyIndex, 0, DifficultyPresetCount - 1);
+        switch (pathogenType)
+        {
+            case InfectionPathogenType.Allergen:
+                return GetProfileWeightPercent(profileName, AllergenProfileNames, AllergenProfileWeightsByDifficulty[clampedDifficultyIndex]);
+            case InfectionPathogenType.Parasite:
+                return GetProfileWeightPercent(profileName, ParasiteProfileNames, ParasiteProfileWeightsByDifficulty[clampedDifficultyIndex]);
+            default:
+                return 0f;
+        }
+    }
+
+    private static float GetProfileWeightPercent(string profileName, string[] profileNames, float[] weights)
+    {
+        for (int index = 0; index < profileNames.Length; index++)
+        {
+            if (string.Equals(profileName, profileNames[index], StringComparison.OrdinalIgnoreCase))
+                return weights[index];
+        }
+
+        return 0f;
+    }
 
     public static DifficultyStats CurrentStats
     {

@@ -96,6 +96,14 @@ public sealed class InfectionSpawner : MonoBehaviour
     private static readonly string[] AllergenCategoryKeywords = { "allergen", "allergy", "pollen", "dust mite", "pet dander", "ragweed" };
     private const float OxygenBuffMovementMultiplier = 2f;
     private const float OxygenBuffAgentRefreshIntervalSeconds = 0.2f;
+    private static readonly InfectionPathogenType[] SelectablePathogenTypes =
+    {
+        InfectionPathogenType.Bacterial,
+        InfectionPathogenType.Viral,
+        InfectionPathogenType.Fungal,
+        InfectionPathogenType.Allergen,
+        InfectionPathogenType.Parasite
+    };
     private static readonly InfectionRarity[] GenericPathogenRarities =
     {
         InfectionRarity.Common,
@@ -3579,8 +3587,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             return false;
 
         infection = CloneInfectionData(selectedProfile);
+        bool usesDifficultyWeightedNewPathogen = infection.pathogenType == InfectionPathogenType.Allergen ||
+            infection.pathogenType == InfectionPathogenType.Parasite;
+        if (usesDifficultyWeightedNewPathogen)
+            isGeneric = false;
         infection.isGeneric = isGeneric;
-        if (isGeneric)
+        if (infection.isGeneric)
             infection.displayName = GetGenericInfectionDisplayName(infection.pathogenType);
         return true;
     }
@@ -3596,12 +3608,74 @@ public sealed class InfectionSpawner : MonoBehaviour
         InfectionRarity[] selectableRarities = selectGenericPool
             ? GenericPathogenRarities
             : NamedPathogenRarities;
+        List<InfectionPathogenType> availableTypes = new List<InfectionPathogenType>();
+        foreach (InfectionPathogenType pathogenType in SelectablePathogenTypes)
+        {
+            if (HasWeightedProfilesForType(validEntries, difficultyStats, pathogenType, selectableRarities, difficultyIndex))
+                availableTypes.Add(pathogenType);
+        }
+
+        if (availableTypes.Count == 0)
+            return null;
+
+        InfectionPathogenType selectedType = availableTypes[UnityEngine.Random.Range(0, availableTypes.Count)];
+        return SelectWeightedPathogenProfile(selectedType, validEntries, difficultyStats, selectableRarities, difficultyIndex);
+    }
+
+    private static bool HasWeightedProfilesForType(List<InfectionData> validEntries, DifficultyStats difficultyStats,
+        InfectionPathogenType pathogenType, InfectionRarity[] selectableRarities, int difficultyIndex)
+    {
+        foreach (InfectionData entry in validEntries)
+        {
+            if (entry.pathogenType == pathogenType &&
+                DifficultySettings.GetNewPathogenProfileWeightPercent(pathogenType, entry.pathogenDatabaseName, difficultyIndex) > 0f)
+            {
+                return true;
+            }
+        }
+
+        foreach (InfectionRarity rarity in selectableRarities)
+        {
+            if (GetAvailableRarityWeight(validEntries, difficultyStats, pathogenType, rarity, difficultyIndex) > 0f)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static InfectionData SelectWeightedPathogenProfile(InfectionPathogenType pathogenType,
+        List<InfectionData> validEntries, DifficultyStats difficultyStats, InfectionRarity[] selectableRarities, int difficultyIndex)
+    {
+        List<InfectionData> candidates = new List<InfectionData>();
+        List<float> candidateWeights = new List<float>();
+        float totalProfileWeight = 0f;
+
+        if (pathogenType == InfectionPathogenType.Allergen || pathogenType == InfectionPathogenType.Parasite)
+        {
+            foreach (InfectionData entry in validEntries)
+            {
+                if (entry.pathogenType != pathogenType)
+                    continue;
+
+                float profileWeight = DifficultySettings.GetNewPathogenProfileWeightPercent(
+                    pathogenType, entry.pathogenDatabaseName, difficultyIndex);
+                if (profileWeight <= 0f)
+                    continue;
+
+                candidates.Add(entry);
+                candidateWeights.Add(profileWeight);
+                totalProfileWeight += profileWeight;
+            }
+
+            return SelectWeightedInfectionEntry(candidates, candidateWeights, totalProfileWeight);
+        }
+
         List<InfectionRarity> availableRarities = new List<InfectionRarity>();
         List<float> rarityWeights = new List<float>();
         float totalRarityWeight = 0f;
         foreach (InfectionRarity rarity in selectableRarities)
         {
-            float rarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, rarity, difficultyIndex);
+            float rarityWeight = GetAvailableRarityWeight(validEntries, difficultyStats, pathogenType, rarity, difficultyIndex);
             if (rarityWeight <= 0f)
                 continue;
 
@@ -3625,12 +3699,9 @@ public sealed class InfectionSpawner : MonoBehaviour
             }
         }
 
-        List<InfectionData> candidates = new List<InfectionData>();
-        List<float> candidateWeights = new List<float>();
-        float totalProfileWeight = 0f;
         foreach (InfectionData entry in validEntries)
         {
-            if (entry.rarity != selectedRarity)
+            if (entry.pathogenType != pathogenType || entry.rarity != selectedRarity)
                 continue;
 
             float profileWeight = GetPathogenSpawnWeight(entry, difficultyIndex);
@@ -3642,21 +3713,28 @@ public sealed class InfectionSpawner : MonoBehaviour
             totalProfileWeight += profileWeight;
         }
 
-        if (candidates.Count == 0 || totalProfileWeight <= 0f)
+        return SelectWeightedInfectionEntry(candidates, candidateWeights, totalProfileWeight);
+    }
+
+    private static InfectionData SelectWeightedInfectionEntry(List<InfectionData> candidates, List<float> candidateWeights,
+        float totalWeight)
+    {
+        if (candidates == null || candidateWeights == null || candidates.Count == 0 || totalWeight <= 0f)
             return null;
 
-        float profileRoll = UnityEngine.Random.value * totalProfileWeight;
+        float roll = UnityEngine.Random.value * totalWeight;
         for (int index = 0; index < candidates.Count; index++)
         {
-            profileRoll -= candidateWeights[index];
-            if (profileRoll < 0f)
+            roll -= candidateWeights[index];
+            if (roll < 0f)
                 return candidates[index];
         }
 
         return candidates[candidates.Count - 1];
     }
 
-    private static float GetAvailableRarityWeight(List<InfectionData> validEntries, DifficultyStats difficultyStats, InfectionRarity rarity, int difficultyIndex)
+    private static float GetAvailableRarityWeight(List<InfectionData> validEntries, DifficultyStats difficultyStats,
+        InfectionPathogenType pathogenType, InfectionRarity rarity, int difficultyIndex)
     {
         float tierWeight = difficultyStats.GetPathogenTierWeightPercent(rarity);
         if (tierWeight <= 0f)
@@ -3664,7 +3742,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         foreach (InfectionData entry in validEntries)
         {
-            if (entry.rarity == rarity && GetPathogenSpawnWeight(entry, difficultyIndex) > 0f)
+            if (entry.pathogenType == pathogenType && entry.rarity == rarity && GetPathogenSpawnWeight(entry, difficultyIndex) > 0f)
                 return tierWeight;
         }
 
