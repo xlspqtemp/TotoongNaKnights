@@ -63,6 +63,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float ContainedDendriticIdleBobSpeed = 2f;
     private const string AntigenIconResourcePath = "UI/Dentritic message pop up";
     private const string AntigenScaleReferenceIconResourcePath = "UI/Blue virus icon";
+    private const string AllergenNotificationIconResourcePath = "UI/Allergen icon";
+    private const string ParasiteNotificationIconResourcePath = "UI/Parasite icon";
+    private const string InfectionNotificationObjectPrefix = "Infection Notification - ";
     private const string AntigenCollectedTitle = "ANTIGEN COLLECTED";
     private const string AntigenCollectedSubtitleFormat = "{0} antigen acquired. T-Cell training unlocked.";
     private const string AntigenAlreadyAcquiredTitle = "ANTIGEN ALREADY ACQUIRED";
@@ -86,7 +89,6 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float NeutrophilBaseDamage = 10f;
     private const float EosinophilBaseDamage = 15f;
     private const float BasophilBaseDamage = 12f;
-    private const float InnateVariantSpecialistDamageMultiplier = 3f;
     private static readonly Color NeutrophilBaseColor = new Color(0.906f, 0.877f, 0.857f, 1f);
     private static readonly Color EosinophilTint = new Color(1f, 0.28f, 0.14f, 1f);
     private static readonly Color BasophilTint = new Color(0.48f, 0.32f, 1f, 1f);
@@ -239,6 +241,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     private readonly List<GameObject> activeBatchPathogens = new List<GameObject>();
     private readonly List<PendingAntigenCollection> pendingAntigenCollections = new List<PendingAntigenCollection>();
     private Sprite resolvedAntigenIconSprite;
+    private Sprite resolvedAllergenNotificationIcon;
+    private Sprite resolvedParasiteNotificationIcon;
     private Texture2D antigenScaleReferenceTexture;
     private readonly List<LymphaticBatchGroup> activeLymphaticBatches = new List<LymphaticBatchGroup>();
     private LymphaticBatchSpawner lymphaticBatchSpawner;
@@ -624,6 +628,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         public bool wellnessGainAwardedOnResolve;
         public Vector3 worldPosition;
         public int vesselSpawnPointIndex;
+        public Sprite notificationIcon;
+        public SpriteRenderer notificationRenderer;
         public readonly List<GameObject> threatVisuals = new List<GameObject>();
         public bool threatVisualsDespawned;
     }
@@ -855,12 +861,33 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void LateUpdate()
     {
+        ApplySpecialInfectionNotificationIcons();
         if (selectedInfectionPopupObject == null || !selectedInfectionPopupObject.activeSelf || selectedInfectionPopupMarker == null)
             return;
 
         Camera popupCamera = gameplayCamera != null ? gameplayCamera : Camera.main;
         if (popupCamera != null)
             PositionSelectedInfectionPopup(selectedInfectionPopupMarker, popupCamera);
+    }
+
+    private void ApplySpecialInfectionNotificationIcons()
+    {
+        foreach (InfectionMarker marker in activeInfectionMarkers)
+        {
+            if (marker == null || marker.isRemoving || marker.infection == null || marker.notificationIcon == null)
+                continue;
+
+            if (marker.notificationRenderer == null)
+            {
+                GameObject notificationObject = GameObject.Find(InfectionNotificationObjectPrefix + marker.infection.displayName);
+                marker.notificationRenderer = notificationObject != null
+                    ? notificationObject.GetComponent<SpriteRenderer>()
+                    : null;
+            }
+
+            if (marker.notificationRenderer != null && marker.notificationRenderer.sprite != marker.notificationIcon)
+                marker.notificationRenderer.sprite = marker.notificationIcon;
+        }
     }
 
     private void OnDisable()
@@ -1678,7 +1705,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             deploymentIndex = idleSquadDeploymentIndex,
             lifetimeRemaining = squadLifetimeSeconds,
             attackOnArrival = infectionTarget != null && infectionTarget.infection != null
-                && infectionTarget.infection.pathogenType != InfectionPathogenType.Viral,
+                && infectionTarget.infection.pathogenType != InfectionPathogenType.Viral
+                && infectionTarget.infection.pathogenType != InfectionPathogenType.Parasite,
             infectionTarget = infectionTarget
         });
         SpendLeukocyteSupply(deployCost);
@@ -2223,10 +2251,11 @@ public sealed class InfectionSpawner : MonoBehaviour
                 {
                     squad.arrivalMessageLogged = true;
                     LogWbcSquadMessage($"WBC squad arrived at {squad.infectionTarget.infection.displayName}.", ConsoleLogUI.LogType.Success);
-                    if (!squad.infectionTarget.isTagged)
+                    if (!squad.infectionTarget.isTagged && squad.infectionTarget.infection.pathogenType != InfectionPathogenType.Allergen)
                         BeginInfectionResolution(squad.infectionTarget);
-                    if (squad.infectionTarget.isContained
-                        && squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Viral)
+                    if (squad.infectionTarget.isContained &&
+                        (squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Viral ||
+                         squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Parasite))
                     {
                         squad.holdingForContainment = true;
                     }
@@ -2259,7 +2288,9 @@ public sealed class InfectionSpawner : MonoBehaviour
             InfectionMarker marker = squad.infectionTarget;
             if (!squad.combatStarted || marker == null || marker.isRemoving || marker.isTagged)
                 continue;
-            if (marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
+            bool pathogenIsVirusOrParasite = marker.infection != null &&
+                (marker.infection.pathogenType == InfectionPathogenType.Viral || marker.infection.pathogenType == InfectionPathogenType.Parasite);
+            if (pathogenIsVirusOrParasite)
             {
                 if (marker.isContained)
                     squad.holdingForContainment = true;
@@ -2386,10 +2417,15 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             InfectionMarker marker = batch.TargetInfection;
-            if (marker == null || marker.isRemoving || marker.isContained || marker.infection == null)
+            if (marker == null || marker.isRemoving || marker.infection == null)
                 continue;
 
             bool isBCellBatch = string.Equals(batch.UnitType, BCellUnitName, StringComparison.OrdinalIgnoreCase);
+            bool isParasite = marker.infection.pathogenType == InfectionPathogenType.Parasite;
+            bool isEosinophilParasiteBatch = isParasite && IsEosinophilResponder(batch);
+            if (marker.isContained && !isEosinophilParasiteBatch)
+                continue;
+
             if (isBCellBatch)
             {
                 if (marker.isTagged)
@@ -2405,16 +2441,31 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
             }
 
-            if (marker.isTagged)
+            if (isParasite && !isEosinophilParasiteBatch)
+            {
+                BeginInfectionResolution(marker, batch);
+                continue;
+            }
+
+            if (marker.isTagged && !isEosinophilParasiteBatch)
                 continue;
 
-            BeginInfectionResolution(marker);
+            bool usesCombatClear = marker.infection.pathogenType == InfectionPathogenType.Allergen || isEosinophilParasiteBatch;
+            if (!usesCombatClear)
+                BeginInfectionResolution(marker);
+
             activeBatchPathogens.Clear();
             foreach (GameObject pathogen in marker.threatVisuals)
             {
                 Health pathogenHealth = pathogen != null ? pathogen.GetComponent<Health>() : null;
                 if (pathogen != null && pathogen.activeInHierarchy && pathogenHealth != null && !pathogenHealth.IsDead)
                     activeBatchPathogens.Add(pathogen);
+            }
+
+            if (usesCombatClear && activeBatchPathogens.Count == 0)
+            {
+                BeginInfectionResolution(marker, batch);
+                continue;
             }
 
             bool isMacrophageBatch = string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase);
@@ -2458,9 +2509,9 @@ public sealed class InfectionSpawner : MonoBehaviour
                         string neutrophilVariant = GetNeutrophilVariantName(member);
                         attackDamage = Mathf.Max(0f, neutrophil.damage);
                         if (string.Equals(neutrophilVariant, EosinophilVariantName, StringComparison.OrdinalIgnoreCase) && IsParasiteInfection(marker.infection))
-                            attackDamage *= InnateVariantSpecialistDamageMultiplier;
+                            attackDamage *= stats.innateVariantSpecialistDamageMultiplier;
                         else if (string.Equals(neutrophilVariant, BasophilVariantName, StringComparison.OrdinalIgnoreCase) && IsAllergenInfection(marker.infection))
-                            attackDamage *= InnateVariantSpecialistDamageMultiplier;
+                            attackDamage *= stats.innateVariantSpecialistDamageMultiplier;
                     }
                 }
 
@@ -2764,8 +2815,11 @@ public sealed class InfectionSpawner : MonoBehaviour
                 UpdateUnitMovementAnimation(member, member.GetComponent<NavMeshAgent>(), isMovingBatch);
             }
 
+            bool isParasiteCombat = target != null && target.infection != null &&
+                target.infection.pathogenType == InfectionPathogenType.Parasite && IsEosinophilResponder(batch);
             bool isBacterialClash = target != null && target.infection != null &&
-                target.infection.pathogenType != InfectionPathogenType.Viral;
+                target.infection.pathogenType != InfectionPathogenType.Viral &&
+                (target.infection.pathogenType != InfectionPathogenType.Parasite || isParasiteCombat);
             bool shouldPlayCombatAttack = (isBacterialClash && !isBCellBatch) || isKillerTCellViralClash;
             if (batch.Status == LymphaticBatchGroup.BatchStatus.Working && shouldPlayCombatAttack &&
                 lymphaticBatchAttackAnimationsTriggered.Add(batch))
@@ -2947,8 +3001,27 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void BeginInfectionResolution(InfectionMarker marker, LymphaticBatchGroup sourceBatch = null)
     {
-        if (marker == null || marker.isRemoving || marker.isContained || marker.resolutionPending || marker.infection == null)
+        if (marker == null || marker.isRemoving || marker.resolutionPending || marker.infection == null)
             return;
+
+        bool isParasite = marker.infection.pathogenType == InfectionPathogenType.Parasite;
+        bool isEosinophilParasiteResponder = isParasite && IsEosinophilResponder(sourceBatch);
+        if (marker.isContained && !isEosinophilParasiteResponder)
+            return;
+
+        if (isParasite)
+        {
+            if (!isEosinophilParasiteResponder)
+            {
+                ContainParasiteInfection(marker);
+                return;
+            }
+
+            marker.isContained = false;
+            marker.resolutionPending = true;
+            StartCoroutine(ResolveParasiteInfectionByEosinophil(marker, sourceBatch));
+            return;
+        }
 
         bool isViral = marker.infection.pathogenType == InfectionPathogenType.Viral;
         bool isKillerTCell = sourceBatch != null &&
@@ -2986,6 +3059,37 @@ public sealed class InfectionSpawner : MonoBehaviour
         AddLeukocyteSupply(containmentBonus);
         LogWbcSquadMessage($"WBC contained {marker.infection.displayName}, but the virus is hiding inside cells. Adaptive response is building.", ConsoleLogUI.LogType.Warning);
         ApplyWellnessGainOnResolve(marker);
+    }
+
+    private void ContainParasiteInfection(InfectionMarker marker)
+    {
+        if (marker == null || marker.isContained || marker.infection == null)
+            return;
+
+        marker.infection = CloneInfectionData(marker.infection);
+        int reducedSeverity = Mathf.Max((int)InfectionSeverityStage.Mild,
+            (int)marker.infection.severityStage - containedSeverityDropSteps);
+        marker.infection.severityStage = (InfectionSeverityStage)reducedSeverity;
+        marker.isContained = true;
+        marker.containedResolveDay = int.MaxValue;
+        SpawnContainedDendriticCell(marker);
+        AddLeukocyteSupply(containmentBonus);
+        LogWbcSquadMessage($"WBC contained {marker.infection.displayName}; only Eosinophils can clear the parasite.", ConsoleLogUI.LogType.Warning);
+        ApplyWellnessGainOnResolve(marker);
+    }
+
+    private IEnumerator ResolveParasiteInfectionByEosinophil(InfectionMarker marker, LymphaticBatchGroup sourceBatch)
+    {
+        if (useFixedDurationClash)
+            yield return GameplaySpeed.WaitForGameplaySeconds(bacterialClashDurationSeconds);
+        if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
+            yield break;
+
+        AddLeukocyteSupply(clearBonus);
+        ApplyWellnessGainOnResolve(marker);
+        PlayInfectionClearedSfx();
+        LogWbcSquadMessage($"Eosinophils eliminated {marker.infection.displayName}. Parasite infection cleared.", ConsoleLogUI.LogType.Success);
+        BeginRemovingInfectionMarker(marker);
     }
 
     private IEnumerator ResolveViralInfectionByKillerTCell(InfectionMarker marker, LymphaticBatchGroup sourceBatch)
@@ -3116,7 +3220,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 containedWellnessCost *= BreachedBarrierPathogenMultiplier;
             ApplyWellnessChange($"Contained infection {marker.infection.displayName}", -containedWellnessCost);
 
-            if (currentDay < marker.containedResolveDay)
+            if (marker.infection.pathogenType == InfectionPathogenType.Parasite || currentDay < marker.containedResolveDay)
                 continue;
 
             string infectionName = marker.infection.displayName;
@@ -3590,8 +3694,14 @@ public sealed class InfectionSpawner : MonoBehaviour
                 return "Unidentified Bacteria";
             case InfectionPathogenType.Viral:
                 return "Unidentified Virus";
-            default:
+            case InfectionPathogenType.Allergen:
+                return "Unidentified Allergen";
+            case InfectionPathogenType.Parasite:
+                return "Unidentified Parasite";
+            case InfectionPathogenType.Fungal:
                 return "Unidentified Fungus";
+            default:
+                return "Unidentified Bacteria";
         }
     }
 
@@ -3725,7 +3835,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             vesselSpawnPointIndex = vesselSpawnPointIndex,
             canvas = hudCanvas,
             unresolvedDays = Mathf.Max(0, infection.daysUntreated),
-            wasBarrierMutated = wasBarrierMutated
+            wasBarrierMutated = wasBarrierMutated,
+            notificationIcon = ResolvePathogenNotificationIcon(infection.pathogenType)
         };
 
         activeInfectionMarkers.Add(marker);
@@ -3895,6 +4006,43 @@ public sealed class InfectionSpawner : MonoBehaviour
             default:
                 return "Bacterial infection";
         }
+    }
+
+    private Sprite ResolvePathogenNotificationIcon(InfectionPathogenType pathogenType)
+    {
+        if (pathogenType == InfectionPathogenType.Allergen)
+        {
+            if (resolvedAllergenNotificationIcon == null)
+                resolvedAllergenNotificationIcon = LoadNotificationSprite(AllergenNotificationIconResourcePath, "Allergen Infection Notification");
+            return resolvedAllergenNotificationIcon;
+        }
+
+        if (pathogenType == InfectionPathogenType.Parasite)
+        {
+            if (resolvedParasiteNotificationIcon == null)
+                resolvedParasiteNotificationIcon = LoadNotificationSprite(ParasiteNotificationIconResourcePath, "Parasite Infection Notification");
+            return resolvedParasiteNotificationIcon;
+        }
+
+        return null;
+    }
+
+    private static Sprite LoadNotificationSprite(string resourcePath, string spriteName)
+    {
+        Sprite sprite = Resources.Load<Sprite>(resourcePath);
+        if (sprite != null)
+            return sprite;
+
+        Texture2D texture = Resources.Load<Texture2D>(resourcePath);
+        if (texture == null)
+            return null;
+
+        sprite = Sprite.Create(texture,
+            new Rect(0f, 0f, texture.width, texture.height),
+            new Vector2(0.5f, 0.5f),
+            NotificationSpritePixelsPerUnit);
+        sprite.name = spriteName;
+        return sprite;
     }
 
     private Sprite ResolveMarkerSprite()
@@ -4275,14 +4423,30 @@ public sealed class InfectionSpawner : MonoBehaviour
         return NeutrophilVariantName;
     }
 
+    private static bool IsEosinophilResponder(LymphaticBatchGroup batch)
+    {
+        if (batch == null || string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        foreach (GameObject member in batch.Members)
+        {
+            if (member != null && string.Equals(GetNeutrophilVariantName(member), EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool IsParasiteInfection(InfectionData infection)
     {
-        return InfectionMatchesCategory(infection, ParasiteCategoryKeywords);
+        return infection != null && (infection.pathogenType == InfectionPathogenType.Parasite ||
+            InfectionMatchesCategory(infection, ParasiteCategoryKeywords));
     }
 
     private static bool IsAllergenInfection(InfectionData infection)
     {
-        return InfectionMatchesCategory(infection, AllergenCategoryKeywords);
+        return infection != null && (infection.pathogenType == InfectionPathogenType.Allergen ||
+            InfectionMatchesCategory(infection, AllergenCategoryKeywords));
     }
 
     private static bool InfectionMatchesCategory(InfectionData infection, string[] categoryKeywords)
@@ -4585,7 +4749,19 @@ public sealed class InfectionSpawner : MonoBehaviour
             CreatePathogenEntry("Histoplasmosis", InfectionPathogenType.Fungal, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
             CreatePathogenEntry("Sporotrichosis", InfectionPathogenType.Fungal, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.WBC),
             CreatePathogenEntry("Cryptococcus", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 10f, InfectionCorrectResponder.WBC),
-            CreatePathogenEntry("Mucormycosis", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 40f, InfectionCorrectResponder.WBC)
+            CreatePathogenEntry("Mucormycosis", InfectionPathogenType.Fungal, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 40f, InfectionCorrectResponder.WBC),
+
+            CreatePathogenEntry("Pollen", InfectionPathogenType.Allergen, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 45f, 35f, 25f, 20f, InfectionCorrectResponder.Basophil),
+            CreatePathogenEntry("Dust Mites", InfectionPathogenType.Allergen, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 35f, 30f, 25f, 20f, InfectionCorrectResponder.Basophil),
+            CreatePathogenEntry("Pet Dander", InfectionPathogenType.Allergen, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 15f, 20f, 20f, 20f, InfectionCorrectResponder.Basophil),
+            CreatePathogenEntry("Mold Spores", InfectionPathogenType.Allergen, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 5f, 10f, 15f, 20f, InfectionCorrectResponder.Basophil),
+            CreatePathogenEntry("Peanut", InfectionPathogenType.Allergen, InfectionRarity.Rare, InfectionSeverityStage.Severe, 6, 6, 0f, 5f, 10f, 15f, InfectionCorrectResponder.Basophil),
+
+            CreatePathogenEntry("Pinworm", InfectionPathogenType.Parasite, InfectionRarity.Common, InfectionSeverityStage.Mild, 2, 2, 40f, 35f, 25f, 20f, InfectionCorrectResponder.Eosinophil),
+            CreatePathogenEntry("Giardia", InfectionPathogenType.Parasite, InfectionRarity.Uncommon, InfectionSeverityStage.Moderate, 4, 4, 15f, 20f, 20f, 20f, InfectionCorrectResponder.Eosinophil),
+            CreatePathogenEntry("Tapeworm", InfectionPathogenType.Parasite, InfectionRarity.Rare, InfectionSeverityStage.Severe, 6, 6, 0f, 10f, 15f, 20f, InfectionCorrectResponder.Eosinophil),
+            CreatePathogenEntry("Ascaris", InfectionPathogenType.Parasite, InfectionRarity.Rare, InfectionSeverityStage.Moderate, 4, 4, 0f, 5f, 10f, 15f, InfectionCorrectResponder.Eosinophil),
+            CreatePathogenEntry("Malaria", InfectionPathogenType.Parasite, InfectionRarity.VeryRare, InfectionSeverityStage.Severe, 6, 6, 0f, 0f, 5f, 15f, InfectionCorrectResponder.Eosinophil)
         };
     }
 

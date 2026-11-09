@@ -7,7 +7,9 @@ public enum InfectionPathogenType
 {
     Bacterial,
     Viral,
-    Fungal
+    Fungal,
+    Allergen,
+    Parasite
 }
 
 /// <summary>Spawn-pool frequency category for one pathogen profile.</summary>
@@ -32,7 +34,9 @@ public enum InfectionCorrectResponder
 {
     WBC,
     KillerT,
-    BCell
+    BCell,
+    Basophil,
+    Eosinophil
 }
 
 /// <summary>Body-part groups represented by the existing tactical buttons.</summary>

@@ -27,6 +27,7 @@ public sealed class DifficultyStats
     [Range(0f, 100f)] public float veryRarePathogenWeightPercent;
     [Range(0f, 100f)] public float namedInfectionChance;
     [Min(0f)] public float barrierDamageMultiplier = 1f;
+    [Min(1f)] public float innateVariantSpecialistDamageMultiplier = 3f;
 
     public DifficultyStats()
     {
@@ -85,6 +86,7 @@ public static class DifficultySettings
     private const int HardDifficultyIndex = 3;
     private const float HardDifficultyWbcHp = 80f;
     private const float HardDifficultyWbcAttack = 8f;
+    private const float DefaultInnateVariantSpecialistDamageMultiplier = 3f;
     private static readonly float[] DefaultNamedInfectionChances = { 20f, 40f, 50f, 60f };
     private static readonly float[] DefaultBarrierDamageMultipliers = { 0.5f, 1f, 1.5f, 2f };
     private static readonly float[][] DefaultPathogenTierWeights =
@@ -127,6 +129,8 @@ public static class DifficultySettings
             preset.rarePathogenWeightPercent = tierWeights[2];
             preset.veryRarePathogenWeightPercent = tierWeights[3];
             preset.barrierDamageMultiplier = DefaultBarrierDamageMultipliers[index];
+            if (preset.innateVariantSpecialistDamageMultiplier <= 0f)
+                preset.innateVariantSpecialistDamageMultiplier = DefaultInnateVariantSpecialistDamageMultiplier;
             if (index == HardDifficultyIndex)
             {
                 preset.wbcHp = HardDifficultyWbcHp;
