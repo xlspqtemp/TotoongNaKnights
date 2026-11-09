@@ -267,15 +267,25 @@ public sealed class UnitSelectionController : MonoBehaviour
         KillerTCellCombatStats killerTCell = selectedUnit != null
             ? selectedUnit.GetComponentInParent<KillerTCellCombatStats>()
             : (selectedHealth != null ? selectedHealth.GetComponentInParent<KillerTCellCombatStats>() : null);
+        NeutrophilScript neutrophil = selectedUnit != null
+            ? selectedUnit.GetComponentInParent<NeutrophilScript>()
+            : (selectedHealth != null ? selectedHealth.GetComponentInParent<NeutrophilScript>() : null);
         bool isMacrophage = !isPathogen && macrophage != null;
         bool isTCell = !isPathogen && (killerTCell != null || displayName.StartsWith("T Cell", System.StringComparison.OrdinalIgnoreCase));
-        bool isWbc = !isPathogen && string.Equals(displayName, "WBC", System.StringComparison.OrdinalIgnoreCase);
+        bool isInnateCell = !isPathogen && (neutrophil != null ||
+            displayName.StartsWith("Neutrophil", System.StringComparison.OrdinalIgnoreCase) ||
+            displayName.StartsWith("Eosinophil", System.StringComparison.OrdinalIgnoreCase) ||
+            displayName.StartsWith("Basophil", System.StringComparison.OrdinalIgnoreCase));
+        bool isWbc = !isPathogen && (string.Equals(displayName, "WBC", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(displayName, "Neutrophil", System.StringComparison.OrdinalIgnoreCase));
         if (isPathogen)
             attack = selectedHealth.PathogenType == InfectionPathogenType.Viral ? stats.virusAttack : stats.bacteriaAttack;
         else if (isMacrophage)
             attack = macrophage.damage;
         else if (isTCell)
             attack = killerTCell != null ? killerTCell.AttackDamage : 0f;
+        else if (isInnateCell)
+            attack = neutrophil != null ? neutrophil.damage : 0f;
         else
             attack = isWbc ? stats.wbcAttack : 0f;
         lines.Add($"Attack: {attack:0.##}");

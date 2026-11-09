@@ -1,0 +1,17 @@
+{
+  "material": "Material.008",
+  "generator": "Blender 4.2.3 LTS / Mat-Baker",
+  "resolution": 2048,
+  "format": "PNG",
+  "bit_depth": 8,
+  "normal_convention": "OpenGL",
+  "maps": {
+    "basecolor": "Material_008_Albedo.png"
+  },
+  "packed": {
+    "type": "Unity Metallic-Smoothness",
+    "file": "Material_008_MetallicSmoothness.png",
+    "channels": "R:Metal  G:Metal  B:Metal  A:Smooth"
+  },
+  "ior": 1.5
+}

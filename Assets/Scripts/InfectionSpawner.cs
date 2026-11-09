@@ -38,8 +38,10 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float InfectionPopupFadeDuration = 0.3f;
     private const string AnimatorMovingParameter = "IsMoving";
     private const string AnimatorAttackParameter = "Attack";
+    private const string AnimatorTagParameter = "Tag";
     private const string AnimatorVictoryParameter = "Victory";
     private const float AnimatorMovementThreshold = 0.1f;
+    private const float BCellTagAnimationTimeoutSeconds = 10f;
     private const float KillerTCellAttackDurationSeconds = 1.1f;
     private const float KillerTCellWarCryDurationSeconds = 2.8333335f;
     private const int MinimumViralContainmentDays = 2;
@@ -53,12 +55,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const string NeutrophilVariantName = "NEUTROPHIL";
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
-    private const float AntibodyDroneFlightDurationSeconds = 1.2f;
-    private const float AntibodyDroneDiameter = 0.18f;
     private static readonly Color AntibodyGoldColor = new Color(1f, 0.72f, 0.12f, 1f);
     private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
     private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
-    private static readonly int EmissionColorPropertyId = Shader.PropertyToID("_EmissionColor");
     private const float ContainedDendriticIdleBobHeight = 0.04f;
     private const float ContainedDendriticIdleBobSpeed = 2f;
     private const string AntigenIconResourcePath = "UI/Dentritic message pop up";
@@ -229,6 +228,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     [SerializeField] private Color promptBannerColor = new Color(0.025f, 0.045f, 0.065f, 0.92f);
     [SerializeField, Min(0f)] private float promptAutoFadeSeconds = 8f;
     private readonly HashSet<LymphaticBatchGroup> lymphaticBatchAttackAnimationsTriggered = new HashSet<LymphaticBatchGroup>();
+    private readonly HashSet<GameObject> bCellTintedUnits = new HashSet<GameObject>();
 
 
 
@@ -612,7 +612,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         public bool isRemoving;
         public bool isContained;
         public bool isTagged;
-        public bool antibodyDroneInFlight;
+        public bool bCellTagInProgress;
         public bool resolutionPending;
         public int containedResolveDay;
         public GameObject containedDendriticCell;
@@ -2388,21 +2388,19 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (marker == null || marker.isRemoving || marker.isContained || marker.infection == null)
                 continue;
 
-            if (marker.infection.pathogenType == InfectionPathogenType.Viral)
-            {
-                BeginInfectionResolution(marker, batch);
-                continue;
-            }
-
             bool isBCellBatch = string.Equals(batch.UnitType, BCellUnitName, StringComparison.OrdinalIgnoreCase);
-            bool isBacterialOrFungal = marker.infection.pathogenType == InfectionPathogenType.Bacterial
-                || marker.infection.pathogenType == InfectionPathogenType.Fungal;
-            if (isBCellBatch && isBacterialOrFungal)
+            if (isBCellBatch)
             {
                 if (marker.isTagged)
                     DestroyLymphaticBatch(batch.BatchId);
-                else if (!marker.antibodyDroneInFlight)
-                    LaunchAntibodyDrone(batch, marker);
+                else if (!marker.bCellTagInProgress)
+                    BeginBCellTagging(batch, marker);
+                continue;
+            }
+
+            if (marker.infection.pathogenType == InfectionPathogenType.Viral)
+            {
+                BeginInfectionResolution(marker, batch);
                 continue;
             }
 
@@ -2495,108 +2493,111 @@ public sealed class InfectionSpawner : MonoBehaviour
             }
         }
     }
-    private void LaunchAntibodyDrone(LymphaticBatchGroup batch, InfectionMarker marker)
+    private void BeginBCellTagging(LymphaticBatchGroup batch, InfectionMarker marker)
     {
-        if (batch == null || marker == null || marker.isTagged || marker.antibodyDroneInFlight)
+        if (batch == null || marker == null || marker.isTagged || marker.bCellTagInProgress)
             return;
 
-        GameObject sourceCell = null;
+        GameObject tagger = null;
         foreach (GameObject member in batch.Members)
         {
             if (member == null || !member.activeInHierarchy)
                 continue;
 
-            sourceCell = member;
+            tagger = member;
             break;
         }
 
-        if (sourceCell == null)
+        if (tagger == null)
             return;
 
-        marker.antibodyDroneInFlight = true;
-        GameObject drone = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        drone.name = "Antibody Drone";
-        drone.transform.position = sourceCell.transform.position;
-        drone.transform.localScale = Vector3.one * AntibodyDroneDiameter;
-        Collider droneCollider = drone.GetComponent<Collider>();
-        if (droneCollider != null)
-            Destroy(droneCollider);
-
-        Material droneMaterial = null;
-        Renderer droneRenderer = drone.GetComponent<Renderer>();
-        if (droneRenderer != null)
+        Animator animator = tagger.GetComponentInChildren<Animator>(true);
+        if (animator == null || !HasAnimatorParameter(animator, AnimatorTagParameter, AnimatorControllerParameterType.Trigger))
         {
-            droneMaterial = droneRenderer.material;
-            if (droneMaterial.HasProperty(BaseColorPropertyId))
-                droneMaterial.SetColor(BaseColorPropertyId, AntibodyGoldColor);
-            if (droneMaterial.HasProperty(ColorPropertyId))
-                droneMaterial.SetColor(ColorPropertyId, AntibodyGoldColor);
-            if (droneMaterial.HasProperty(EmissionColorPropertyId))
-            {
-                droneMaterial.SetColor(EmissionColorPropertyId, AntibodyGoldColor * 1.5f);
-                droneMaterial.EnableKeyword("_EMISSION");
-            }
+            Debug.LogWarning($"[Resolution] B-Cell '{tagger.name}' cannot tag {marker.infection.displayName}: its Animator has no '{AnimatorTagParameter}' trigger.", this);
+            return;
         }
 
-        GameObject targetPathogen = FindAntibodyDroneTarget(marker);
-        StartCoroutine(FlyAntibodyDrone(drone, droneMaterial, targetPathogen, marker, batch.BatchId));
+        marker.bCellTagInProgress = true;
+        StartCoroutine(PlayBCellTagAnimation(tagger, animator, marker, batch.BatchId));
     }
 
-    private GameObject FindAntibodyDroneTarget(InfectionMarker marker)
+    private IEnumerator PlayBCellTagAnimation(GameObject tagger, Animator animator, InfectionMarker marker, int batchId)
     {
-        if (marker == null)
-            return null;
-
-        foreach (GameObject pathogen in marker.threatVisuals)
+        if (tagger == null || animator == null || marker == null || marker.isRemoving)
         {
-            if (pathogen == null || !pathogen.activeInHierarchy)
-                continue;
-
-            Health pathogenHealth = pathogen.GetComponent<Health>();
-            if (pathogenHealth == null || !pathogenHealth.IsDead)
-                return pathogen;
+            if (marker != null)
+                marker.bCellTagInProgress = false;
+            yield break;
         }
 
-        return null;
-    }
+        if (!animator.enabled)
+            animator.enabled = true;
+        if (HasAnimatorParameter(animator, AnimatorMovingParameter, AnimatorControllerParameterType.Bool))
+            animator.SetBool(AnimatorMovingParameter, false);
+        animator.ResetTrigger(AnimatorTagParameter);
+        animator.SetTrigger(AnimatorTagParameter);
 
-    private IEnumerator FlyAntibodyDrone(GameObject drone, Material droneMaterial, GameObject targetPathogen,
-        InfectionMarker marker, int batchId)
-    {
-        Vector3 startPosition = drone != null ? drone.transform.position : Vector3.zero;
+        int tagStateHash = Animator.StringToHash("Tag");
         float elapsed = 0f;
-        while (drone != null && marker != null && !marker.isRemoving && elapsed < AntibodyDroneFlightDurationSeconds)
+        bool enteredTagState = false;
+        while (tagger != null && animator != null && marker != null && !marker.isRemoving)
         {
-            elapsed += GameplaySpeed.DeltaTime;
-            float progress = Mathf.Clamp01(elapsed / AntibodyDroneFlightDurationSeconds);
-            Vector3 targetPosition = targetPathogen != null ? targetPathogen.transform.position : marker.worldPosition;
-            float arcHeight = Mathf.Sin(progress * Mathf.PI) * 0.35f;
-            drone.transform.position = Vector3.Lerp(startPosition, targetPosition, progress) + Vector3.up * arcHeight;
+            if (animator.GetCurrentAnimatorStateInfo(0).shortNameHash == tagStateHash)
+            {
+                enteredTagState = true;
+                break;
+            }
+
+            elapsed += Time.deltaTime;
+            if (elapsed >= BCellTagAnimationTimeoutSeconds)
+                break;
             yield return null;
         }
 
-        if (drone != null && marker != null && !marker.isRemoving && marker.infection != null)
+        if (!enteredTagState)
         {
-            drone.transform.position = targetPathogen != null ? targetPathogen.transform.position : marker.worldPosition;
-            marker.antibodyDroneInFlight = false;
-            if (!marker.isTagged)
+            if (marker != null)
             {
-                marker.isTagged = true;
-                ApplyTaggedPathogenVisuals(marker);
-                Debug.Log($"[Resolution] Antibody Drone tagged {marker.infection.displayName} for destruction.", this);
+                marker.bCellTagInProgress = false;
+                Debug.LogWarning("[Resolution] B-Cell Tag animation did not enter its Tag state.", this);
+            }
+            yield break;
+        }
+
+        elapsed = 0f;
+        while (tagger != null && animator != null && marker != null && !marker.isRemoving)
+        {
+            AnimatorStateInfo tagState = animator.GetCurrentAnimatorStateInfo(0);
+            if (tagState.shortNameHash != tagStateHash || tagState.normalizedTime >= 1f)
+                break;
+
+            elapsed += Time.deltaTime;
+            if (elapsed >= BCellTagAnimationTimeoutSeconds)
+                break;
+            yield return null;
+        }
+
+        if (tagger != null && animator != null && marker != null && !marker.isRemoving && marker.infection != null)
+        {
+            AnimatorStateInfo finalState = animator.GetCurrentAnimatorStateInfo(0);
+            if (finalState.shortNameHash == tagStateHash && finalState.normalizedTime < 1f)
+            {
+                marker.bCellTagInProgress = false;
+                Debug.LogWarning("[Resolution] B-Cell Tag animation timed out before completion.", this);
+                yield break;
             }
 
+            marker.bCellTagInProgress = false;
+            marker.isTagged = true;
+            ApplyTaggedPathogenVisuals(marker);
+            Debug.Log($"[Resolution] B-Cell antibodies tagged {marker.infection.displayName}.", this);
             DestroyLymphaticBatch(batchId);
         }
         else if (marker != null)
         {
-            marker.antibodyDroneInFlight = false;
+            marker.bCellTagInProgress = false;
         }
-
-        if (drone != null)
-            Destroy(drone);
-        if (droneMaterial != null)
-            Destroy(droneMaterial);
     }
 
     private void ApplyTaggedPathogenVisuals(InfectionMarker marker)
@@ -2729,6 +2730,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
 
         lymphaticBatchSpawner.GetBatches(activeLymphaticBatches);
+        bCellTintedUnits.RemoveWhere(unit => unit == null);
         lymphaticBatchAttackAnimationsTriggered.RemoveWhere(batch =>
             batch == null || !activeLymphaticBatches.Contains(batch) || batch.Status != LymphaticBatchGroup.BatchStatus.Working);
 
@@ -2738,6 +2740,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             InfectionMarker target = batch.TargetInfection;
+            bool isBCellBatch = string.Equals(batch.UnitType, BCellUnitName, StringComparison.OrdinalIgnoreCase);
             bool isKillerTCellViralClash = target != null && target.infection != null &&
                 target.infection.pathogenType == InfectionPathogenType.Viral &&
                 string.Equals(batch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase) &&
@@ -2749,13 +2752,20 @@ public sealed class InfectionSpawner : MonoBehaviour
                 if (member == null || !member.activeInHierarchy)
                     continue;
 
+                if (isBCellBatch)
+                {
+                    BacteriaCellResponder bacteriaResponder = member.GetComponent<BacteriaCellResponder>();
+                    if (bacteriaResponder != null && bacteriaResponder.enabled)
+                        bacteriaResponder.enabled = false;
+                    ApplyBCellTint(member);
+                }
                 UpdateUnitMovementAnimation(member, member.GetComponent<NavMeshAgent>(), isMovingBatch);
             }
 
             bool isBacterialClash = target != null && target.infection != null &&
                 target.infection.pathogenType != InfectionPathogenType.Viral;
-            if (batch.Status == LymphaticBatchGroup.BatchStatus.Working &&
-                (isBacterialClash || isKillerTCellViralClash) &&
+            bool shouldPlayCombatAttack = (isBacterialClash && !isBCellBatch) || isKillerTCellViralClash;
+            if (batch.Status == LymphaticBatchGroup.BatchStatus.Working && shouldPlayCombatAttack &&
                 lymphaticBatchAttackAnimationsTriggered.Add(batch))
             {
                 foreach (GameObject member in batch.Members)
@@ -2764,6 +2774,42 @@ public sealed class InfectionSpawner : MonoBehaviour
                         TriggerUnitAttackAnimation(member);
                 }
             }
+        }
+    }
+
+    private void ApplyBCellTint(GameObject unit)
+    {
+        if (unit == null || !bCellTintedUnits.Add(unit))
+            return;
+
+        Renderer[] renderers = unit.GetComponentsInChildren<Renderer>(true);
+        foreach (Renderer cellRenderer in renderers)
+        {
+            if (cellRenderer == null)
+                continue;
+
+            MaterialPropertyBlock properties = new MaterialPropertyBlock();
+            cellRenderer.GetPropertyBlock(properties);
+            bool hasTintProperty = false;
+            foreach (Material sharedMaterial in cellRenderer.sharedMaterials)
+            {
+                if (sharedMaterial == null)
+                    continue;
+
+                if (sharedMaterial.HasProperty(BaseColorPropertyId))
+                {
+                    properties.SetColor(BaseColorPropertyId, AntibodyGoldColor);
+                    hasTintProperty = true;
+                }
+                if (sharedMaterial.HasProperty(ColorPropertyId))
+                {
+                    properties.SetColor(ColorPropertyId, AntibodyGoldColor);
+                    hasTintProperty = true;
+                }
+            }
+
+            if (hasTintProperty)
+                cellRenderer.SetPropertyBlock(properties);
         }
     }
 
