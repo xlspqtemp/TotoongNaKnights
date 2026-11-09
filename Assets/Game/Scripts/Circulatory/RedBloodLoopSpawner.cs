@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -10,6 +11,10 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
     private const float DefaultSpawnDurationSeconds = 25f;
     private const float DefaultNavMeshSampleRadius = 10f;
     private const float SpawnBoundsHalfExtent = 0.5f;
+    private const float MovementAnimationSpeedThreshold = 0.05f;
+    private const float MovementAnimationSpeedThresholdSquared = MovementAnimationSpeedThreshold * MovementAnimationSpeedThreshold;
+    private const string IsMovingParameterName = "IsMoving";
+    private static readonly int IsMovingParameterHash = Animator.StringToHash(IsMovingParameterName);
     // Route waypoints are collected from the spawn point's parent container.
     private const string DestinationTargetName = "Destination - Target";
     private const string LungPointName = "Point - Lung";
@@ -21,6 +26,8 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
     private Transform[] destinationTargets;
     private Transform[] lungPoints;
     private bool hasReportedFirstSpawn;
+    private readonly List<NavMeshAgent> spawnedAgents = new List<NavMeshAgent>();
+    private readonly List<Animator> spawnedAnimators = new List<Animator>();
     [SerializeField, Min(0.1f)] private float spawnIntervalSeconds = DefaultSpawnIntervalSeconds;
     [SerializeField, Min(0.1f)] private float spawnDurationSeconds = DefaultSpawnDurationSeconds;
     [SerializeField, Min(0.1f)] private float navMeshSampleRadius = DefaultNavMeshSampleRadius;
@@ -36,6 +43,27 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
 
         Debug.Log($"Red blood spawner ready: {destinationTargets.Length} unique targets, {lungPoints.Length} lung points, one spawn per {spawnIntervalSeconds:0.##} seconds for {spawnDurationSeconds:0.##} seconds.", this);
         StartCoroutine(SpawnCellsOverTime());
+    }
+
+    private void Update()
+    {
+        for (int index = spawnedAgents.Count - 1; index >= 0; index--)
+        {
+            NavMeshAgent agent = spawnedAgents[index];
+            Animator animator = spawnedAnimators[index];
+            if (agent == null || animator == null || !agent.enabled)
+            {
+                spawnedAgents.RemoveAt(index);
+                spawnedAnimators.RemoveAt(index);
+                continue;
+            }
+
+            bool isMoving = agent.isOnNavMesh && agent.velocity.sqrMagnitude > MovementAnimationSpeedThresholdSquared;
+            if (animator.GetBool(IsMovingParameterHash) != isMoving)
+            {
+                animator.SetBool(IsMovingParameterHash, isMoving);
+            }
+        }
     }
 
     private void ResolveWaypoints()
@@ -157,6 +185,17 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
             Destroy(cell);
             return;
         }
+
+        Animator animator = cell.GetComponentInChildren<Animator>();
+        if (animator == null || animator.runtimeAnimatorController == null)
+        {
+            Debug.LogError("The Red Blood prefab needs an Animator with an assigned controller on its visual model.", cell);
+            Destroy(cell);
+            return;
+        }
+
+        spawnedAgents.Add(agent);
+        spawnedAnimators.Add(animator);
 
         if (!hasReportedFirstSpawn)
         {
