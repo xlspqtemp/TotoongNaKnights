@@ -37,6 +37,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float SquadPromptFadeDuration = 0.4f;
     private const float InfectionPopupFadeDuration = 0.3f;
     private const string AnimatorMovingParameter = "IsMoving";
+    private const string AnimatorIdleStateName = "Idle";
     private const string AnimatorAttackParameter = "Attack";
     private const string AnimatorTagParameter = "Tag";
     private const string AnimatorVictoryParameter = "Victory";
@@ -2392,7 +2393,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (isBCellBatch)
             {
                 if (marker.isTagged)
-                    DestroyLymphaticBatch(batch.BatchId);
+                    ReturnLymphaticBatchToReady(batch.BatchId);
                 else if (!marker.bCellTagInProgress)
                     BeginBCellTagging(batch, marker);
                 continue;
@@ -2592,7 +2593,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             marker.isTagged = true;
             ApplyTaggedPathogenVisuals(marker);
             Debug.Log($"[Resolution] B-Cell antibodies tagged {marker.infection.displayName}.", this);
-            DestroyLymphaticBatch(batchId);
+            animator.Play(AnimatorIdleStateName, 0, 0f);
+            ReturnLymphaticBatchToReady(batchId);
         }
         else if (marker != null)
         {
@@ -2642,12 +2644,12 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
     }
 
-    private void DestroyLymphaticBatch(int batchId)
+    private void ReturnLymphaticBatchToReady(int batchId)
     {
         if (lymphaticBatchSpawner == null)
             lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
         if (lymphaticBatchSpawner != null)
-            lymphaticBatchSpawner.DestroyBatch(batchId);
+            lymphaticBatchSpawner.AbortBatch(batchId);
     }
 
     private void UpdateTaggedInfectionResolutions()
