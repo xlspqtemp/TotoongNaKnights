@@ -15,6 +15,7 @@ public class MasterAudioSettingsController : MonoBehaviour
     private const float VolumeSliderHorizontalOffset = -68f;
     private const float VolumeControlsVerticalOffset = -24f;
     private const float VolumeSliderHeight = 30f;
+    private const float VolumeSliderTrackInset = 12f;
     private const float SoundLabelGap = 14f;
     private const float SoundLabelHeight = 24f;
     private const float VolumePercentageWidth = 120f;
@@ -190,7 +191,7 @@ public class MasterAudioSettingsController : MonoBehaviour
         masterVolumeSlider = CreateMasterSlider(card.transform);
         TextMeshProUGUI soundLabel = CreateText(card.transform, "SettingsSoundLabel", "SOUND", 22, FontStyles.Bold,
             new Vector2(0.5f, VolumeRowAnchorY),
-            new Vector2(VolumeSliderHorizontalOffset - VolumeSliderWidth * 0.5f,
+            new Vector2(VolumeSliderHorizontalOffset - VolumeSliderWidth * 0.5f + VolumeSliderTrackInset,
                 VolumeControlsVerticalOffset + VolumeSliderHeight * 0.5f + SoundLabelGap),
             new Vector2(VolumeSliderWidth, SoundLabelHeight), TextAlignmentOptions.Left);
         soundLabel.rectTransform.pivot = Vector2.zero;
