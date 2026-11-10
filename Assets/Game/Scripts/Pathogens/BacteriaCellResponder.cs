@@ -108,7 +108,12 @@ public sealed class BacteriaCellResponder : MonoBehaviour
         {
             ClearTargetAndResumeRoute();
             nextScanTime = Time.time + Mathf.Max(0.1f, scanIntervalSeconds);
+            return;
         }
+
+        PathogenWanderController wanderController = bacteria.GetComponent<PathogenWanderController>();
+        if (wanderController != null)
+            wanderController.SetPursuitOverride(true);
     }
 
     private void PauseRoute()
@@ -141,6 +146,9 @@ public sealed class BacteriaCellResponder : MonoBehaviour
         if (target != null)
         {
             target.StopContact(this);
+            PathogenWanderController wanderController = target.GetComponent<PathogenWanderController>();
+            if (wanderController != null)
+                wanderController.SetPursuitOverride(false);
             target = null;
         }
 

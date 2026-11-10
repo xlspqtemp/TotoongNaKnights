@@ -681,6 +681,45 @@ public sealed class InfectionSpawner : MonoBehaviour
         public Vector3 scaleAnchor;
     }
 
+    /// <summary>Returns the nearest arrived WBC deployed against the pathogen visual.</summary>
+    /// <param name="pathogenVisual">The threat visual whose active infection dispatch should be checked.</param>
+    /// <returns>The nearest arrived WBC transform, or null when no dispatched unit has arrived.</returns>
+    public Transform FindNearestArrivedWbcForPathogen(GameObject pathogenVisual)
+    {
+        if (pathogenVisual == null)
+            return null;
+
+        Transform nearestUnit = null;
+        float nearestDistanceSquared = float.PositiveInfinity;
+        foreach (DispatchedWbcSquad squad in dispatchedWbcSquads)
+        {
+            if (squad == null || squad.infectionTarget == null || squad.infectionTarget.isRemoving ||
+                !squad.infectionTarget.threatVisuals.Contains(pathogenVisual))
+            {
+                continue;
+            }
+
+            foreach (GameObject unit in squad.arrivedUnits)
+            {
+                if (unit == null || !unit.activeInHierarchy)
+                    continue;
+
+                Health health = unit.GetComponent<Health>();
+                if (health != null && health.IsDead)
+                    continue;
+
+                float distanceSquared = (unit.transform.position - pathogenVisual.transform.position).sqrMagnitude;
+                if (distanceSquared < nearestDistanceSquared)
+                {
+                    nearestDistanceSquared = distanceSquared;
+                    nearestUnit = unit.transform;
+                }
+            }
+        }
+
+        return nearestUnit;
+    }
+
     private void Awake()
     {
         activeInstance = this;
@@ -3951,13 +3990,21 @@ public sealed class InfectionSpawner : MonoBehaviour
             Vector3 offset = UnityEngine.Random.insideUnitSphere * threatVisualClusterRadius;
             GameObject visual = Instantiate(bacteriaPrefab, marker.worldPosition + offset, Quaternion.identity);
 
+            PathogenWanderController wanderController = visual.GetComponent<PathogenWanderController>();
+            if (wanderController != null)
+                wanderController.Initialize(marker.infection.pathogenType, visual.transform.position);
+
             BacteriaAgent bacteriaAgent = visual.GetComponentInChildren<BacteriaAgent>(true);
             if (bacteriaAgent != null)
                 bacteriaAgent.enabled = false;
 
             NavMeshAgent navMeshAgent = visual.GetComponentInChildren<NavMeshAgent>(true);
             if (navMeshAgent != null)
-                navMeshAgent.enabled = false;
+            {
+                navMeshAgent.enabled = true;
+                if (navMeshAgent.isOnNavMesh)
+                    navMeshAgent.isStopped = false;
+            }
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
             foreach (Collider visualCollider in colliders)

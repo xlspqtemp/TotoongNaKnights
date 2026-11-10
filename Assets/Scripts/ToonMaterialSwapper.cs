@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-/// <summary>Applies runtime Unity Toon Shader variants to system-layer meshes and Platelet drone instances.</summary>
+/// <summary>Applies runtime Unity Toon Shader variants to system-layer meshes, pathogen instances, and platelet drones.</summary>
 [DisallowMultipleComponent]
 public sealed class ToonMaterialSwapper : MonoBehaviour
 {
@@ -82,6 +82,38 @@ public sealed class ToonMaterialSwapper : MonoBehaviour
             swapper.ApplyToRenderers();
         }
     }
+    /// <summary>Applies the project Toon Shader to a pathogen and tints its runtime toon materials.</summary>
+    public static void ApplyToPathogen(GameObject pathogen, Color baseColor)
+    {
+        if (pathogen == null)
+            return;
+
+        ToonMaterialSwapper swapper = pathogen.GetComponent<ToonMaterialSwapper>();
+        if (swapper == null)
+            swapper = pathogen.AddComponent<ToonMaterialSwapper>();
+
+        swapper.ApplyPathogenTint(baseColor);
+    }
+
+    private void ApplyPathogenTint(Color baseColor)
+    {
+        ApplyToRenderers();
+        foreach (Material material in runtimeMaterials)
+        {
+            if (material == null)
+                continue;
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", baseColor);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color", baseColor);
+            if (material.HasProperty("_1st_ShadeColor"))
+                material.SetColor("_1st_ShadeColor", GetFirstShadeColor(baseColor));
+            if (material.HasProperty("_2nd_ShadeColor"))
+                material.SetColor("_2nd_ShadeColor", GetSecondShadeColor(baseColor));
+        }
+    }
+
 
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
