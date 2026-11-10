@@ -49,12 +49,12 @@ public sealed class InfectionIntelPopup : MonoBehaviour
 
     private void OnDisable()
     {
-        RestoreTimeScale();
+        Close();
     }
 
     private void OnDestroy()
     {
-        RestoreTimeScale();
+        Close();
     }
 
     /// <summary>Opens the intel panel for the specified active infection and pauses gameplay time.</summary>

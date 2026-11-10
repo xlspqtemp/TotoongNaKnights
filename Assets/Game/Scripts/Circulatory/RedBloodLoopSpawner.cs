@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -11,10 +10,11 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
     private const float DefaultSpawnDurationSeconds = 25f;
     private const float DefaultNavMeshSampleRadius = 10f;
     private const float SpawnBoundsHalfExtent = 0.5f;
-    private const float MovementAnimationSpeedThreshold = 0.05f;
-    private const float MovementAnimationSpeedThresholdSquared = MovementAnimationSpeedThreshold * MovementAnimationSpeedThreshold;
-    private const string IsMovingParameterName = "IsMoving";
-    private static readonly int IsMovingParameterHash = Animator.StringToHash(IsMovingParameterName);
+    private const string UnlitShaderName = "Universal Render Pipeline/Unlit";
+    private const string FallbackShaderName = "Sprites/Default";
+    private const string SharedMaterialName = "RBC Shared Unlit Red";
+    private static readonly Color RedBloodCellColor = new Color(1f, 0.025f, 0.025f, 1f);
+    private static Material sharedRedBloodMaterial;
     // Route waypoints are collected from the spawn point's parent container.
     private const string DestinationTargetName = "Destination - Target";
     private const string LungPointName = "Point - Lung";
@@ -26,8 +26,6 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
     private Transform[] destinationTargets;
     private Transform[] lungPoints;
     private bool hasReportedFirstSpawn;
-    private readonly List<NavMeshAgent> spawnedAgents = new List<NavMeshAgent>();
-    private readonly List<Animator> spawnedAnimators = new List<Animator>();
     [SerializeField, Min(0.1f)] private float spawnIntervalSeconds = DefaultSpawnIntervalSeconds;
     [SerializeField, Min(0.1f)] private float spawnDurationSeconds = DefaultSpawnDurationSeconds;
     [SerializeField, Min(0.1f)] private float navMeshSampleRadius = DefaultNavMeshSampleRadius;
@@ -43,27 +41,6 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
 
         Debug.Log($"Red blood spawner ready: {destinationTargets.Length} unique targets, {lungPoints.Length} lung points, one spawn per {spawnIntervalSeconds:0.##} seconds for {spawnDurationSeconds:0.##} seconds.", this);
         StartCoroutine(SpawnCellsOverTime());
-    }
-
-    private void Update()
-    {
-        for (int index = spawnedAgents.Count - 1; index >= 0; index--)
-        {
-            NavMeshAgent agent = spawnedAgents[index];
-            Animator animator = spawnedAnimators[index];
-            if (agent == null || animator == null || !agent.enabled)
-            {
-                spawnedAgents.RemoveAt(index);
-                spawnedAnimators.RemoveAt(index);
-                continue;
-            }
-
-            bool isMoving = agent.isOnNavMesh && agent.velocity.sqrMagnitude > MovementAnimationSpeedThresholdSquared;
-            if (animator.GetBool(IsMovingParameterHash) != isMoving)
-            {
-                animator.SetBool(IsMovingParameterHash, isMoving);
-            }
-        }
     }
 
     private void ResolveWaypoints()
@@ -165,6 +142,13 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
         }
 
         GameObject cell = Instantiate(redBloodPrefab, hit.position, spawnPoint.rotation);
+        if (!ApplyStaticRedVisual(cell))
+        {
+            Debug.LogError("RedBloodLoopSpawner could not apply its shared unlit red material to the cell visual.", cell);
+            Destroy(cell);
+            return;
+        }
+
         NavMeshAgent agent = cell.GetComponent<NavMeshAgent>();
         if (agent == null || !agent.enabled || !agent.Warp(hit.position))
         {
@@ -186,22 +170,60 @@ public sealed class RedBloodLoopSpawner : MonoBehaviour
             return;
         }
 
-        Animator animator = cell.GetComponentInChildren<Animator>();
-        if (animator == null || animator.runtimeAnimatorController == null)
-        {
-            Debug.LogError("The Red Blood prefab needs an Animator with an assigned controller on its visual model.", cell);
-            Destroy(cell);
-            return;
-        }
-
-        spawnedAgents.Add(agent);
-        spawnedAnimators.Add(animator);
-
         if (!hasReportedFirstSpawn)
         {
             hasReportedFirstSpawn = true;
             Debug.Log($"Red blood spawner created the first routed cell for '{assignedDestination.name}'.", this);
         }
+    }
+
+    private static bool ApplyStaticRedVisual(GameObject cell)
+    {
+        Renderer[] renderers = cell.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+        {
+            return false;
+        }
+
+        Material material = GetSharedRedBloodMaterial();
+        if (material == null)
+        {
+            return false;
+        }
+
+        foreach (Renderer cellRenderer in renderers)
+        {
+            cellRenderer.sharedMaterial = material;
+        }
+
+        return true;
+    }
+
+    private static Material GetSharedRedBloodMaterial()
+    {
+        if (sharedRedBloodMaterial != null)
+        {
+            return sharedRedBloodMaterial;
+        }
+
+        Shader shader = Shader.Find(UnlitShaderName);
+        if (shader == null)
+        {
+            shader = Shader.Find(FallbackShaderName);
+        }
+
+        if (shader == null)
+        {
+            return null;
+        }
+
+        sharedRedBloodMaterial = new Material(shader)
+        {
+            name = SharedMaterialName,
+            hideFlags = HideFlags.HideAndDontSave,
+            color = RedBloodCellColor
+        };
+        return sharedRedBloodMaterial;
     }
 
     private static bool HasAnyTarget(Transform[] targets)

@@ -100,6 +100,7 @@ public class CameraScript : MonoBehaviour
     private Vector3 previousMousePosition;
     private Camera sceneCamera;
     private LayerTransitionUI layerTransitionUI;
+    private InfectionIntelPopup infectionIntelPopup;
     private AudioSource breachAlarmAudioSource;
     private int selectedLayer = 1;
     private Coroutine infectionFocusCoroutine;
@@ -850,6 +851,8 @@ public class CameraScript : MonoBehaviour
             return;
         }
 
+        CloseInfectionIntelPopup();
+
         if (playSwitchSound && layerTransitionUI != null)
         {
             layerHudVisibilityDeferred = true;
@@ -943,6 +946,15 @@ public class CameraScript : MonoBehaviour
         {
             PlayLayerSwitchSound();
         }
+    }
+
+    private void CloseInfectionIntelPopup()
+    {
+        if (infectionIntelPopup == null)
+            infectionIntelPopup = FindFirstObjectByType<InfectionIntelPopup>();
+
+        if (infectionIntelPopup != null && infectionIntelPopup.IsOpen)
+            infectionIntelPopup.Close();
     }
 
     private void HideAllSystemControls()
