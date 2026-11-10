@@ -35,7 +35,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const int PlateletDroneSwarmSize = 4;
     private const float PlateletDroneSwarmRadius = 0.8f;
     private const float PlateletDroneHoverHeight = 0.15f;
-    private const float PlateletDroneTargetHeight = 2.945f;
+    private const float PlateletDroneTargetHeight = 1.986625f;
     private const string PlateletDronePrefabAssetPath = "Assets/Models/Platelet drone static fixed 3 fbx.prefab";
     private const string DefaultPlateletDroneWeavingStateName = "Base Layer.Weaving";
     private const float FibrinNetModelScale = 3f;
