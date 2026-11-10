@@ -37,7 +37,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float PlateletDroneOrbitDurationSeconds = 8f;
     private const float FullCircleRadians = Mathf.PI * 2f;
     private const float PlateletDroneHoverHeight = 0.15f;
-    private const float PlateletDroneTargetHeight = 1.986625f;
+    private const float PlateletDroneSpawnScale = 0.2669f;
     private const string PlateletDronePrefabAssetPath = "Assets/Game/Prefabs/Platelet drone animated.prefab";
     private const string DefaultPlateletDroneWeavingStateName = "Base Layer.Weaving";
     private const float FibrinNetModelScale = 3f;
@@ -702,7 +702,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
             Vector3 radialOffset = GetPlateletDroneOrbitOffset(orbitAngle);
             GameObject drone = Instantiate(prefabToInstantiate, transform.position + radialOffset, transform.rotation);
             drone.name = $"Platelet Drone (Wound Repair {droneIndex + 1})";
-            drone.transform.localScale *= PlateletDroneTargetHeight / GetRendererBoundsHeight(drone);
+            drone.transform.localScale = Vector3.one * PlateletDroneSpawnScale;
             CenterDroneOverWound(drone, radialOffset);
             plateletDroneOrbitHeights.Add(drone.transform.position.y - transform.position.y);
             SetLayerRecursively(drone, gameObject.layer);
@@ -799,7 +799,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
         }
 
         Vector3 targetBoundsCenter = transform.position + radialOffset +
-            Vector3.up * (PlateletDroneTargetHeight * 0.5f + PlateletDroneHoverHeight);
+            Vector3.up * (combinedBounds.size.y * 0.5f + PlateletDroneHoverHeight);
         drone.transform.position += targetBoundsCenter - combinedBounds.center;
     }
 
