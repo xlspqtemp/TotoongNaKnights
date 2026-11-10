@@ -13,6 +13,9 @@ public sealed class PathogenWanderController : MonoBehaviour
     private const int DestinationSampleAttempts = 16;
     private const float NavMeshSampleDistance = 1.25f;
     private const float BoundaryTolerance = 0.1f;
+    private const float MovementAnimationVelocityThreshold = 0.05f;
+    private const string MovementAnimationStateName = "Walk";
+    private static readonly int MovementAnimationStateHash = Animator.StringToHash(MovementAnimationStateName);
 
     private static readonly Color BacterialTint = new Color(0.48f, 0.025f, 0.04f, 1f);
     private static readonly Color ViralTint = new Color(0.045f, 0.24f, 0.95f, 1f);
@@ -27,6 +30,7 @@ public sealed class PathogenWanderController : MonoBehaviour
     [SerializeField, Min(1f)] private float turnSpeedDegreesPerSecond = DefaultTurnSpeedDegreesPerSecond;
 
     private NavMeshAgent navMeshAgent;
+    private Animator pathogenAnimator;
     private InfectionSpawner infectionSpawner;
     private Vector3 spawnCenter;
     private Transform currentAttacker;
@@ -34,10 +38,14 @@ public sealed class PathogenWanderController : MonoBehaviour
     private float nextAttackerScanTime;
     private float nextWanderTime;
     private bool pursuitOverride;
+    private bool movementAnimationPlaying;
 
     private void Awake()
     {
         navMeshAgent = GetComponent<NavMeshAgent>();
+        pathogenAnimator = GetComponentInChildren<Animator>(true);
+        if (pathogenAnimator != null)
+            pathogenAnimator.speed = 0f;
         infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
         spawnCenter = transform.position;
         ConfigureAgent();
@@ -60,17 +68,22 @@ public sealed class PathogenWanderController : MonoBehaviour
         if (currentAttacker != null)
         {
             HoldAndFace(currentAttacker.position);
+            SetMovementAnimation(false);
             return;
         }
 
         if (pursuitOverride)
         {
             FaceMovementDirection();
+            UpdateMovementAnimation();
             return;
         }
 
         if (navMeshAgent == null || !navMeshAgent.enabled || !navMeshAgent.isOnNavMesh)
+        {
+            SetMovementAnimation(false);
             return;
+        }
 
         if (navMeshAgent.isStopped)
             navMeshAgent.isStopped = false;
@@ -80,6 +93,8 @@ public sealed class PathogenWanderController : MonoBehaviour
         {
             navMeshAgent.ResetPath();
             navMeshAgent.SetDestination(spawnCenter);
+            FaceMovementDirection();
+            UpdateMovementAnimation();
             return;
         }
 
@@ -94,6 +109,7 @@ public sealed class PathogenWanderController : MonoBehaviour
         }
 
         FaceMovementDirection();
+        UpdateMovementAnimation();
     }
 
     /// <summary>Sets the pathogen category and the center used to constrain its wandering radius.</summary>
@@ -248,6 +264,36 @@ public sealed class PathogenWanderController : MonoBehaviour
         }
 
         return true;
+    }
+
+    private void UpdateMovementAnimation()
+    {
+        bool isMoving = navMeshAgent != null && navMeshAgent.enabled && navMeshAgent.isOnNavMesh &&
+            !navMeshAgent.isStopped && navMeshAgent.velocity.sqrMagnitude > MovementAnimationVelocityThreshold * MovementAnimationVelocityThreshold;
+        SetMovementAnimation(isMoving);
+    }
+
+    private void SetMovementAnimation(bool shouldAnimate)
+    {
+        if (pathogenAnimator == null || pathogenAnimator.runtimeAnimatorController == null ||
+            movementAnimationPlaying == shouldAnimate)
+        {
+            return;
+        }
+
+        if (shouldAnimate)
+        {
+            if (!pathogenAnimator.HasState(0, MovementAnimationStateHash))
+                return;
+
+            pathogenAnimator.Play(MovementAnimationStateHash, 0, 0f);
+            pathogenAnimator.speed = 1f;
+            movementAnimationPlaying = true;
+            return;
+        }
+
+        pathogenAnimator.speed = 0f;
+        movementAnimationPlaying = false;
     }
 
     private void HoldAndFace(Vector3 targetPosition)

@@ -263,6 +263,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Pathogen model2
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 28d3ed8e1d3206847994505583cc2d52, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 0e3baf2672fa6974aa370b6920aae0db, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
