@@ -13,7 +13,9 @@ public class MasterAudioSettingsController : MonoBehaviour
     private const float VolumeRowAnchorY = 0.62f;
     private const float VolumeSliderWidth = 360f;
     private const float VolumeSliderHorizontalOffset = -68f;
-    private const float SoundLabelGap = 10f;
+    private const float VolumeControlsVerticalOffset = -24f;
+    private const float VolumeSliderHeight = 30f;
+    private const float SoundLabelGap = 14f;
     private const float SoundLabelHeight = 24f;
     private const float VolumePercentageWidth = 120f;
     private const float VolumePercentageHorizontalOffset = 180f;
@@ -182,14 +184,16 @@ public class MasterAudioSettingsController : MonoBehaviour
             new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(520f, 54f), TextAlignmentOptions.Center);
 
         percentageLabel = CreateText(card.transform, "MasterVolumePercentage", "100%", 22, FontStyles.Bold,
-            new Vector2(0.5f, VolumeRowAnchorY), new Vector2(VolumePercentageHorizontalOffset, 0f),
+            new Vector2(0.5f, VolumeRowAnchorY), new Vector2(VolumePercentageHorizontalOffset, VolumeControlsVerticalOffset),
             new Vector2(VolumePercentageWidth, 44f), TextAlignmentOptions.Right);
         percentageLabel.overflowMode = TextOverflowModes.Overflow;
         masterVolumeSlider = CreateMasterSlider(card.transform);
-        CreateText(card.transform, "SettingsSoundLabel", "SOUND", 22, FontStyles.Bold,
+        TextMeshProUGUI soundLabel = CreateText(card.transform, "SettingsSoundLabel", "SOUND", 22, FontStyles.Bold,
             new Vector2(0.5f, VolumeRowAnchorY),
-            new Vector2(VolumeSliderHorizontalOffset, 15f + SoundLabelGap + SoundLabelHeight * 0.5f),
+            new Vector2(VolumeSliderHorizontalOffset - VolumeSliderWidth * 0.5f,
+                VolumeControlsVerticalOffset + VolumeSliderHeight * 0.5f + SoundLabelGap),
             new Vector2(VolumeSliderWidth, SoundLabelHeight), TextAlignmentOptions.Left);
+        soundLabel.rectTransform.pivot = Vector2.zero;
 
         CreateButton(card.transform, "SettingsBackButton", "BACK", new Vector2(0.5f, 0f),
             new Vector2(0f, 58f), new Vector2(200f, 52f), CloseSettings);
@@ -203,7 +207,7 @@ public class MasterAudioSettingsController : MonoBehaviour
         sliderObject.transform.SetParent(parent, false);
         SetRect(sliderObject.GetComponent<RectTransform>(), new Vector2(0.5f, VolumeRowAnchorY),
             new Vector2(0.5f, VolumeRowAnchorY), new Vector2(0.5f, 0.5f),
-            new Vector2(VolumeSliderHorizontalOffset, 0f), new Vector2(VolumeSliderWidth, 30f));
+            new Vector2(VolumeSliderHorizontalOffset, VolumeControlsVerticalOffset), new Vector2(VolumeSliderWidth, VolumeSliderHeight));
 
         Image background = CreateImage(sliderObject.transform, "Background", new Color(0.035f, 0.09f, 0.11f, 1f),
             Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, true);
