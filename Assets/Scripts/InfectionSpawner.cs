@@ -32,6 +32,14 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float SquadStandingOffsetRadius = 2.8f;
     private const float SquadOffsetAngleStep = 2.39996323f;
     private const string DendriticDestinationObjectName = "Dendritic Infection Destination";
+    private const string DendriticAnimationStateName = "Scene";
+    private const float DendriticContainmentOffset = 1.5f;
+    private const float DendriticContainmentMinimumDistance = 1f;
+    private const float DendriticContainmentMaximumDistance = 2f;
+    private const float DendriticContainmentNavMeshSampleDistance = 25f;
+    private const float DendriticContainmentMaximumVerticalOffset = 10f;
+    private const int DendriticContainmentSampleCount = 16;
+    private const float DendriticFacingSpeedDegreesPerSecond = 720f;
     private const float MinimumPromptWellnessGap = 30f;
     private const float DefaultPromptWellnessGap = 36f;
     private const float SquadPromptFadeDuration = 0.4f;
@@ -1779,6 +1787,24 @@ public sealed class InfectionSpawner : MonoBehaviour
             ? Quaternion.LookRotation(lookDirection) * prefabRotation
             : prefabRotation;
     }
+    private static void PlayDendriticAnimation(GameObject dendriticCell)
+    {
+        if (dendriticCell == null)
+            return;
+
+        Animator animator = dendriticCell.GetComponentInChildren<Animator>(true);
+        if (animator == null || animator.runtimeAnimatorController == null)
+            return;
+
+        int animationStateHash = Animator.StringToHash(DendriticAnimationStateName);
+        if (!animator.HasState(0, animationStateHash))
+            return;
+
+        animator.speed = 1f;
+        animator.Play(animationStateHash, 0, 0f);
+        animator.Update(0f);
+    }
+
 
     private GameObject SpawnDendriticCell(InfectionMarker infectionTarget, Vector3 spawnPosition, out GameObject destinationObject)
     {
@@ -1790,6 +1816,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         Quaternion spawnRotation = GetDendriticSpawnRotation(dendriticPrefab, lookDirection);
 
         GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, spawnRotation);
+        PlayDendriticAnimation(dendriticCell);
         NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
         CirculatoryCellRoute route = dendriticCell.GetComponent<CirculatoryCellRoute>();
         if (agent == null || route == null || !agent.enabled)
@@ -1862,6 +1889,9 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
             }
 
+            if (dispatchedCell.infectionTarget != null)
+                FaceDendriticCellToward(dendriticCell, GetInfectionVisualCenter(dispatchedCell.infectionTarget));
+
             NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
             if (agent == null || !agent.enabled || !agent.isOnNavMesh || agent.pathPending || !agent.hasPath
                 || agent.pathStatus != NavMeshPathStatus.PathComplete)
@@ -1885,13 +1915,109 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         foreach (InfectionMarker marker in activeInfectionMarkers)
         {
-            if (marker == null || !marker.isContained || marker.containedDendriticCell == null ||
-                !marker.containedDendriticUsesProceduralIdle)
+            if (marker == null || !marker.isContained || marker.containedDendriticCell == null)
                 continue;
 
-            float bobOffset = Mathf.Sin(Time.time * ContainedDendriticIdleBobSpeed) * ContainedDendriticIdleBobHeight;
-            marker.containedDendriticCell.transform.position = marker.containedDendriticBasePosition + Vector3.up * bobOffset;
+            if (marker.containedDendriticUsesProceduralIdle)
+            {
+                float bobOffset = Mathf.Sin(Time.time * ContainedDendriticIdleBobSpeed) * ContainedDendriticIdleBobHeight;
+                marker.containedDendriticCell.transform.position = marker.containedDendriticBasePosition + Vector3.up * bobOffset;
+            }
+
+            FaceDendriticCellToward(marker.containedDendriticCell, GetInfectionVisualCenter(marker));
         }
+    }
+
+    private static Vector3 GetInfectionVisualCenter(InfectionMarker marker)
+    {
+        if (marker == null || marker.threatVisuals == null || marker.threatVisuals.Count == 0)
+            return marker != null ? marker.worldPosition : Vector3.zero;
+
+        Vector3 combinedPosition = Vector3.zero;
+        int activeVisualCount = 0;
+        foreach (GameObject pathogen in marker.threatVisuals)
+        {
+            if (pathogen == null || !pathogen.activeInHierarchy)
+                continue;
+
+            Health health = pathogen.GetComponent<Health>();
+            if (health != null && health.IsDead)
+                continue;
+
+            combinedPosition += pathogen.transform.position;
+            activeVisualCount++;
+        }
+
+        return activeVisualCount > 0 ? combinedPosition / activeVisualCount : marker.worldPosition;
+    }
+
+    private void FaceDendriticCellToward(GameObject dendriticCell, Vector3 targetPosition)
+    {
+        if (dendriticCell == null)
+            return;
+
+        Vector3 lookDirection = targetPosition - dendriticCell.transform.position;
+        lookDirection.y = 0f;
+        if (lookDirection.sqrMagnitude <= 0.001f)
+            return;
+
+        Quaternion targetRotation = GetDendriticSpawnRotation(dendriticPrefab, lookDirection);
+        dendriticCell.transform.rotation = Quaternion.RotateTowards(dendriticCell.transform.rotation, targetRotation,
+            DendriticFacingSpeedDegreesPerSecond * Time.deltaTime);
+    }
+
+    private bool TryGetDendriticContainmentPosition(InfectionMarker marker, NavMeshAgent agent, out Vector3 spawnPosition)
+    {
+        Vector3 pathogenPosition = GetInfectionVisualCenter(marker);
+        NavMeshQueryFilter filter = new NavMeshQueryFilter
+        {
+            agentTypeID = agent.agentTypeID,
+            areaMask = agent.areaMask
+        };
+
+        bool hasGroundAnchor = NavMesh.SamplePosition(pathogenPosition, out NavMeshHit groundHit,
+            Mathf.Max(dispatchNavMeshSampleRadius, DendriticContainmentNavMeshSampleDistance), filter);
+        Vector3 groundAnchor = hasGroundAnchor ? groundHit.position : pathogenPosition;
+        float bestScore = float.PositiveInfinity;
+        spawnPosition = Vector3.zero;
+        bool foundPosition = false;
+
+        for (int sampleIndex = 0; sampleIndex < DendriticContainmentSampleCount; sampleIndex++)
+        {
+            float angle = Mathf.PI * 2f * sampleIndex / DendriticContainmentSampleCount;
+            Vector3 horizontalOffset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * DendriticContainmentOffset;
+            Vector3 candidate = groundAnchor + horizontalOffset;
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, DendriticContainmentNavMeshSampleDistance, filter))
+                continue;
+
+            Vector3 planarOffset = Vector3.ProjectOnPlane(hit.position - groundAnchor, Vector3.up);
+            float planarDistance = planarOffset.magnitude;
+            float verticalDistance = Mathf.Abs(hit.position.y - groundAnchor.y);
+            if (planarDistance < DendriticContainmentMinimumDistance || planarDistance > DendriticContainmentMaximumDistance ||
+                verticalDistance > DendriticContainmentMaximumVerticalOffset)
+            {
+                continue;
+            }
+
+            float score = Mathf.Abs(planarDistance - DendriticContainmentOffset) + verticalDistance * 2f;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                spawnPosition = hit.position;
+                foundPosition = true;
+            }
+        }
+
+        if (foundPosition)
+            return true;
+
+        Vector3 fallbackDirection = Vector3.right;
+        spawnPosition = groundAnchor + fallbackDirection * DendriticContainmentOffset;
+        if (!hasGroundAnchor)
+            Debug.LogWarning("[InfectionSpawner] No nearby NavMesh was found for the contained Dendritic Cell; spawning beside the infection anchor without NavMesh attachment.", this);
+        else
+            Debug.LogWarning("[InfectionSpawner] No NavMesh point was available 1–2 units from the contained pathogen cluster; spawning at the nearest ground anchor offset.", this);
+        return true;
     }
 
     private void SpawnContainedDendriticCell(InfectionMarker marker)
@@ -1899,13 +2025,26 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (marker == null || dendriticPrefab == null || marker.containedDendriticCell != null)
             return;
 
-        Vector3 spawnPosition = marker.worldPosition + Vector3.right * 1.5f;
-        Vector3 lookDirection = marker.worldPosition - spawnPosition;
-        Quaternion spawnRotation = GetDendriticSpawnRotation(dendriticPrefab, lookDirection);
+        NavMeshAgent prefabAgent = dendriticPrefab.GetComponent<NavMeshAgent>();
+        if (prefabAgent == null || !prefabAgent.enabled)
+        {
+            Debug.LogWarning("[InfectionSpawner] The contained Dendritic Cell prefab requires an enabled NavMeshAgent.", this);
+            return;
+        }
 
+        Vector3 pathogenPosition = GetInfectionVisualCenter(marker);
+        Vector3 spawnPosition;
+        if (!TryGetDendriticContainmentPosition(marker, prefabAgent, out spawnPosition))
+        {
+            Debug.LogWarning("[InfectionSpawner] Could not find a NavMesh position 1–2 units from the contained pathogen cluster.", this);
+            return;
+        }
+
+        Quaternion spawnRotation = GetDendriticSpawnRotation(dendriticPrefab, pathogenPosition - spawnPosition);
         GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, spawnRotation);
+        PlayDendriticAnimation(dendriticCell);
         marker.containedDendriticCell = dendriticCell;
-        marker.containedDendriticBasePosition = dendriticCell.transform.position;
+        marker.containedDendriticBasePosition = spawnPosition;
 
         NavMeshAgent agent = dendriticCell.GetComponent<NavMeshAgent>();
         if (agent != null && agent.enabled)
@@ -1913,6 +2052,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             agent.updateRotation = false;
             if (agent.isOnNavMesh)
             {
+                agent.Warp(spawnPosition);
                 agent.ResetPath();
                 agent.isStopped = true;
             }
@@ -1923,11 +2063,10 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         Animator animator = dendriticCell.GetComponentInChildren<Animator>(true);
-        bool hasIdleAnimation = animator != null && animator.runtimeAnimatorController != null &&
-            animator.HasState(0, Animator.StringToHash("Idle"));
-        marker.containedDendriticUsesProceduralIdle = !hasIdleAnimation;
-        if (hasIdleAnimation)
-            animator.Play("Idle", 0, 0f);
+        bool hasLoopingSceneAnimation = animator != null && animator.runtimeAnimatorController != null &&
+            animator.HasState(0, Animator.StringToHash(DendriticAnimationStateName));
+        marker.containedDendriticUsesProceduralIdle = !hasLoopingSceneAnimation;
+        FaceDendriticCellToward(dendriticCell, pathogenPosition);
     }
 
     private bool CreatePendingAntigenCollection(InfectionMarker marker)

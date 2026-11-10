@@ -3027,7 +3027,7 @@ MonoBehaviour:
   squadLifetimeSeconds: 20
   dispatchNavMeshSampleRadius: 25
   dispatchArrivalRadius: 0.5
-  dendriticPrefab: {fileID: 4316079508605687813, guid: f1157d28f94cfcd46af4407a028c4837, type: 3}
+  dendriticPrefab: {fileID: 3798622682331600020, guid: 8e965b27f269d274a9dc9376a81dee9e, type: 3}
   holdOffset: {x: 1.5, y: 0, z: 0}
   combatDetectionRange: 8
   combatMeleeRange: 1.5
