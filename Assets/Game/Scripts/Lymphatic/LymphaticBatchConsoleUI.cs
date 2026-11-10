@@ -12,6 +12,10 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const string NeutrophilVariantPanelName = "NeutrophilVariantSelectionPanel";
     private const int MaximumSlots = 10;
     private const int NeutrophilVariantCount = 3;
+    private const string TCellUnitName = "T Cell";
+    private const string BCellUnitName = "B Cell";
+    private const string EosinophilVariantName = "EOSINOPHIL";
+    private const string BasophilVariantName = "BASOPHIL";
     private const float IconSize = 58f;
     private const float FollowZoom = 18f;
     private const string FontResourcePath = "BankGothicMediumSDF";
@@ -614,11 +618,58 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         RefreshSlots();
     }
 
+    private bool HandleDeploymentCompatibility(LymphaticBatchGroup batch,
+        InfectionSpawner.InfectionMarker marker, out string blockReason)
+    {
+        blockReason = null;
+        if (batch == null || marker == null || marker.infection == null)
+            return true;
+
+        bool isAdaptiveCell = string.Equals(batch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(batch.UnitType, BCellUnitName, StringComparison.OrdinalIgnoreCase);
+        if (isAdaptiveCell)
+        {
+            string trainedAntigen = batch.PathogenVariant?.Trim();
+            string targetInfectionName = marker.infection.displayName?.Trim();
+            if (string.IsNullOrWhiteSpace(trainedAntigen) ||
+                !string.Equals(trainedAntigen, targetInfectionName, StringComparison.OrdinalIgnoreCase))
+            {
+                blockReason = "[Deployment] Blocked: T-Cell/B-Cell antigen mismatch.";
+                return false;
+            }
+        }
+
+        if (string.Equals(selectedNeutrophilVariantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase) &&
+            marker.infection.pathogenType != InfectionPathogenType.Parasite)
+        {
+            blockReason = "[Deployment] Blocked: Eosinophils can only target Parasites.";
+            return false;
+        }
+
+        if (string.Equals(selectedNeutrophilVariantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase) &&
+            marker.infection.pathogenType != InfectionPathogenType.Allergen)
+        {
+            blockReason = "[Deployment] Blocked: Basophils can only target Allergens.";
+            return false;
+        }
+
+        return true;
+    }
+
     private void HandleInfectionTargetClicked(InfectionSpawner.InfectionMarker marker)
     {
         if (!layerAvailable || neutrophilVariantPanelRoot != null && neutrophilVariantPanelRoot.activeSelf ||
             !awaitingTargetSelection || selectedBatchId < 1 || batchSpawner == null || marker == null)
             return;
+
+        LymphaticBatchGroup selectedBatch = batchSpawner.GetBatch(selectedBatchId);
+        if (!HandleDeploymentCompatibility(selectedBatch, marker, out string blockReason))
+        {
+            Debug.LogWarning(blockReason, this);
+            if (ConsoleLogUI.Instance != null)
+                ConsoleLogUI.Instance.Log(blockReason, ConsoleLogUI.LogType.Warning);
+            return;
+        }
 
         string failureReason = null;
         bool dispatched;
