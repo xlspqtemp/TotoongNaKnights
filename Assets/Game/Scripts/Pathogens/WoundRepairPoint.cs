@@ -36,7 +36,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
     private const float PlateletDroneSwarmRadius = 0.8f;
     private const float PlateletDroneHoverHeight = 0.15f;
     private const float PlateletDroneTargetHeight = 1.986625f;
-    private const string PlateletDronePrefabAssetPath = "Assets/Models/Platelet drone static fixed 3 fbx.prefab";
+    private const string PlateletDronePrefabAssetPath = "Assets/Game/Prefabs/Platelet drone animated.prefab";
     private const string DefaultPlateletDroneWeavingStateName = "Base Layer.Weaving";
     private const float FibrinNetModelScale = 3f;
     private const float FibrinNetModelRotationX = 270f;
@@ -720,9 +720,30 @@ public sealed class WoundRepairPoint : MonoBehaviour
         }
     }
 
+    private static Renderer[] GetVisibleDroneRenderers(GameObject drone)
+    {
+        Renderer[] allRenderers = drone.GetComponentsInChildren<Renderer>(true);
+        int visibleRendererCount = 0;
+        foreach (Renderer renderer in allRenderers)
+        {
+            if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy)
+                visibleRendererCount++;
+        }
+
+        Renderer[] visibleRenderers = new Renderer[visibleRendererCount];
+        int visibleIndex = 0;
+        foreach (Renderer renderer in allRenderers)
+        {
+            if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy)
+                visibleRenderers[visibleIndex++] = renderer;
+        }
+
+        return visibleRenderers;
+    }
+
     private static float GetRendererBoundsHeight(GameObject drone)
     {
-        Renderer[] renderers = drone.GetComponentsInChildren<Renderer>(true);
+        Renderer[] renderers = GetVisibleDroneRenderers(drone);
         if (renderers.Length == 0)
         {
             return 1f;
@@ -739,7 +760,7 @@ public sealed class WoundRepairPoint : MonoBehaviour
 
     private void CenterDroneOverWound(GameObject drone, Vector3 radialOffset)
     {
-        Renderer[] renderers = drone.GetComponentsInChildren<Renderer>(true);
+        Renderer[] renderers = GetVisibleDroneRenderers(drone);
         if (renderers.Length == 0)
         {
             drone.transform.position = transform.position + radialOffset + Vector3.up * PlateletDroneHoverHeight;
