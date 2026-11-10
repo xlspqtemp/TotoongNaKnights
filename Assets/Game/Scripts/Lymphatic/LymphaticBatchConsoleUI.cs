@@ -15,7 +15,15 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const float IconSize = 58f;
     private const float FollowZoom = 18f;
     private const string FontResourcePath = "BankGothicMediumSDF";
+    private const string BCellIconResourcePath = "UI/B cell headshot icon";
+    private const string TCellIconResourcePath = "UI/Killet t cell headshot icon";
+    private const string MacrophageIconResourcePath = "UI/Macrophage Headshot icon";
+    private const string NeutrophilIconResourcePath = "UI/WBC HEADSHOT ICON";
     private static Sprite solidColorSprite;
+    private static Sprite bCellIconSprite;
+    private static Sprite tCellIconSprite;
+    private static Sprite macrophageIconSprite;
+    private static Sprite neutrophilIconSprite;
 
     private static readonly Color PanelColor = new Color(0.012f, 0.035f, 0.047f, 0.96f);
     private static readonly Color AccentColor = new Color(0.12f, 0.84f, 0.91f, 1f);
@@ -57,6 +65,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     {
         public Button Button;
         public Image Background;
+        public Image Icon;
         public TextMeshProUGUI NameLabel;
         public TextMeshProUGUI StatusLabel;
         public TextMeshProUGUI TravelTimeLabel;
@@ -397,6 +406,35 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         return solidColorSprite;
     }
 
+    private static Sprite GetUnitIcon(string unitType)
+    {
+        if (string.IsNullOrWhiteSpace(unitType))
+            return null;
+
+        switch (unitType.Trim().ToUpperInvariant())
+        {
+            case "B CELL":
+                if (bCellIconSprite == null)
+                    bCellIconSprite = Resources.Load<Sprite>(BCellIconResourcePath);
+                return bCellIconSprite;
+            case "T CELL":
+            case "KILLER T CELL":
+                if (tCellIconSprite == null)
+                    tCellIconSprite = Resources.Load<Sprite>(TCellIconResourcePath);
+                return tCellIconSprite;
+            case "MACROPHAGE":
+                if (macrophageIconSprite == null)
+                    macrophageIconSprite = Resources.Load<Sprite>(MacrophageIconResourcePath);
+                return macrophageIconSprite;
+            case "NEUTROPHIL":
+                if (neutrophilIconSprite == null)
+                    neutrophilIconSprite = Resources.Load<Sprite>(NeutrophilIconResourcePath);
+                return neutrophilIconSprite;
+            default:
+                return null;
+        }
+    }
+
     private BatchSlot CreateSlot(int index)
     {
         float anchorX = 0.05f + (index + 0.5f) * 0.09f;
@@ -408,6 +446,15 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         Image background = iconObject.GetComponent<Image>();
         background.color = EmptySlotColor;
         background.raycastTarget = true;
+        GameObject unitIconObject = new GameObject("UnitIcon", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        unitIconObject.transform.SetParent(iconObject.transform, false);
+        RectTransform unitIconRect = unitIconObject.GetComponent<RectTransform>();
+        SetRect(unitIconRect, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero,
+            new Vector2(-8f, -8f));
+        Image unitIcon = unitIconObject.GetComponent<Image>();
+        unitIcon.preserveAspect = true;
+        unitIcon.raycastTarget = false;
+        unitIcon.enabled = false;
         Button button = iconObject.GetComponent<Button>();
         button.targetGraphic = background;
         button.transition = Selectable.Transition.ColorTint;
@@ -435,6 +482,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         {
             Button = button,
             Background = background,
+            Icon = unitIcon,
             NameLabel = nameLabel,
             StatusLabel = statusLabel,
             TravelTimeLabel = travelLabel
@@ -489,6 +537,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             bool isSelected = isOccupied && batchId == selectedBatchId;
             slot.Button.interactable = isOccupied;
             slot.Background.color = !isOccupied ? EmptySlotColor : isSelected ? SelectedSlotColor : ActiveSlotColor;
+            slot.Icon.sprite = isOccupied ? GetUnitIcon(batch.UnitType) : null;
+            slot.Icon.enabled = slot.Icon.sprite != null;
             slot.NameLabel.enabled = isOccupied;
             slot.StatusLabel.enabled = isOccupied;
             slot.TravelTimeLabel.enabled = isOccupied && batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing;
