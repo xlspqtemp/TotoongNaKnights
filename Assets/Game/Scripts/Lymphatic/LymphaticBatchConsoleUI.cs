@@ -16,8 +16,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const string BCellUnitName = "B Cell";
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
-    private const float IconSize = 58f;
-    private const float NeutrophilVariantLongPressDuration = 2f;
+    private const float IconSize = 68f;
+    private const float NeutrophilVariantLongPressDuration = 0.5f;
     private const int NoActivePointerId = int.MinValue;
     private const float FollowZoom = 18f;
     private const string FontResourcePath = "BankGothicMediumSDF";
