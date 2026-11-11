@@ -774,6 +774,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
                 !string.Equals(trainedAntigen, targetInfectionName, StringComparison.OrdinalIgnoreCase))
             {
                 blockReason = "[Deployment] Blocked: T-Cell/B-Cell antigen mismatch.";
+                if (string.Equals(batch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase))
+                    batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayInvalidDeployment();
                 return false;
             }
         }

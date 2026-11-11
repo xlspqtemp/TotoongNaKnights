@@ -144,7 +144,11 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             return false;
 
         if (!IsViralTargetCompatible(batch, infection, out failureReason))
+        {
+            if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayInvalidDeployment();
             return false;
+        }
 
         Transform duct = null;
         Transform vein = null;
@@ -188,6 +192,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
                 if (targetWasAborted)
                     batch.ConsumeTargetAbortedState();
             }
+            else if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayDeploymentAccepted();
             return true;
         }
 
@@ -237,6 +243,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             batch.GroupLeader.GetComponent<WbcVoiceLines>()?.PlayTargetAborted();
             batch.MarkTargetAborted();
         }
+        else if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+            batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayTargetChangedOrAborted();
         batch.AbortOrder();
         return true;
     }
@@ -260,6 +268,11 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             System.StringComparison.OrdinalIgnoreCase))
         {
             batchLeader.GetComponent<WbcVoiceLines>()?.PlayUnitDestroyed();
+        }
+        else if (batchGroup != null && string.Equals(batchGroup.UnitType, TCellUnitName,
+            System.StringComparison.OrdinalIgnoreCase))
+        {
+            batchLeader.GetComponent<KillerTCellVoiceLines>()?.PlayBatchDestroyed();
         }
 
         foreach (GameObject member in reservation.Members)
@@ -346,6 +359,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             members[0].GetComponent<MacrophageVoiceLines>()?.PlayTrainingCompleted();
         else if (string.Equals(unitType, NeutrophilUnitName, System.StringComparison.OrdinalIgnoreCase))
             members[0].GetComponent<WbcVoiceLines>()?.PlayTrainingReady();
+        else if (string.Equals(unitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+            members[0].GetComponent<KillerTCellVoiceLines>()?.PlayTrainingCompleted();
         return true;
     }
 

@@ -3353,6 +3353,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             yield break;
 
         Debug.Log($"[Resolution] Killer T-Cell induced apoptosis in {marker.infection.displayName}. Infection cleared.", this);
+        if (sourceBatch != null)
+            sourceBatch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayViralDestroyed();
         ApplyWellnessGainOnResolve(marker);
         BeginRemovingInfectionMarker(marker);
     }

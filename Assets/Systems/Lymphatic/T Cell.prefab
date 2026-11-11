@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 363319802868154011}
   - component: {fileID: 1401831449982530103}
   - component: {fileID: 8746077116724342594}
+  - component: {fileID: 4103371819546567568}
   m_Layer: 0
   m_Name: T Cell
   m_TagString: Untagged
@@ -108,6 +109,24 @@ MonoBehaviour:
   attackDamage: 20
   attackIntervalSeconds: 1
   attackRange: 2.5
+--- !u!114 &4103371819546567568
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8640416537868356536}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fdd804163cc70b146b8c54a58f856dff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::KillerTCellVoiceLines
+  trainingCompletedClip: {fileID: 8300000, guid: 1a363bc1b2f563147bdb55612200b61c, type: 3}
+  deploymentAcceptedClip: {fileID: 8300000, guid: 2223f5dee725c934c8c7916371768981, type: 3}
+  invalidDeploymentClip: {fileID: 8300000, guid: 3920499719b4e77499d4215e9e0c357a, type: 3}
+  targetChangedOrAbortedClip: {fileID: 8300000, guid: 2c45adf716585934aa99e42f79a7e6e1, type: 3}
+  viralDestroyedClip: {fileID: 8300000, guid: 088c1fe8163d45940b9e5b62c8b1b755, type: 3}
+  batchDestroyedClip: {fileID: 8300000, guid: 1cd9ba5a403d6104597d7c467e8a1440, type: 3}
 --- !u!1001 &4446070856746279625
 PrefabInstance:
   m_ObjectHideFlags: 0
