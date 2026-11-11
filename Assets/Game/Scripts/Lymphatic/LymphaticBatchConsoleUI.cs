@@ -398,12 +398,6 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             if (slot == null || !slot.IsLongPressPending)
                 continue;
 
-            if (!IsTouchPointerActive(slot.LongPressPointerId))
-            {
-                CancelLongPress(slot);
-                continue;
-            }
-
             if (Time.unscaledTime - slot.LongPressStartTime < NeutrophilVariantLongPressDuration)
                 continue;
 
@@ -430,7 +424,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     {
         PointerEventData pointerEvent = eventData as PointerEventData;
         if (!layerAvailable || pointerEvent == null || pointerEvent.button != PointerEventData.InputButton.Left ||
-            !IsTouchPointerActive(pointerEvent.pointerId) || !CanChooseNeutrophilVariant(slotIndex + 1))
+            !CanChooseNeutrophilVariant(slotIndex + 1))
             return;
 
         BatchSlot slot = slots[slotIndex];
@@ -493,18 +487,6 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         LymphaticBatchGroup batch = batchSpawner != null ? batchSpawner.GetBatch(batchId) : null;
         return layerAvailable && batch != null && batch.Status == LymphaticBatchGroup.BatchStatus.Ready &&
             string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsTouchPointerActive(int pointerId)
-    {
-        for (int index = 0; index < Input.touchCount; index++)
-        {
-            Touch touch = Input.GetTouch(index);
-            if (touch.fingerId == pointerId)
-                return touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
-        }
-
-        return false;
     }
 
     private static void AddPointerEvent(EventTrigger trigger, EventTriggerType eventType,
