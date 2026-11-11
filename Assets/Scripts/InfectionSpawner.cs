@@ -26,6 +26,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const int PathogenPoolDifficultyCount = 4;
     private const float FungalHealthMultiplier = 1.25f;
     private const float BreachedBarrierPathogenMultiplier = 1.5f;
+    private const float PathogenSpawnNavMeshSampleRadius = 1.25f;
     private const int DefaultMaximumActiveWbcs = 5;
     private const int DefaultMaximumActiveInfections = 5;
     private const float SquadSpawnOffsetRadius = 1.75f;
@@ -4161,6 +4162,24 @@ public sealed class InfectionSpawner : MonoBehaviour
         return spawnPoints[spawnPointIndex];
     }
 
+    private bool TrySampleInfectionNavMeshPosition(Vector3 requestedPosition, out NavMeshHit navMeshHit)
+    {
+        NavMeshAgent agent = bacteriaPrefab != null ? bacteriaPrefab.GetComponent<NavMeshAgent>() : null;
+        if (agent == null)
+        {
+            navMeshHit = default;
+            return false;
+        }
+
+        NavMeshQueryFilter filter = new NavMeshQueryFilter
+        {
+            agentTypeID = agent.agentTypeID,
+            areaMask = agent.areaMask
+        };
+        float sampleRadius = Mathf.Max(dispatchNavMeshSampleRadius, PathogenSpawnNavMeshSampleRadius);
+        return NavMesh.SamplePosition(requestedPosition, out navMeshHit, sampleRadius, filter);
+    }
+
     private Vector3 GetInfectionWorldPosition(InfectionMarker marker)
     {
         if (marker == null)
@@ -4170,8 +4189,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (vesselSpawnPointCache != null && marker.vesselSpawnPointIndex >= 0)
         {
             IReadOnlyList<Vector3> spawnPoints = vesselSpawnPointCache.WorldSpawnPoints;
-            if (marker.vesselSpawnPointIndex < spawnPoints.Count)
-                marker.worldPosition = spawnPoints[marker.vesselSpawnPointIndex];
+            if (marker.vesselSpawnPointIndex < spawnPoints.Count &&
+                TrySampleInfectionNavMeshPosition(spawnPoints[marker.vesselSpawnPointIndex], out NavMeshHit navMeshHit))
+            {
+                marker.worldPosition = navMeshHit.position;
+            }
         }
 
         return marker.worldPosition;
@@ -4185,9 +4207,19 @@ public sealed class InfectionSpawner : MonoBehaviour
         Vector3? worldPositionOverride = null)
     {
         int vesselSpawnPointIndex = -1;
-        Vector3 infectionWorldPosition = worldPositionOverride.HasValue
+        Vector3 requestedPosition = worldPositionOverride.HasValue
             ? worldPositionOverride.Value
             : ResolveInitialInfectionWorldPosition(bodyPartButton, out vesselSpawnPointIndex);
+        Vector3 infectionWorldPosition = requestedPosition;
+        if (TrySampleInfectionNavMeshPosition(requestedPosition, out NavMeshHit infectionNavMeshHit))
+        {
+            infectionWorldPosition = infectionNavMeshHit.position;
+        }
+        else
+        {
+            Debug.LogWarning($"[InfectionSpawner] Could not find a NavMesh point near {infection.displayName}; keeping its requested infection position.", this);
+        }
+
         InfectionMarker marker = new InfectionMarker
         {
             infection = infection,
@@ -4231,14 +4263,38 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
+        NavMeshAgent prefabAgent = bacteriaPrefab.GetComponent<NavMeshAgent>();
+        if (prefabAgent == null)
+        {
+            Debug.LogWarning($"[InfectionSpawner] Bacteria prefab '{bacteriaPrefab.name}' requires a NavMeshAgent; skipping threat visuals for {marker.infection.displayName}.", this);
+            return;
+        }
+
+        NavMeshQueryFilter spawnFilter = new NavMeshQueryFilter
+        {
+            agentTypeID = prefabAgent.agentTypeID,
+            areaMask = prefabAgent.areaMask
+        };
+
         for (int index = 0; index < threatVisualSpawnCount; index++)
         {
-            Vector3 offset = UnityEngine.Random.insideUnitSphere * threatVisualClusterRadius;
-            GameObject visual = Instantiate(bacteriaPrefab, marker.worldPosition + offset, Quaternion.identity);
+            Vector2 horizontalOffset = UnityEngine.Random.insideUnitCircle * threatVisualClusterRadius;
+            Vector3 requestedPosition = marker.worldPosition + new Vector3(horizontalOffset.x, 0f, horizontalOffset.y);
+            if (!NavMesh.SamplePosition(requestedPosition, out NavMeshHit spawnHit,
+                PathogenSpawnNavMeshSampleRadius, spawnFilter))
+            {
+                Debug.LogWarning($"[InfectionSpawner] Could not find a nearby NavMesh point for {marker.infection.displayName} threat visual {index + 1}; skipping this visual.", this);
+                continue;
+            }
 
+            GameObject visual = Instantiate(bacteriaPrefab, spawnHit.position, Quaternion.identity);
             PathogenWanderController wanderController = visual.GetComponent<PathogenWanderController>();
-            if (wanderController != null)
-                wanderController.Initialize(marker.infection.pathogenType, visual.transform.position);
+            if (wanderController != null && !wanderController.Initialize(marker.infection.pathogenType, spawnHit.position))
+            {
+                Debug.LogWarning($"[InfectionSpawner] Could not attach {marker.infection.displayName} threat visual {index + 1} to the NavMesh; removing the invalid visual.", visual);
+                Destroy(visual);
+                continue;
+            }
 
             BacteriaAgent bacteriaAgent = visual.GetComponentInChildren<BacteriaAgent>(true);
             if (bacteriaAgent != null)
@@ -4248,8 +4304,13 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (navMeshAgent != null)
             {
                 navMeshAgent.enabled = true;
-                if (navMeshAgent.isOnNavMesh)
-                    navMeshAgent.isStopped = false;
+                if (!navMeshAgent.isOnNavMesh && !navMeshAgent.Warp(spawnHit.position))
+                {
+                    Debug.LogWarning($"[InfectionSpawner] Could not warp {marker.infection.displayName} threat visual {index + 1} onto its sampled NavMesh position; removing the invalid visual.", visual);
+                    Destroy(visual);
+                    continue;
+                }
+                navMeshAgent.isStopped = false;
             }
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);

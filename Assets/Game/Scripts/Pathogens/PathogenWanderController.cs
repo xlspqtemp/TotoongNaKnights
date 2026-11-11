@@ -112,16 +112,18 @@ public sealed class PathogenWanderController : MonoBehaviour
         UpdateMovementAnimation();
     }
 
-    /// <summary>Sets the pathogen category and the center used to constrain its wandering radius.</summary>
+    /// <summary>Sets the pathogen category and snaps its spawn center onto the nearest nearby NavMesh point.</summary>
     /// <param name="type">The infection's pathogen category.</param>
-    /// <param name="center">The world-space position around which this pathogen may wander.</param>
-    public void Initialize(InfectionPathogenType type, Vector3 center)
+    /// <param name="center">The requested world-space spawn position and wander center.</param>
+    /// <returns>True when the pathogen agent was warped onto a nearby NavMesh point.</returns>
+    public bool Initialize(InfectionPathogenType type, Vector3 center)
     {
         pathogenType = type;
         spawnCenter = center;
         ConfigureAgent();
-        SnapToNavMeshSpawnPoint();
+        bool snappedToNavMesh = SnapToNavMeshSpawnPoint();
         ApplyPathogenColor();
+        return snappedToNavMesh;
     }
 
     /// <summary>Pauses autonomous wandering while a bacteria responder is pursuing this pathogen.</summary>
@@ -142,16 +144,19 @@ public sealed class PathogenWanderController : MonoBehaviour
         navMeshAgent.updateRotation = false;
     }
 
-    private void SnapToNavMeshSpawnPoint()
+    private bool SnapToNavMeshSpawnPoint()
     {
-        if (navMeshAgent == null || !navMeshAgent.enabled || navMeshAgent.isOnNavMesh ||
+        if (navMeshAgent == null || !navMeshAgent.enabled ||
             !NavMesh.SamplePosition(spawnCenter, out NavMeshHit hit, NavMeshSampleDistance, navMeshAgent.areaMask))
         {
-            return;
+            return false;
         }
 
-        navMeshAgent.Warp(hit.position);
+        if (!navMeshAgent.Warp(hit.position))
+            return false;
+
         spawnCenter = hit.position;
+        return true;
     }
 
     private void ApplyPathogenColor()
