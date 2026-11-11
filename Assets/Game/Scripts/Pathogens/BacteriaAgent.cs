@@ -93,6 +93,12 @@ public sealed class BacteriaAgent : MonoBehaviour
         if (elapsedContactSeconds >= RequiredContactSeconds)
         {
             isCleared = true;
+            LymphaticBatchGroup batch = responder.GetComponent<LymphaticBatchGroup>();
+            LymphaticBatchGroup leader = batch != null ? batch.GroupLeader : null;
+            MacrophageVoiceLines voiceLines = leader != null
+                ? leader.GetComponent<MacrophageVoiceLines>()
+                : responder.GetComponent<MacrophageVoiceLines>();
+            voiceLines?.PlayPathogenCleared();
             if (!string.IsNullOrWhiteSpace(wellnessEventKey))
                 WellnessManager.Instance?.TryAwardEventPoints(wellnessEventKey, "BacteriaCleared", 3f);
             Destroy(gameObject);

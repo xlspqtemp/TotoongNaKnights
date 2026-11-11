@@ -10,7 +10,8 @@ public class MasterAudioSettingsController : MonoBehaviour
     private const string MasterVolumeParameterName = "MasterVolume";
     private const float DefaultMasterVolume = 1f;
     private const float MinimumMasterDecibels = -80f;
-    private const float VolumeRowAnchorY = 0.62f;
+    private const float VolumeRowAnchorY = 0.68f;
+    private const float VoiceLineVolumeRowAnchorY = 0.39f;
     private const float VolumeSliderWidth = 360f;
     private const float VolumeSliderHorizontalOffset = -68f;
     private const float VolumeControlsVerticalOffset = -24f;
@@ -39,7 +40,9 @@ public class MasterAudioSettingsController : MonoBehaviour
     private AudioMixerGroup masterAudioGroup;
     private GameObject settingsPanel;
     private Slider masterVolumeSlider;
+    private Slider voiceLineVolumeSlider;
     private TextMeshProUGUI percentageLabel;
+    private TextMeshProUGUI voiceLinePercentageLabel;
     private bool returnToPauseMenu;
     private bool masterParameterAvailable;
 
@@ -57,8 +60,13 @@ public class MasterAudioSettingsController : MonoBehaviour
 
         float savedVolume = Mathf.Clamp01(PlayerPrefs.GetFloat(MasterVolumePreferenceKey, DefaultMasterVolume));
         masterVolumeSlider.SetValueWithoutNotify(savedVolume);
-        UpdatePercentageLabel(savedVolume);
+        UpdatePercentageLabel(percentageLabel, savedVolume);
         ApplyMasterVolume(savedVolume, false);
+
+        float savedVoiceLineVolume = VoiceLineAudioPlayer.GetVolume();
+        voiceLineVolumeSlider.SetValueWithoutNotify(savedVoiceLineVolume);
+        UpdatePercentageLabel(voiceLinePercentageLabel, savedVoiceLineVolume);
+        ApplyVoiceLineVolume(savedVoiceLineVolume);
         settingsPanel.SetActive(false);
     }
 
@@ -110,6 +118,7 @@ public class MasterAudioSettingsController : MonoBehaviour
             masterParameterAvailable = audioMixer.GetFloat(MasterVolumeParameterName, out _);
         }
 
+        VoiceLineAudioPlayer.SetOutputMixerGroup(masterAudioGroup);
         RouteUnassignedAudioSources();
     }
 
@@ -142,7 +151,7 @@ public class MasterAudioSettingsController : MonoBehaviour
             AudioListener.volume = clampedVolume;
         }
 
-        UpdatePercentageLabel(clampedVolume);
+        UpdatePercentageLabel(percentageLabel, clampedVolume);
         if (savePreference)
         {
             PlayerPrefs.SetFloat(MasterVolumePreferenceKey, clampedVolume);
@@ -150,15 +159,27 @@ public class MasterAudioSettingsController : MonoBehaviour
         }
     }
 
+    private void ApplyVoiceLineVolume(float normalizedVolume)
+    {
+        float clampedVolume = Mathf.Clamp01(normalizedVolume);
+        VoiceLineAudioPlayer.SetVolume(clampedVolume);
+        UpdatePercentageLabel(voiceLinePercentageLabel, clampedVolume);
+    }
+
     private void HandleMasterVolumeChanged(float value)
     {
         ApplyMasterVolume(value, true);
     }
 
-    private void UpdatePercentageLabel(float normalizedVolume)
+    private void HandleVoiceLineVolumeChanged(float value)
     {
-        if (percentageLabel != null)
-            percentageLabel.text = $"{Mathf.RoundToInt(Mathf.Clamp01(normalizedVolume) * 100f)}%";
+        ApplyVoiceLineVolume(value);
+    }
+
+    private static void UpdatePercentageLabel(TextMeshProUGUI label, float normalizedVolume)
+    {
+        if (label != null)
+            label.text = $"{Mathf.RoundToInt(Mathf.Clamp01(normalizedVolume) * 100f)}%";
     }
 
     private void CreateSettingsPanel()
@@ -180,21 +201,20 @@ public class MasterAudioSettingsController : MonoBehaviour
 
         GameObject card = CreateImageObject(settingsPanel.transform, "SettingsCard", PanelColor,
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            Vector2.zero, new Vector2(620f, 360f), true);
+            Vector2.zero, new Vector2(620f, 430f), true);
         CreateText(card.transform, "SettingsTitle", "SETTINGS", 34, FontStyles.Bold,
             new Vector2(0.5f, 1f), new Vector2(0f, -64f), new Vector2(520f, 54f), TextAlignmentOptions.Center);
 
-        percentageLabel = CreateText(card.transform, "MasterVolumePercentage", "100%", 22, FontStyles.Bold,
-            new Vector2(0.5f, VolumeRowAnchorY), new Vector2(VolumePercentageHorizontalOffset, VolumeControlsVerticalOffset),
-            new Vector2(VolumePercentageWidth, 44f), TextAlignmentOptions.Right);
-        percentageLabel.overflowMode = TextOverflowModes.Overflow;
-        masterVolumeSlider = CreateMasterSlider(card.transform);
-        TextMeshProUGUI soundLabel = CreateText(card.transform, "SettingsSoundLabel", "SOUND", 22, FontStyles.Bold,
-            new Vector2(0.5f, VolumeRowAnchorY),
-            new Vector2(VolumeSliderHorizontalOffset - VolumeSliderWidth * 0.5f + VolumeSliderTrackInset,
-                VolumeControlsVerticalOffset + VolumeSliderHeight * 0.5f + SoundLabelGap),
-            new Vector2(VolumeSliderWidth, SoundLabelHeight), TextAlignmentOptions.Left);
-        soundLabel.rectTransform.pivot = Vector2.zero;
+        percentageLabel = CreateVolumePercentageLabel(card.transform, "MasterVolumePercentage", VolumeRowAnchorY);
+        masterVolumeSlider = CreateVolumeSlider(card.transform, "MasterVolumeSlider", VolumeRowAnchorY,
+            HandleMasterVolumeChanged);
+        CreateVolumeLabel(card.transform, "MasterVolumeLabel", "MASTER VOLUME", VolumeRowAnchorY);
+
+        voiceLinePercentageLabel = CreateVolumePercentageLabel(card.transform,
+            "VoiceLineVolumePercentage", VoiceLineVolumeRowAnchorY);
+        voiceLineVolumeSlider = CreateVolumeSlider(card.transform, "VoiceLineVolumeSlider",
+            VoiceLineVolumeRowAnchorY, HandleVoiceLineVolumeChanged);
+        CreateVolumeLabel(card.transform, "VoiceLineVolumeLabel", "VOICE LINES", VoiceLineVolumeRowAnchorY);
 
         CreateButton(card.transform, "SettingsBackButton", "BACK", new Vector2(0.5f, 0f),
             new Vector2(0f, 58f), new Vector2(200f, 52f), CloseSettings);
@@ -202,13 +222,34 @@ public class MasterAudioSettingsController : MonoBehaviour
         settingsPanel.SetActive(false);
     }
 
-    private Slider CreateMasterSlider(Transform parent)
+    private TextMeshProUGUI CreateVolumePercentageLabel(Transform parent, string objectName, float rowAnchorY)
     {
-        GameObject sliderObject = new GameObject("MasterVolumeSlider", typeof(RectTransform), typeof(Slider));
+        TextMeshProUGUI label = CreateText(parent, objectName, "100%", 22, FontStyles.Bold,
+            new Vector2(0.5f, rowAnchorY), new Vector2(VolumePercentageHorizontalOffset, VolumeControlsVerticalOffset),
+            new Vector2(VolumePercentageWidth, 44f), TextAlignmentOptions.Right);
+        label.overflowMode = TextOverflowModes.Overflow;
+        return label;
+    }
+
+    private void CreateVolumeLabel(Transform parent, string objectName, string labelText, float rowAnchorY)
+    {
+        TextMeshProUGUI label = CreateText(parent, objectName, labelText, 18, FontStyles.Bold,
+            new Vector2(0.5f, rowAnchorY),
+            new Vector2(VolumeSliderHorizontalOffset - VolumeSliderWidth * 0.5f + VolumeSliderTrackInset,
+                VolumeControlsVerticalOffset + VolumeSliderHeight * 0.5f + SoundLabelGap),
+            new Vector2(VolumeSliderWidth, SoundLabelHeight), TextAlignmentOptions.Left);
+        label.rectTransform.pivot = Vector2.zero;
+    }
+
+    private Slider CreateVolumeSlider(Transform parent, string objectName, float rowAnchorY,
+        UnityEngine.Events.UnityAction<float> onValueChanged)
+    {
+        GameObject sliderObject = new GameObject(objectName, typeof(RectTransform), typeof(Slider));
         sliderObject.transform.SetParent(parent, false);
-        SetRect(sliderObject.GetComponent<RectTransform>(), new Vector2(0.5f, VolumeRowAnchorY),
-            new Vector2(0.5f, VolumeRowAnchorY), new Vector2(0.5f, 0.5f),
-            new Vector2(VolumeSliderHorizontalOffset, VolumeControlsVerticalOffset), new Vector2(VolumeSliderWidth, VolumeSliderHeight));
+        SetRect(sliderObject.GetComponent<RectTransform>(), new Vector2(0.5f, rowAnchorY),
+            new Vector2(0.5f, rowAnchorY), new Vector2(0.5f, 0.5f),
+            new Vector2(VolumeSliderHorizontalOffset, VolumeControlsVerticalOffset),
+            new Vector2(VolumeSliderWidth, VolumeSliderHeight));
 
         Image background = CreateImage(sliderObject.transform, "Background", new Color(0.035f, 0.09f, 0.11f, 1f),
             Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, true);
@@ -229,7 +270,7 @@ public class MasterAudioSettingsController : MonoBehaviour
         slider.maxValue = 1f;
         slider.wholeNumbers = false;
         slider.direction = Slider.Direction.LeftToRight;
-        slider.onValueChanged.AddListener(HandleMasterVolumeChanged);
+        slider.onValueChanged.AddListener(onValueChanged);
         background.raycastTarget = true;
         fill.raycastTarget = false;
         handle.raycastTarget = true;

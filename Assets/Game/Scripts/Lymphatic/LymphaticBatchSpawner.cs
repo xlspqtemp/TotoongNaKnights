@@ -133,7 +133,7 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         return DispatchBatch(batchId, infection, out _);
     }
 
-    /// <summary>Starts routing a ready batch and returns a reason when its viral target does not match.</summary>
+    /// <summary>Starts routing a ready batch and returns a reason when its specialized target is incompatible.</summary>
     public bool DispatchBatch(int batchId, InfectionSpawner.InfectionMarker infection, out string failureReason)
     {
         failureReason = null;
@@ -142,8 +142,12 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             infection == null || infection.isRemoving || infection.infection == null)
             return false;
 
-        if (!IsViralTargetCompatible(batch, infection, out failureReason))
+        if (!IsTargetCompatible(batch, infection, out failureReason))
+        {
+            if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayInvalidDeployment();
             return false;
+        }
 
         Transform duct = null;
         Transform vein = null;
@@ -173,7 +177,11 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         batch.BeginMobilization(infection, duct, vein);
         Vector3 firstDestination = batch.HasEnteredCirculatorySystem ? infection.worldPosition : duct.position;
         if (TrySetDestinations(batch, firstDestination, transferNavMeshSampleRadius))
+        {
+            if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayDeploymentAccepted();
             return true;
+        }
 
         StopBatchAgents(batch);
         batch.AbortOrder();
@@ -181,9 +189,16 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         return false;
     }
 
-    private static bool IsViralTargetCompatible(LymphaticBatchGroup batch,
+    private static bool IsTargetCompatible(LymphaticBatchGroup batch,
         InfectionSpawner.InfectionMarker infection, out string failureReason)
     {
+        if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
+        {
+            bool targetIsBacterial = infection.infection.pathogenType == InfectionPathogenType.Bacterial;
+            failureReason = targetIsBacterial ? null : batch.DisplayName + " can only target bacterial infections.";
+            return targetIsBacterial;
+        }
+
         bool isAdaptiveCell = string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase) ||
             string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase);
         if (!isAdaptiveCell || !InfectionSpawner.IsKnownViralTrainingPathogenName(batch.PathogenVariant))
@@ -214,6 +229,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             return false;
 
         StopBatchAgents(batch);
+        if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
+            batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayTargetChangedOrAborted();
         batch.AbortOrder();
         return true;
     }
@@ -224,6 +241,12 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         int nodeIndex = batchId - 1;
         if (!reservations.TryGetValue(nodeIndex, out BatchReservation reservation) || reservation.Members == null)
             return false;
+
+        GameObject batchLeader = reservation.Members.Length > 0 ? reservation.Members[0] : null;
+        MacrophageVoiceLines macrophageVoiceLines = batchLeader != null
+            ? batchLeader.GetComponent<MacrophageVoiceLines>()
+            : null;
+        macrophageVoiceLines?.PlayBatchDestroyed();
 
         foreach (GameObject member in reservation.Members)
         {
@@ -305,6 +328,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
 
         reservation.Members = members;
         Debug.Log($"Lymphatic batch {nodeIndex + 1}/{MaximumBatchCount} deployed: {displayName} (5 units) at '{reservation.Node.Transform.name}'.", this);
+        if (string.Equals(unitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
+            members[0].GetComponent<MacrophageVoiceLines>()?.PlayTrainingCompleted();
         return true;
     }
 

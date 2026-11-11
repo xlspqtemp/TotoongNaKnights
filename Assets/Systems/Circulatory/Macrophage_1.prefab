@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 1211034880874814307}
   - component: {fileID: 2298780155758711810}
   - component: {fileID: 2450957734260466083}
+  - component: {fileID: 3493742506257845939}
   m_Layer: 0
   m_Name: Macrophage_1
   m_TagString: Cell
@@ -111,6 +112,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BacteriaCellResponder
   scanIntervalSeconds: 0.5
   contactDistance: 2.25
+--- !u!114 &3493742506257845939
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5201823894453661281}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88739822ec4ed14438f2f47efe724e59, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MacrophageVoiceLines
+  trainingCompletedClip: {fileID: 8300000, guid: 3e5c6a682589be84ca97d54be300c1d7, type: 3}
+  deploymentAcceptedClip: {fileID: 8300000, guid: 4a8a9cfc348d549418a10519aa7e0d82, type: 3}
+  invalidDeploymentClip: {fileID: 8300000, guid: a4d255b6d0cd9184996dff0d3f544ed6, type: 3}
+  targetChangedOrAbortedClip: {fileID: 8300000, guid: 1ff90b23d90471e4cbf24c1189d2d626, type: 3}
+  pathogenClearedClip: {fileID: 8300000, guid: b80c42e6a13e18043b644065bca761fd, type: 3}
+  batchDestroyedClip: {fileID: 8300000, guid: 12f753dad2dbb454c85ff81ed2087ad4, type: 3}
 --- !u!1001 &6598639686195608770
 PrefabInstance:
   m_ObjectHideFlags: 0
