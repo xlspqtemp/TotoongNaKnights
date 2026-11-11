@@ -2995,6 +2995,7 @@ MonoBehaviour:
   dispatchAvatarSize: {x: 38, y: 38}
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
   infectionClearedSfx: {fileID: 8300000, guid: 0e31ae3a9256a894e971ee6c073311eb, type: 3}
+  viralContainedVoiceLine: {fileID: 8300000, guid: c39b603910be09a4eb46ac7f07b0e257, type: 3}
   useFixedDurationClash: 1
   bacterialClashDurationSeconds: 4
   mildBacterialWellnessGain: 2

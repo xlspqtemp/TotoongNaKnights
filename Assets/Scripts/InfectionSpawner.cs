@@ -196,6 +196,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     [Header("Infection Resolution")]
     [SerializeField] private AudioClip infectionClearedSfx;
+    [SerializeField] private AudioClip viralContainedVoiceLine;
     [SerializeField] private bool useFixedDurationClash = false;
     [SerializeField, Min(0f)] private float bacterialClashDurationSeconds = 4f;
     [SerializeField] private float mildBacterialWellnessGain = 2f;
@@ -1661,6 +1662,42 @@ public sealed class InfectionSpawner : MonoBehaviour
         RefreshWbcSquadHud();
     }
 
+    private static bool IsValidWbcClearTarget(InfectionMarker marker, LymphaticBatchGroup sourceBatch,
+        WbcVoiceLines sourceWbcVoiceLines)
+    {
+        if (marker == null || marker.infection == null || sourceWbcVoiceLines == null)
+            return false;
+
+        if (sourceBatch == null)
+            return marker.infection.pathogenType == InfectionPathogenType.Bacterial;
+        if (!string.Equals(sourceBatch.UnitType, NeutrophilUnitName, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (marker.infection.pathogenType == InfectionPathogenType.Bacterial)
+            return !IsEosinophilResponder(sourceBatch) && !IsBasophilResponder(sourceBatch);
+        if (marker.infection.pathogenType == InfectionPathogenType.Allergen)
+            return IsBasophilResponder(sourceBatch);
+        if (marker.infection.pathogenType == InfectionPathogenType.Parasite)
+            return IsEosinophilResponder(sourceBatch);
+
+        return false;
+    }
+
+    private static bool IsWbcTargetCompatible(string variantName, InfectionData infection)
+    {
+        if (infection == null)
+            return false;
+
+        if (string.Equals(variantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return infection.pathogenType == InfectionPathogenType.Parasite;
+        if (string.Equals(variantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return infection.pathogenType == InfectionPathogenType.Allergen;
+
+        return infection.pathogenType == InfectionPathogenType.Bacterial ||
+            infection.pathogenType == InfectionPathogenType.Viral ||
+            infection.pathogenType == InfectionPathogenType.Fungal;
+    }
+
     /// <summary>Starts moving the idle WBC squad to a NavMesh position and begins its gameplay-time cooldown and lifetime.</summary>
     public bool DispatchIdleSquadTo(Vector3 destination)
     {
@@ -1672,6 +1709,17 @@ public sealed class InfectionSpawner : MonoBehaviour
         Debug.Log("[Dispatch] Dispatch method started.");
         if (idleSquad == null || idleSquad.Length == 0)
             return false;
+
+        if (infectionTarget != null && !IsWbcTargetCompatible(NeutrophilVariantName, infectionTarget.infection))
+        {
+            idleSquad[0].GetComponent<WbcVoiceLines>()?.PlayInvalidDeployment();
+            bool isAllergen = infectionTarget.infection != null &&
+                infectionTarget.infection.pathogenType == InfectionPathogenType.Allergen;
+            LogWbcSquadMessage(isAllergen
+                ? "Neutrophils cannot target Allergens."
+                : "Neutrophils cannot target Parasites.", ConsoleLogUI.LogType.Warning);
+            return false;
+        }
 
         DifficultyStats supplyStats = DifficultySettings.CurrentStats;
         int deployCost = Mathf.Max(0, supplyStats.deployCost);
@@ -1765,6 +1813,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             infectionTarget = infectionTarget
         });
         SpendLeukocyteSupply(deployCost);
+        idleSquad[0].GetComponent<WbcVoiceLines>()?.PlayDeploymentAccepted();
         idleSquad = null;
         awaitingSquadDestination = false;
         FadeOutSquadPrompt();
@@ -2438,7 +2487,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                     squad.arrivalMessageLogged = true;
                     LogWbcSquadMessage($"WBC squad arrived at {squad.infectionTarget.infection.displayName}.", ConsoleLogUI.LogType.Success);
                     if (!squad.infectionTarget.isTagged && squad.infectionTarget.infection.pathogenType != InfectionPathogenType.Allergen)
-                        BeginInfectionResolution(squad.infectionTarget);
+                        BeginInfectionResolution(squad.infectionTarget, null, GetWbcVoiceLines(squad.units));
                     if (squad.infectionTarget.isContained &&
                         (squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Viral ||
                          squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Parasite))
@@ -2517,7 +2566,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                 if (!squad.resolutionTriggered)
                 {
                     squad.resolutionTriggered = true;
-                    BeginInfectionResolution(marker);
+                    BeginInfectionResolution(marker, null, GetWbcVoiceLines(squad.units));
                     FadeOutAndDespawnWbcSquad(squadIndex);
                 }
                 continue;
@@ -2638,7 +2687,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
             bool usesCombatClear = marker.infection.pathogenType == InfectionPathogenType.Allergen || isEosinophilParasiteBatch;
             if (!usesCombatClear)
-                BeginInfectionResolution(marker);
+                BeginInfectionResolution(marker, batch);
 
             activeBatchPathogens.Clear();
             foreach (GameObject pathogen in marker.threatVisuals)
@@ -3185,7 +3234,8 @@ public sealed class InfectionSpawner : MonoBehaviour
 
 
 
-    private void BeginInfectionResolution(InfectionMarker marker, LymphaticBatchGroup sourceBatch = null)
+    private void BeginInfectionResolution(InfectionMarker marker, LymphaticBatchGroup sourceBatch = null,
+        WbcVoiceLines sourceWbcVoiceLines = null)
     {
         if (marker == null || marker.isRemoving || marker.resolutionPending || marker.infection == null)
             return;
@@ -3228,7 +3278,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!isViral)
         {
             marker.resolutionPending = true;
-            StartCoroutine(ResolveBacterialInfection(marker));
+            StartCoroutine(ResolveBacterialInfection(marker, sourceBatch, sourceWbcVoiceLines));
             return;
         }
 
@@ -3237,6 +3287,12 @@ public sealed class InfectionSpawner : MonoBehaviour
             (int)marker.infection.severityStage - containedSeverityDropSteps);
         marker.infection.severityStage = (InfectionSeverityStage)reducedSeverity;
         marker.isContained = true;
+        WbcVoiceLines wbcVoiceLines = sourceWbcVoiceLines ?? GetWbcVoiceLines(sourceBatch);
+        if (wbcVoiceLines != null)
+            wbcVoiceLines.PlayViralContained();
+        else if (sourceBatch != null &&
+            string.Equals(sourceBatch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase))
+            VoiceLineAudioPlayer.Play(viralContainedVoiceLine);
         int minimumContainmentDays = Mathf.Clamp(containedSelfResolveDays,
             MinimumViralContainmentDays, MaximumViralContainmentDays);
         int containmentDays = UnityEngine.Random.Range(minimumContainmentDays, MaximumViralContainmentDays + 1);
@@ -3272,6 +3328,9 @@ public sealed class InfectionSpawner : MonoBehaviour
             yield break;
 
         AddLeukocyteSupply(clearBonus);
+        WbcVoiceLines voiceLines = GetWbcVoiceLines(sourceBatch);
+        if (IsValidWbcClearTarget(marker, sourceBatch, voiceLines))
+            voiceLines.PlayPathogenCleared();
         ApplyWellnessGainOnResolve(marker);
         PlayInfectionClearedSfx();
         LogWbcSquadMessage($"Eosinophils eliminated {marker.infection.displayName}. Parasite infection cleared.", ConsoleLogUI.LogType.Success);
@@ -3300,13 +3359,17 @@ public sealed class InfectionSpawner : MonoBehaviour
     }
 
 
-    private IEnumerator ResolveBacterialInfection(InfectionMarker marker)
+    private IEnumerator ResolveBacterialInfection(InfectionMarker marker, LymphaticBatchGroup sourceBatch,
+        WbcVoiceLines sourceWbcVoiceLines)
     {
         if (useFixedDurationClash)
             yield return GameplaySpeed.WaitForGameplaySeconds(bacterialClashDurationSeconds);
         if (marker == null || marker.isRemoving || !activeInfectionMarkers.Contains(marker))
             yield break;
 
+        WbcVoiceLines voiceLines = sourceWbcVoiceLines ?? GetWbcVoiceLines(sourceBatch);
+        if (IsValidWbcClearTarget(marker, sourceBatch, voiceLines))
+            voiceLines.PlayPathogenCleared();
         AddLeukocyteSupply(clearBonus);
 
         ApplyWellnessGainOnResolve(marker);
@@ -3456,6 +3519,42 @@ public sealed class InfectionSpawner : MonoBehaviour
             default:
                 return mildDailyInfectionWellnessCost;
         }
+    }
+
+    private static WbcVoiceLines GetWbcVoiceLines(GameObject[] units)
+    {
+        if (units == null)
+            return null;
+
+        foreach (GameObject unit in units)
+        {
+            if (unit == null)
+                continue;
+
+            WbcVoiceLines voiceLines = unit.GetComponent<WbcVoiceLines>();
+            if (voiceLines != null)
+                return voiceLines;
+        }
+
+        return null;
+    }
+
+    private static WbcVoiceLines GetWbcVoiceLines(LymphaticBatchGroup batch)
+    {
+        if (batch == null)
+            return null;
+
+        foreach (GameObject member in batch.Members)
+        {
+            if (member == null)
+                continue;
+
+            WbcVoiceLines voiceLines = member.GetComponent<WbcVoiceLines>();
+            if (voiceLines != null)
+                return voiceLines;
+        }
+
+        return null;
     }
 
     private static void PlaySquadArrivalAnimation(GameObject unit, bool attackOnArrival)
@@ -4592,6 +4691,14 @@ public sealed class InfectionSpawner : MonoBehaviour
             return false;
         }
 
+        if (!IsWbcTargetCompatible(variantName, marker.infection))
+        {
+            WbcVoiceLines voiceLines = GetWbcVoiceLines(batch);
+            voiceLines?.PlayInvalidDeployment();
+            failureReason = variantName + " cannot be deployed to " + marker.infection.displayName + ".";
+            return false;
+        }
+
         if (!lymphaticBatchSpawner.DispatchBatch(batchId, marker, out failureReason))
             return false;
 
@@ -4695,6 +4802,20 @@ public sealed class InfectionSpawner : MonoBehaviour
         foreach (GameObject member in batch.Members)
         {
             if (member != null && string.Equals(GetNeutrophilVariantName(member), EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsBasophilResponder(LymphaticBatchGroup batch)
+    {
+        if (batch == null || string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        foreach (GameObject member in batch.Members)
+        {
+            if (member != null && string.Equals(GetNeutrophilVariantName(member), BasophilVariantName, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
