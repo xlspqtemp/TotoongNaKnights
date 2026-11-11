@@ -147,6 +147,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         {
             if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
                 batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayInvalidDeployment();
+            else if (string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<BCellVoiceLines>()?.PlayInvalidDeployment();
             return false;
         }
 
@@ -194,6 +196,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             }
             else if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
                 batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayDeploymentAccepted();
+            else if (string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<BCellVoiceLines>()?.PlayDeploymentAccepted();
             return true;
         }
 
@@ -245,6 +249,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         }
         else if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
             batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayTargetChangedOrAborted();
+        else if (string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+            batch.GroupLeader.GetComponent<BCellVoiceLines>()?.PlayTargetChangedOrAborted();
         batch.AbortOrder();
         return true;
     }
@@ -273,6 +279,11 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             System.StringComparison.OrdinalIgnoreCase))
         {
             batchLeader.GetComponent<KillerTCellVoiceLines>()?.PlayBatchDestroyed();
+        }
+        else if (batchGroup != null && string.Equals(batchGroup.UnitType, BCellUnitName,
+            System.StringComparison.OrdinalIgnoreCase))
+        {
+            batchLeader.GetComponent<BCellVoiceLines>()?.PlayBatchDestroyed();
         }
 
         foreach (GameObject member in reservation.Members)
@@ -361,6 +372,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             members[0].GetComponent<WbcVoiceLines>()?.PlayTrainingReady();
         else if (string.Equals(unitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
             members[0].GetComponent<KillerTCellVoiceLines>()?.PlayTrainingCompleted();
+        else if (string.Equals(unitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase))
+            members[0].GetComponent<BCellVoiceLines>()?.PlayTrainingCompleted();
         return true;
     }
 

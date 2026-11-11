@@ -2881,6 +2881,8 @@ public sealed class InfectionSpawner : MonoBehaviour
 
             marker.bCellTagInProgress = false;
             marker.isTagged = true;
+            LymphaticBatchGroup taggedBatch = tagger.GetComponent<LymphaticBatchGroup>();
+            taggedBatch?.GroupLeader.GetComponent<BCellVoiceLines>()?.PlayPathogenTagged();
             ApplyTaggedPathogenVisuals(marker);
             Debug.Log($"[Resolution] B-Cell antibodies tagged {marker.infection.displayName}.", this);
             animator.Play(AnimatorIdleStateName, 0, 0f);
