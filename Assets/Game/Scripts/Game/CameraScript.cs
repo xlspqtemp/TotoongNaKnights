@@ -98,6 +98,10 @@ public class CameraScript : MonoBehaviour
     private bool wasZoomInputActive;
     private bool mousePanStartedOverWorld;
     private Vector3 previousMousePosition;
+    private int touchPanFingerId = -1;
+    private int previousTouchCount;
+    private bool touchPanStartedOverWorld;
+    private Vector2 previousTouchPosition;
     private Camera sceneCamera;
     private LayerTransitionUI layerTransitionUI;
     private InfectionIntelPopup infectionIntelPopup;
@@ -181,11 +185,61 @@ public class CameraScript : MonoBehaviour
         RefreshBreachAlarm();
         HandleDeployedSquadFocusInput();
 
-        if (infectionFocusCoroutine != null && Time.timeScale > 0f && Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f)
+        if (infectionFocusCoroutine != null && Time.timeScale > 0f &&
+            (Mathf.Abs(Input.mouseScrollDelta.y) > 0.01f || Input.touchCount >= 2))
         {
             StopInfectionFocus();
         }
 
+        bool cameraMoved = Input.touchCount > 0
+            ? HandleTouchPan()
+            : HandleMousePan();
+
+        // World panning uses one-finger touch drag on mobile and right-mouse drag on desktop.
+        // Pinch zoom is handled by CameraScript_Zoom; HUD interactions remain unchanged.
+        UpdateMovementAudio(cameraMoved);
+    }
+
+    private bool HandleTouchPan()
+    {
+        if (Input.touchCount != 1)
+        {
+            touchPanFingerId = -1;
+            touchPanStartedOverWorld = false;
+            previousTouchCount = Input.touchCount;
+            return false;
+        }
+
+        Touch touch = Input.GetTouch(0);
+        if (touch.phase == TouchPhase.Began || previousTouchCount >= 2)
+        {
+            touchPanFingerId = touch.fingerId;
+            touchPanStartedOverWorld = EventSystem.current == null ||
+                !EventSystem.current.IsPointerOverGameObject(touch.fingerId);
+            previousTouchPosition = touch.position;
+        }
+        previousTouchCount = 1;
+
+        if (touch.fingerId != touchPanFingerId || !touchPanStartedOverWorld)
+            return false;
+
+        if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+        {
+            touchPanFingerId = -1;
+            touchPanStartedOverWorld = false;
+            return false;
+        }
+
+        if (touch.phase != TouchPhase.Moved)
+            return false;
+
+        Vector2 touchDelta = touch.position - previousTouchPosition;
+        previousTouchPosition = touch.position;
+        return PanCameraByScreenDelta(touchDelta);
+    }
+
+    private bool HandleMousePan()
+    {
         if (Input.GetMouseButtonDown(MousePanButton))
         {
             mousePanStartedOverWorld = EventSystem.current == null || !EventSystem.current.IsPointerOverGameObject();
@@ -193,36 +247,38 @@ public class CameraScript : MonoBehaviour
         }
 
         bool panInputActive = Input.GetMouseButton(MousePanButton) && mousePanStartedOverWorld;
-        bool cameraMoved = false;
         if (panInputActive)
         {
             Vector3 currentMousePosition = Input.mousePosition;
-            Vector3 mouseDelta = currentMousePosition - previousMousePosition;
+            Vector2 mouseDelta = currentMousePosition - previousMousePosition;
             previousMousePosition = currentMousePosition;
-
-            if (mouseDelta.sqrMagnitude > 0.01f && Screen.height > 0)
-            {
-                if (infectionFocusCoroutine != null && Time.timeScale > 0f)
-                    StopInfectionFocus();
-
-                float worldUnitsPerPixel = sceneCamera != null && sceneCamera.orthographic
-                    ? (sceneCamera.orthographicSize * 2f) / Screen.height
-                    : 0.01f;
-                float panSpeedScale = Mathf.Max(0f, panSpeed) / DefaultPanSpeed;
-                Vector3 cameraRightOnGround = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
-                Vector3 cameraUpOnGround = Vector3.ProjectOnPlane(transform.up, Vector3.up).normalized;
-                Vector3 movement = (-cameraRightOnGround * mouseDelta.x - cameraUpOnGround * mouseDelta.y) * worldUnitsPerPixel * panSpeedScale;
-                transform.position += movement;
-                cameraMoved = true;
-            }
+            return PanCameraByScreenDelta(mouseDelta);
         }
-        else if (!Input.GetMouseButton(MousePanButton))
-        {
+
+        if (!Input.GetMouseButton(MousePanButton))
             mousePanStartedOverWorld = false;
-        }
 
-        // World panning uses right-mouse drag; scroll-wheel zoom and HUD layer selection remain unchanged.
-        UpdateMovementAudio(cameraMoved);
+        return false;
+    }
+
+    private bool PanCameraByScreenDelta(Vector2 screenDelta)
+    {
+        if (screenDelta.sqrMagnitude <= 0.01f || Screen.height <= 0)
+            return false;
+
+        if (infectionFocusCoroutine != null && Time.timeScale > 0f)
+            StopInfectionFocus();
+
+        float worldUnitsPerPixel = sceneCamera != null && sceneCamera.orthographic
+            ? (sceneCamera.orthographicSize * 2f) / Screen.height
+            : 0.01f;
+        float panSpeedScale = Mathf.Max(0f, panSpeed) / DefaultPanSpeed;
+        Vector3 cameraRightOnGround = Vector3.ProjectOnPlane(transform.right, Vector3.up).normalized;
+        Vector3 cameraUpOnGround = Vector3.ProjectOnPlane(transform.up, Vector3.up).normalized;
+        Vector3 movement = (-cameraRightOnGround * screenDelta.x - cameraUpOnGround * screenDelta.y) *
+            worldUnitsPerPixel * panSpeedScale;
+        transform.position += movement;
+        return true;
     }
 
     private void InitializeBreachIcons()

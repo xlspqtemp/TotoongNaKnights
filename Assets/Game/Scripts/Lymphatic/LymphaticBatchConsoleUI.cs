@@ -17,6 +17,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
     private const float IconSize = 58f;
+    private const float NeutrophilVariantLongPressDuration = 2f;
+    private const int NoActivePointerId = int.MinValue;
     private const float FollowZoom = 18f;
     private const string FontResourcePath = "BankGothicMediumSDF";
     private const string BCellIconResourcePath = "UI/B cell headshot icon";
@@ -73,6 +75,10 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         public TextMeshProUGUI NameLabel;
         public TextMeshProUGUI StatusLabel;
         public TextMeshProUGUI TravelTimeLabel;
+        public bool IsLongPressPending;
+        public bool SuppressNextClick;
+        public int LongPressPointerId = NoActivePointerId;
+        public float LongPressStartTime;
     }
 
     private readonly BatchSlot[] slots = new BatchSlot[MaximumSlots];
@@ -130,11 +136,13 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         if (cameraScript == null)
             cameraScript = FindFirstObjectByType<CameraScript>();
         SubscribeToInfections();
+        ProcessLongPresses();
         RefreshSlots();
     }
 
     private void OnDisable()
     {
+        ResetSlotPressStates(true);
         if (infectionSpawner != null)
             infectionSpawner.OnInfectionTargetClicked -= HandleInfectionTargetClicked;
         if (isFollowingBatch && cameraScript != null)
@@ -328,6 +336,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
     private void CloseNeutrophilVariantPanel()
     {
+        ResetSlotPressStates(true);
         if (neutrophilVariantPanelRoot != null)
             neutrophilVariantPanelRoot.SetActive(false);
 
@@ -363,6 +372,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             return;
 
         NeutrophilVariantOption option = NeutrophilVariantOptions[index];
+        ResetSlotPressStates(true);
         selectedNeutrophilVariantIndex = index;
         selectedNeutrophilVariantName = option.Name;
         neutrophilVariantPanelRoot.SetActive(false);
@@ -374,23 +384,155 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         RefreshSlots();
     }
 
+    private void ProcessLongPresses()
+    {
+        if (!layerAvailable)
+        {
+            ResetSlotPressStates(false);
+            return;
+        }
+
+        for (int index = 0; index < slots.Length; index++)
+        {
+            BatchSlot slot = slots[index];
+            if (slot == null || !slot.IsLongPressPending)
+                continue;
+
+            if (!IsTouchPointerActive(slot.LongPressPointerId))
+            {
+                CancelLongPress(slot);
+                continue;
+            }
+
+            if (Time.unscaledTime - slot.LongPressStartTime < NeutrophilVariantLongPressDuration)
+                continue;
+
+            slot.IsLongPressPending = false;
+            if (OpenNeutrophilVariantPanelForBatch(index + 1))
+            {
+                slot.SuppressNextClick = true;
+                ResetOtherPendingLongPresses(index);
+                break;
+            }
+        }
+    }
+
+    private void ResetOtherPendingLongPresses(int activeSlotIndex)
+    {
+        for (int index = 0; index < slots.Length; index++)
+        {
+            if (index != activeSlotIndex && slots[index] != null)
+                CancelLongPress(slots[index]);
+        }
+    }
+
+    private void HandleBatchSlotPointerDown(int slotIndex, BaseEventData eventData)
+    {
+        PointerEventData pointerEvent = eventData as PointerEventData;
+        if (!layerAvailable || pointerEvent == null || pointerEvent.button != PointerEventData.InputButton.Left ||
+            !IsTouchPointerActive(pointerEvent.pointerId) || !CanChooseNeutrophilVariant(slotIndex + 1))
+            return;
+
+        BatchSlot slot = slots[slotIndex];
+        slot.SuppressNextClick = false;
+        slot.LongPressPointerId = pointerEvent.pointerId;
+        slot.LongPressStartTime = Time.unscaledTime;
+        slot.IsLongPressPending = true;
+    }
+
+    private void HandleBatchSlotPointerUp(int slotIndex, BaseEventData eventData)
+    {
+        PointerEventData pointerEvent = eventData as PointerEventData;
+        BatchSlot slot = slots[slotIndex];
+        if (pointerEvent == null || slot.LongPressPointerId != pointerEvent.pointerId)
+            return;
+
+        CancelLongPress(slot);
+    }
+
+    private void HandleBatchSlotPointerExit(int slotIndex, BaseEventData eventData)
+    {
+        PointerEventData pointerEvent = eventData as PointerEventData;
+        BatchSlot slot = slots[slotIndex];
+        if (pointerEvent != null && slot.LongPressPointerId == pointerEvent.pointerId)
+            CancelLongPress(slot);
+    }
+
+    private void HandleBatchSlotBeginDrag(int slotIndex, BaseEventData eventData)
+    {
+        PointerEventData pointerEvent = eventData as PointerEventData;
+        BatchSlot slot = slots[slotIndex];
+        if (pointerEvent != null && slot.LongPressPointerId == pointerEvent.pointerId)
+            CancelLongPress(slot);
+    }
+
     private void HandleBatchSlotPointerClick(int slotIndex, BaseEventData eventData)
     {
         PointerEventData pointerEvent = eventData as PointerEventData;
-        if (!layerAvailable || pointerEvent == null || pointerEvent.button != PointerEventData.InputButton.Right)
+        if (pointerEvent == null || pointerEvent.button != PointerEventData.InputButton.Right)
             return;
 
-        int batchId = slotIndex + 1;
-        LymphaticBatchGroup batch = batchSpawner != null ? batchSpawner.GetBatch(batchId) : null;
-        if (batch == null || batch.Status != LymphaticBatchGroup.BatchStatus.Ready ||
-            !string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase))
-            return;
+        OpenNeutrophilVariantPanelForBatch(slotIndex + 1);
+    }
+
+    private bool OpenNeutrophilVariantPanelForBatch(int batchId)
+    {
+        if (!CanChooseNeutrophilVariant(batchId))
+            return false;
 
         selectedBatchId = batchId;
         awaitingTargetSelection = false;
         selectedNeutrophilVariantName = null;
         ShowNeutrophilVariantPanel();
         RefreshSlots();
+        return true;
+    }
+
+    private bool CanChooseNeutrophilVariant(int batchId)
+    {
+        LymphaticBatchGroup batch = batchSpawner != null ? batchSpawner.GetBatch(batchId) : null;
+        return layerAvailable && batch != null && batch.Status == LymphaticBatchGroup.BatchStatus.Ready &&
+            string.Equals(batch.UnitType, "Neutrophil", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTouchPointerActive(int pointerId)
+    {
+        for (int index = 0; index < Input.touchCount; index++)
+        {
+            Touch touch = Input.GetTouch(index);
+            if (touch.fingerId == pointerId)
+                return touch.phase != TouchPhase.Ended && touch.phase != TouchPhase.Canceled;
+        }
+
+        return false;
+    }
+
+    private static void AddPointerEvent(EventTrigger trigger, EventTriggerType eventType,
+        UnityEngine.Events.UnityAction<BaseEventData> callback)
+    {
+        EventTrigger.Entry entry = new EventTrigger.Entry { eventID = eventType };
+        entry.callback.AddListener(callback);
+        trigger.triggers.Add(entry);
+    }
+
+    private static void CancelLongPress(BatchSlot slot)
+    {
+        slot.IsLongPressPending = false;
+        slot.LongPressPointerId = NoActivePointerId;
+    }
+
+    private void ResetSlotPressStates(bool clearSuppressedClicks)
+    {
+        for (int index = 0; index < slots.Length; index++)
+        {
+            BatchSlot slot = slots[index];
+            if (slot == null)
+                continue;
+
+            CancelLongPress(slot);
+            if (clearSuppressedClicks)
+                slot.SuppressNextClick = false;
+        }
     }
 
     private void RefreshNeutrophilVariantSelection()
@@ -468,9 +610,16 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         int slotIndex = index;
         button.onClick.AddListener(() => SelectSlot(slotIndex));
         EventTrigger pointerClickTrigger = iconObject.AddComponent<EventTrigger>();
-        EventTrigger.Entry pointerClickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-        pointerClickEntry.callback.AddListener(eventData => HandleBatchSlotPointerClick(slotIndex, eventData));
-        pointerClickTrigger.triggers.Add(pointerClickEntry);
+        AddPointerEvent(pointerClickTrigger, EventTriggerType.PointerClick,
+            eventData => HandleBatchSlotPointerClick(slotIndex, eventData));
+        AddPointerEvent(pointerClickTrigger, EventTriggerType.PointerDown,
+            eventData => HandleBatchSlotPointerDown(slotIndex, eventData));
+        AddPointerEvent(pointerClickTrigger, EventTriggerType.PointerUp,
+            eventData => HandleBatchSlotPointerUp(slotIndex, eventData));
+        AddPointerEvent(pointerClickTrigger, EventTriggerType.PointerExit,
+            eventData => HandleBatchSlotPointerExit(slotIndex, eventData));
+        AddPointerEvent(pointerClickTrigger, EventTriggerType.BeginDrag,
+            eventData => HandleBatchSlotBeginDrag(slotIndex, eventData));
 
         TextMeshProUGUI travelLabel = CreateText("TravelTime_" + (index + 1), panelRect, string.Empty, 9f, MobilizingColor,
             TextAlignmentOptions.Center, new Vector2(anchorX, 0.5f), new Vector2(anchorX, 0.5f), new Vector2(0.5f, 0f),
@@ -507,6 +656,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         if (isAvailable)
             return;
 
+        ResetSlotPressStates(true);
         if (neutrophilVariantPanelRoot != null)
             neutrophilVariantPanelRoot.SetActive(false);
         selectedNeutrophilVariantIndex = -1;
@@ -604,6 +754,12 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
     private void SelectSlot(int slotIndex)
     {
+        if (slotIndex >= 0 && slotIndex < slots.Length && slots[slotIndex].SuppressNextClick)
+        {
+            slots[slotIndex].SuppressNextClick = false;
+            return;
+        }
+
         if (!layerAvailable)
             return;
 
