@@ -43,10 +43,13 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private static readonly Color DefaultRowColor = new Color(0.055f, 0.09f, 0.115f, 0.98f);
     private static readonly Color OngoingRowColor = new Color(0.035f, 0.24f, 0.29f, 0.98f);
     private static readonly Color AccentColor = new Color(0.18f, 0.83f, 0.78f, 1f);
+    private static readonly Color EmptyStateColor = new Color(0.55f, 0.68f, 0.72f, 1f);
     private static readonly Color TaggedColor = new Color(1f, 0.843f, 0f, 1f);
     private static readonly Color BacterialColor = new Color(0.95f, 0.2f, 0.18f, 1f);
     private static readonly Color ViralColor = new Color(0.2f, 0.55f, 1f, 1f);
     private static readonly Color FungalColor = new Color(0.3f, 0.85f, 0.35f, 1f);
+    private static readonly Color AllergenColor = new Color(0.96f, 0.97f, 1f, 1f);
+    private static readonly Color ParasiteColor = new Color(1f, 0.78f, 0.04f, 1f);
     private static readonly Color MutatedColor = new Color(0.72f, 0.12f, 1f, 1f);
     private static readonly Color ResolvedColor = new Color(0.18f, 0.85f, 0.42f, 1f);
 
@@ -87,9 +90,11 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private CanvasGroup layerVisibilityGroup;
     private Button collapseButton;
     private TextMeshProUGUI collapseButtonLabel;
+    private TextMeshProUGUI emptyStateLabel;
     private InfectionSpawner infectionSpawner;
     private Coroutine panelSlideCoroutine;
     private bool isCollapsed;
+    private bool isLayerVisible;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneLoadedHandler()
@@ -194,14 +199,15 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     /// <summary>Shows the pending-infection panel only while the circulatory layer is active.</summary>
     public void SetLayerVisible(bool isVisible)
     {
+        isLayerVisible = isVisible;
         if (layerVisibilityGroup == null && panelContainerRect != null)
             layerVisibilityGroup = panelContainerRect.GetComponent<CanvasGroup>();
         if (layerVisibilityGroup == null)
             return;
 
-        layerVisibilityGroup.alpha = isVisible ? 1f : 0f;
-        layerVisibilityGroup.interactable = isVisible;
-        layerVisibilityGroup.blocksRaycasts = isVisible;
+        layerVisibilityGroup.alpha = isLayerVisible ? 1f : 0f;
+        layerVisibilityGroup.interactable = isLayerVisible;
+        layerVisibilityGroup.blocksRaycasts = isLayerVisible;
     }
 
     /// <summary>Adds a standalone row; live infection rows are synchronized from InfectionSpawner.</summary>
@@ -292,8 +298,17 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private void SyncRows()
     {
         if (infectionSpawner == null)
+        {
+            if (emptyStateLabel != null)
+            {
+                emptyStateLabel.text = "WAITING FOR INFECTION DATA";
+                emptyStateLabel.gameObject.SetActive(true);
+            }
             return;
+        }
 
+        if (emptyStateLabel != null)
+            emptyStateLabel.text = "NO ACTIVE INFECTIONS YET";
         IReadOnlyList<InfectionSpawner.InfectionMarker> activeInfections = infectionSpawner.ActiveInfections;
         HashSet<InfectionSpawner.InfectionMarker> displayedMarkers = new HashSet<InfectionSpawner.InfectionMarker>();
         int activeCount = 0;
@@ -340,6 +355,9 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
             if (row.marker == null || row.marker.isRemoving || !displayedMarkers.Contains(row.marker))
                 MarkRemovedRow(row);
         }
+
+        if (emptyStateLabel != null)
+            emptyStateLabel.gameObject.SetActive(rows.Count == 0);
     }
 
     private RowView FindRow(InfectionSpawner.InfectionMarker marker)
@@ -437,17 +455,39 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         if (panelRect != null)
             return true;
 
-        Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
-        foreach (Canvas candidate in canvases)
+        GameObject hudCanvasObject = GameObject.Find("HUDCanvas");
+        if (hudCanvasObject != null)
         {
-            if (candidate != null && candidate.renderMode == RenderMode.ScreenSpaceOverlay)
+            Canvas hudCanvas = hudCanvasObject.GetComponent<Canvas>();
+            if (hudCanvas != null && hudCanvas.isActiveAndEnabled &&
+                hudCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+                rootCanvas = hudCanvas;
+        }
+
+        Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        if (rootCanvas == null)
+        {
+            foreach (Canvas candidate in canvases)
             {
-                rootCanvas = candidate;
-                break;
+                if (candidate != null && candidate.isActiveAndEnabled &&
+                    candidate.renderMode == RenderMode.ScreenSpaceOverlay)
+                {
+                    rootCanvas = candidate;
+                    break;
+                }
             }
         }
-        if (rootCanvas == null && canvases.Length > 0)
-            rootCanvas = canvases[0];
+        if (rootCanvas == null)
+        {
+            foreach (Canvas candidate in canvases)
+            {
+                if (candidate != null && candidate.isActiveAndEnabled)
+                {
+                    rootCanvas = candidate;
+                    break;
+                }
+            }
+        }
         if (rootCanvas == null)
             return false;
 
@@ -465,9 +505,9 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         layerVisibilityGroup = panelObject.GetComponent<CanvasGroup>();
         if (layerVisibilityGroup == null)
             layerVisibilityGroup = panelObject.AddComponent<CanvasGroup>();
-        layerVisibilityGroup.alpha = 1f;
-        layerVisibilityGroup.interactable = true;
-        layerVisibilityGroup.blocksRaycasts = true;
+        layerVisibilityGroup.alpha = isLayerVisible ? 1f : 0f;
+        layerVisibilityGroup.interactable = isLayerVisible;
+        layerVisibilityGroup.blocksRaycasts = isLayerVisible;
 
         GameObject panelBodyObject = CreateUiObject("Pending Infections Panel Body", panelContainerRect);
         panelRect = panelBodyObject.GetComponent<RectTransform>();
@@ -540,6 +580,15 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         contentRect.pivot = new Vector2(0.5f, 1f);
         contentRect.offsetMin = new Vector2(10f, 10f);
         contentRect.offsetMax = new Vector2(-10f, -HeaderHeight - 10f);
+
+        emptyStateLabel = CreateText("Pending Infection Empty State", contentRect,
+            "NO ACTIVE INFECTIONS YET", 13f, FontStyles.Normal, EmptyStateColor, TextAlignmentOptions.Center);
+        emptyStateLabel.rectTransform.anchorMin = Vector2.zero;
+        emptyStateLabel.rectTransform.anchorMax = Vector2.one;
+        emptyStateLabel.rectTransform.offsetMin = Vector2.zero;
+        emptyStateLabel.rectTransform.offsetMax = Vector2.zero;
+        emptyStateLabel.gameObject.SetActive(true);
+
         ApplyPanelCollapsedState();
 
         return true;
@@ -670,6 +719,10 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
                 return ViralColor;
             case InfectionPathogenType.Fungal:
                 return FungalColor;
+            case InfectionPathogenType.Allergen:
+                return AllergenColor;
+            case InfectionPathogenType.Parasite:
+                return ParasiteColor;
             default:
                 return BacterialColor;
         }

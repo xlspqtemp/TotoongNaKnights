@@ -180,6 +180,7 @@ public class CameraScript : MonoBehaviour
 
     private void Update()
     {
+        SyncPendingInfectionsPanelVisibility();
         RefreshBreachIcons();
         RefreshBarrierHitIcons();
         RefreshBreachAlarm();
@@ -1041,14 +1042,28 @@ public class CameraScript : MonoBehaviour
             humanSnapshotPanel.SetActive(isVisible);
     }
 
+    private void SyncPendingInfectionsPanelVisibility()
+    {
+        ResolvePendingInfectionsPanelController();
+        if (pendingInfectionsPanelController != null)
+            pendingInfectionsPanelController.SetLayerVisible(selectedLayer == 2 && !layerHudVisibilityDeferred);
+    }
+
     private void SetPendingInfectionsPanelVisible(bool isVisible)
+    {
+        ResolvePendingInfectionsPanelController();
+        if (pendingInfectionsPanelController != null)
+            pendingInfectionsPanelController.SetLayerVisible(isVisible);
+    }
+
+    private void ResolvePendingInfectionsPanelController()
     {
         if (pendingInfectionsPanelController == null && pendingInfectionsPanel != null)
             pendingInfectionsPanelController = pendingInfectionsPanel.GetComponent<PendingInfectionsPanel>();
         if (pendingInfectionsPanelController == null)
             pendingInfectionsPanelController = FindFirstObjectByType<PendingInfectionsPanel>();
         if (pendingInfectionsPanelController != null)
-            pendingInfectionsPanelController.SetLayerVisible(isVisible);
+            pendingInfectionsPanel = pendingInfectionsPanelController.gameObject;
     }
 
     private void SetLymphaticOrdersVisible(bool isVisible)
