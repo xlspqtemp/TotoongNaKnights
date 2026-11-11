@@ -142,12 +142,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             infection == null || infection.isRemoving || infection.infection == null)
             return false;
 
-        if (!IsTargetCompatible(batch, infection, out failureReason))
-        {
-            if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
-                batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayInvalidDeployment();
+        if (!IsViralTargetCompatible(batch, infection, out failureReason))
             return false;
-        }
 
         Transform duct = null;
         Transform vein = null;
@@ -189,16 +185,9 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         return false;
     }
 
-    private static bool IsTargetCompatible(LymphaticBatchGroup batch,
+    private static bool IsViralTargetCompatible(LymphaticBatchGroup batch,
         InfectionSpawner.InfectionMarker infection, out string failureReason)
     {
-        if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
-        {
-            bool targetIsBacterial = infection.infection.pathogenType == InfectionPathogenType.Bacterial;
-            failureReason = targetIsBacterial ? null : batch.DisplayName + " can only target bacterial infections.";
-            return targetIsBacterial;
-        }
-
         bool isAdaptiveCell = string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase) ||
             string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase);
         if (!isAdaptiveCell || !InfectionSpawner.IsKnownViralTrainingPathogenName(batch.PathogenVariant))
