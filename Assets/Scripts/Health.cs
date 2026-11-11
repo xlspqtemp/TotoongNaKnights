@@ -86,7 +86,10 @@ public sealed class Health : MonoBehaviour
         currentHp = Mathf.Max(0f, currentHp - damage);
         RefreshHealthBar();
         if (currentHp <= 0f)
+        {
+            GetComponent<WbcVoiceLines>()?.PlayUnitDestroyed();
             BeginRemoval();
+        }
     }
 
     public void FadeOutAndRemove()

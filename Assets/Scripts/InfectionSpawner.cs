@@ -197,6 +197,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     [Header("Infection Resolution")]
     [SerializeField] private AudioClip infectionClearedSfx;
     [SerializeField] private AudioClip viralContainedVoiceLine;
+    [SerializeField] private AudioClip dendriticViralContainedVoiceLine;
+    [SerializeField] private AudioClip dendriticContainmentCompleteVoiceLine;
+    [SerializeField] private AudioClip dendriticAntigenCollectedVoiceLine;
     [SerializeField] private bool useFixedDurationClash = false;
     [SerializeField, Min(0f)] private float bacterialClashDurationSeconds = 4f;
     [SerializeField] private float mildBacterialWellnessGain = 2f;
@@ -2325,6 +2328,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (collection == null)
             return;
 
+        VoiceLineAudioPlayer.Play(dendriticAntigenCollectedVoiceLine);
         bool antigenAlreadyUnlocked = IsAntigenUnlocked(collection.antigenName);
         if (!antigenAlreadyUnlocked)
             Databank.AddAntigen(collection.antigenName);
@@ -3287,12 +3291,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             (int)marker.infection.severityStage - containedSeverityDropSteps);
         marker.infection.severityStage = (InfectionSeverityStage)reducedSeverity;
         marker.isContained = true;
-        WbcVoiceLines wbcVoiceLines = sourceWbcVoiceLines ?? GetWbcVoiceLines(sourceBatch);
-        if (wbcVoiceLines != null)
-            wbcVoiceLines.PlayViralContained();
-        else if (sourceBatch != null &&
-            string.Equals(sourceBatch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase))
-            VoiceLineAudioPlayer.Play(viralContainedVoiceLine);
+        VoiceLineAudioPlayer.Play(dendriticViralContainedVoiceLine);
         int minimumContainmentDays = Mathf.Clamp(containedSelfResolveDays,
             MinimumViralContainmentDays, MaximumViralContainmentDays);
         int containmentDays = UnityEngine.Random.Range(minimumContainmentDays, MaximumViralContainmentDays + 1);
@@ -3473,8 +3472,13 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
 
             string infectionName = marker.infection.displayName;
-            if (marker.infection.pathogenType == InfectionPathogenType.Viral && !CreatePendingAntigenCollection(marker))
-                continue;
+            if (marker.infection.pathogenType == InfectionPathogenType.Viral)
+            {
+                if (!CreatePendingAntigenCollection(marker))
+                    continue;
+
+                VoiceLineAudioPlayer.Play(dendriticContainmentCompleteVoiceLine);
+            }
 
             PlayInfectionClearedSfx();
             BeginRemovingInfectionMarker(marker);

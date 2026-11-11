@@ -12,6 +12,7 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
     private const string TCellUnitName = "T Cell";
     private const string BCellUnitName = "B Cell";
     private const string MacrophageUnitName = "Macrophage";
+    private const string NeutrophilUnitName = "Neutrophil";
     private const float DefaultNavMeshSampleRadius = 2f;
     private const float FormationSpacing = 1.3f;
     private const float MinimumFormationSeparation = 0.9f;
@@ -170,12 +171,23 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             }
         }
 
+        bool targetWasAborted = batch.HasAbortedTarget;
         batch.BeginMobilization(infection, duct, vein);
         Vector3 firstDestination = batch.HasEnteredCirculatorySystem ? infection.worldPosition : duct.position;
         if (TrySetDestinations(batch, firstDestination, transferNavMeshSampleRadius))
         {
             if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
                 batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayDeploymentAccepted();
+            else if (string.Equals(batch.UnitType, NeutrophilUnitName, System.StringComparison.OrdinalIgnoreCase))
+            {
+                WbcVoiceLines voiceLines = batch.GroupLeader.GetComponent<WbcVoiceLines>();
+                if (targetWasAborted)
+                    voiceLines?.PlayTargetChanged();
+                else
+                    voiceLines?.PlayDeploymentAccepted();
+                if (targetWasAborted)
+                    batch.ConsumeTargetAbortedState();
+            }
             return true;
         }
 
@@ -220,6 +232,11 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         StopBatchAgents(batch);
         if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
             batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayTargetChangedOrAborted();
+        else if (string.Equals(batch.UnitType, NeutrophilUnitName, System.StringComparison.OrdinalIgnoreCase))
+        {
+            batch.GroupLeader.GetComponent<WbcVoiceLines>()?.PlayTargetAborted();
+            batch.MarkTargetAborted();
+        }
         batch.AbortOrder();
         return true;
     }
@@ -236,6 +253,14 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             ? batchLeader.GetComponent<MacrophageVoiceLines>()
             : null;
         macrophageVoiceLines?.PlayBatchDestroyed();
+        LymphaticBatchGroup batchGroup = batchLeader != null
+            ? batchLeader.GetComponent<LymphaticBatchGroup>()
+            : null;
+        if (batchGroup != null && string.Equals(batchGroup.UnitType, NeutrophilUnitName,
+            System.StringComparison.OrdinalIgnoreCase))
+        {
+            batchLeader.GetComponent<WbcVoiceLines>()?.PlayUnitDestroyed();
+        }
 
         foreach (GameObject member in reservation.Members)
         {
@@ -319,6 +344,8 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         Debug.Log($"Lymphatic batch {nodeIndex + 1}/{MaximumBatchCount} deployed: {displayName} (5 units) at '{reservation.Node.Transform.name}'.", this);
         if (string.Equals(unitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
             members[0].GetComponent<MacrophageVoiceLines>()?.PlayTrainingCompleted();
+        else if (string.Equals(unitType, NeutrophilUnitName, System.StringComparison.OrdinalIgnoreCase))
+            members[0].GetComponent<WbcVoiceLines>()?.PlayTrainingReady();
         return true;
     }
 

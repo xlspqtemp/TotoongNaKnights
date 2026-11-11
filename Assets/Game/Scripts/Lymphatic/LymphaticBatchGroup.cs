@@ -22,6 +22,7 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
     [SerializeField] private Transform selectedDuct;
     [SerializeField] private Transform selectedVein;
     [SerializeField] private bool hasEnteredCirculatorySystem;
+    [SerializeField] private bool targetWasAborted;
 
     /// <summary>Gets the first unit in this batch.</summary>
     public LymphaticBatchGroup GroupLeader => groupLeader != null ? groupLeader : this;
@@ -47,6 +48,9 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
     /// <summary>Gets the infection currently assigned to this batch.</summary>
     public InfectionSpawner.InfectionMarker TargetInfection => GroupLeader.targetInfection;
 
+    /// <summary>Gets whether the batch has an aborted target awaiting reassignment.</summary>
+    public bool HasAbortedTarget => GroupLeader.targetWasAborted;
+
     /// <summary>Gets whether this batch has transferred from the lymphatic system to the circulatory system.</summary>
     public bool HasEnteredCirculatorySystem => GroupLeader.hasEnteredCirculatorySystem;
 
@@ -68,6 +72,7 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
             selectedDuct = null;
             selectedVein = null;
             hasEnteredCirculatorySystem = false;
+            targetWasAborted = false;
         }
     }
 
@@ -101,5 +106,20 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
     public void MarkEnteredCirculatorySystem()
     {
         GroupLeader.hasEnteredCirculatorySystem = true;
+    }
+
+    /// <summary>Records that the player aborted a target so its next deployment can announce the target change.</summary>
+    public void MarkTargetAborted()
+    {
+        GroupLeader.targetWasAborted = true;
+    }
+
+    /// <summary>Consumes and returns the pending target-aborted state.</summary>
+    public bool ConsumeTargetAbortedState()
+    {
+        LymphaticBatchGroup leader = GroupLeader;
+        bool wasAborted = leader.targetWasAborted;
+        leader.targetWasAborted = false;
+        return wasAborted;
     }
 }

@@ -14,6 +14,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const int NeutrophilVariantCount = 3;
     private const string TCellUnitName = "T Cell";
     private const string BCellUnitName = "B Cell";
+    private const string NeutrophilUnitName = "Neutrophil";
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
     private const float IconSize = 68f;
@@ -777,18 +778,37 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             }
         }
 
-        if (string.Equals(selectedNeutrophilVariantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase) &&
-            marker.infection.pathogenType != InfectionPathogenType.Parasite)
+        bool isWbcBatch = string.Equals(batch.UnitType, NeutrophilUnitName, StringComparison.OrdinalIgnoreCase);
+        if (isWbcBatch)
         {
-            blockReason = "[Deployment] Blocked: Eosinophils can only target Parasites.";
-            return false;
-        }
+            if (string.Equals(selectedNeutrophilVariantName, EosinophilVariantName, StringComparison.OrdinalIgnoreCase) &&
+                marker.infection.pathogenType != InfectionPathogenType.Parasite)
+            {
+                blockReason = "[Deployment] Blocked: Eosinophils can only target Parasites.";
+                batch.GroupLeader.GetComponent<WbcVoiceLines>()?.PlayInvalidDeployment();
+                return false;
+            }
 
-        if (string.Equals(selectedNeutrophilVariantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase) &&
-            marker.infection.pathogenType != InfectionPathogenType.Allergen)
-        {
-            blockReason = "[Deployment] Blocked: Basophils can only target Allergens.";
-            return false;
+            if (string.Equals(selectedNeutrophilVariantName, BasophilVariantName, StringComparison.OrdinalIgnoreCase) &&
+                marker.infection.pathogenType != InfectionPathogenType.Allergen)
+            {
+                blockReason = "[Deployment] Blocked: Basophils can only target Allergens.";
+                batch.GroupLeader.GetComponent<WbcVoiceLines>()?.PlayInvalidDeployment();
+                return false;
+            }
+
+            bool isStandardNeutrophil = string.IsNullOrWhiteSpace(selectedNeutrophilVariantName) ||
+                string.Equals(selectedNeutrophilVariantName, "NEUTROPHIL", StringComparison.OrdinalIgnoreCase);
+            if (isStandardNeutrophil &&
+                (marker.infection.pathogenType == InfectionPathogenType.Allergen ||
+                 marker.infection.pathogenType == InfectionPathogenType.Parasite))
+            {
+                blockReason = marker.infection.pathogenType == InfectionPathogenType.Allergen
+                    ? "[Deployment] Blocked: Neutrophils cannot target Allergens."
+                    : "[Deployment] Blocked: Neutrophils cannot target Parasites.";
+                batch.GroupLeader.GetComponent<WbcVoiceLines>()?.PlayInvalidDeployment();
+                return false;
+            }
         }
 
         return true;

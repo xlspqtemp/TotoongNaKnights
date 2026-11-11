@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 2495892388120003379}
   - component: {fileID: 914929239451632061}
   - component: {fileID: 8486798415795598404}
+  - component: {fileID: 26781853181158006}
   m_Layer: 0
   m_Name: Neutrophil_1
   m_TagString: Cell
@@ -116,6 +117,32 @@ MonoBehaviour:
   deathShrinkDuration: 0.3
   healthBarLocalOffset: {x: 0, y: 1.2, z: 0}
   healthBarSize: {x: 0.8, y: 0.08}
+--- !u!114 &26781853181158006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8808105530521002257}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77efddb2ec728a44e90084483b210905, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WbcVoiceLines
+  deploymentAcceptedClips:
+  - {fileID: 8300000, guid: 1c98f507d55ad63489894c3a641f3e65, type: 3}
+  - {fileID: 8300000, guid: 92ed9faafe6bfa04284f6290d6170cb1, type: 3}
+  - {fileID: 8300000, guid: 0270e458acf04194286721bf00bc8f84, type: 3}
+  invalidDeploymentClips:
+  - {fileID: 8300000, guid: c97c77925e7385f4495340eaa3f80a7c, type: 3}
+  - {fileID: 8300000, guid: 5c292e3732facb045bea784d64051826, type: 3}
+  - {fileID: 8300000, guid: 113bc849d7fcf5241804663c2d011357, type: 3}
+  trainingReadyClip: {fileID: 8300000, guid: 5b128e600ac98f143927f5789b00a9f2, type: 3}
+  targetChangedClip: {fileID: 8300000, guid: 410c9be866bd2dd47925be6f044e03cf, type: 3}
+  targetAbortedClip: {fileID: 8300000, guid: 935dadddf0c8e8b4ab8fa6a73f0e6a3f, type: 3}
+  bacteriaDestroyedClip: {fileID: 8300000, guid: 409c7f80af7047843a99e09c24c68f83, type: 3}
+  unitDestroyedClip: {fileID: 8300000, guid: b40c73fab4b6b644f8b54a44584ca625, type: 3}
+  viralContainedClip: {fileID: 8300000, guid: d47abdad57813954185ef709aff685ae, type: 3}
 --- !u!1001 &2728213568452771041
 PrefabInstance:
   m_ObjectHideFlags: 0

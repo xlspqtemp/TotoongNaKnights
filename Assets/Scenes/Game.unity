@@ -2996,6 +2996,9 @@ MonoBehaviour:
   dispatchUnavailableColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.65}
   infectionClearedSfx: {fileID: 8300000, guid: 0e31ae3a9256a894e971ee6c073311eb, type: 3}
   viralContainedVoiceLine: {fileID: 8300000, guid: c39b603910be09a4eb46ac7f07b0e257, type: 3}
+  dendriticViralContainedVoiceLine: {fileID: 8300000, guid: 8f558337bd474564a90d033e3199fc9f, type: 3}
+  dendriticContainmentCompleteVoiceLine: {fileID: 8300000, guid: b8221d38bb987ec40952c88e29a89821, type: 3}
+  dendriticAntigenCollectedVoiceLine: {fileID: 8300000, guid: 423c3d450c1141741b43952dde48b871, type: 3}
   useFixedDurationClash: 1
   bacterialClashDurationSeconds: 4
   mildBacterialWellnessGain: 2
@@ -13593,7 +13596,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 755701208}
   m_HandleRect: {fileID: 755701207}
   m_Direction: 2
-  m_Value: 1
+  m_Value: 0
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
