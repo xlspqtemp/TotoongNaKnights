@@ -91,6 +91,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float AntigenIconMinimumAlpha = 0.45f;
     private const float AntigenIconMaximumAlpha = 1f;
     private const float AntigenIconColliderScale = 1.5f;
+    private const float AntigenIconClickPaddingPixels = 28f;
     private const float MacrophageDefaultHealth = 300f;
     private const float MacrophageDefaultAttackDamage = 20f;
     private const float NormalDifficultyWbcHp = 100f;
@@ -155,6 +156,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     private List<InfectionData> infectionEntries;
     private int hoursUntilNextInfectionSpawn;
     private bool infectionSpawnTimerInitialized;
+    private bool tutorialViralIsolationActive;
+    private InfectionMarker isolatedTutorialViralMarker;
 
     [Header("Body-Part Button Mapping")]
     [SerializeField] private List<InfectionBodyPartButtonReference> bodyPartButtons = CreateDefaultBodyPartButtons();
@@ -580,11 +583,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     /// <summary>Spawns the named Common Cold viral profile for the tutorial without using weighted pathogen selection.</summary>
     public InfectionMarker SpawnTutorialCommonColdInfection()
     {
-        if (activeInfectionMarkers.Count >= maxActiveInfections)
-        {
-            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because the active infection cap has been reached.", this);
-            return null;
-        }
+        if (tutorialViralIsolationActive && isolatedTutorialViralMarker != null)
+            return isolatedTutorialViralMarker;
 
         if (GetValidBodyPartButtonCount() == 0)
         {
@@ -613,6 +613,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         InfectionData infection = CloneInfectionData(commonColdProfile);
+        infection.displayName = TutorialCommonColdPathogenName;
+        infection.pathogenDatabaseName = TutorialCommonColdPathogenName;
+        infection.isGeneric = false;
         InfectionBodyPartButtonReference bodyPartButton = SelectTutorialBodyPartButton(infection);
         if (bodyPartButton == null)
         {
@@ -620,15 +623,96 @@ public sealed class InfectionSpawner : MonoBehaviour
             return null;
         }
 
-        InfectionMarker marker = SpawnMarker(infection, bodyPartButton);
-        if (marker != null)
+        RemoveExistingVirusesForTutorial();
+        if (activeInfectionMarkers.Count >= maxActiveInfections)
         {
-            marker.isTutorialMarker = true;
-            LogInfection(infection, bodyPartButton);
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because the active infection cap has been reached after clearing other viruses.", this);
+            return null;
         }
 
-        return marker;
+        tutorialViralIsolationActive = true;
+        InfectionMarker marker = SpawnMarker(infection, bodyPartButton, false, null, true);
+        if (marker != null)
+        {
+            isolatedTutorialViralMarker = marker;
+            LogInfection(infection, bodyPartButton);
+            return marker;
+        }
+
+        tutorialViralIsolationActive = false;
+        isolatedTutorialViralMarker = null;
+        return null;
     }
+
+    /// <summary>Ends the tutorial-only viral spawn isolation after the viral lesson is complete.</summary>
+    public void EndTutorialViralIsolation()
+    {
+        tutorialViralIsolationActive = false;
+        isolatedTutorialViralMarker = null;
+    }
+
+    private void RemoveExistingVirusesForTutorial()
+    {
+        for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
+        {
+            PendingAntigenCollection collection = pendingAntigenCollections[index];
+            if (collection == null || collection.infectionMarker == null || collection.infectionMarker.infection == null ||
+                collection.infectionMarker.infection.pathogenType != InfectionPathogenType.Viral)
+                continue;
+
+            if (collection.icon != null)
+                Destroy(collection.icon);
+            if (collection.dendriticCell != null)
+                Destroy(collection.dendriticCell);
+            pendingAntigenCollections.RemoveAt(index);
+        }
+
+        for (int index = activeInfectionMarkers.Count - 1; index >= 0; index--)
+        {
+            InfectionMarker existingMarker = activeInfectionMarkers[index];
+            if (existingMarker == null || existingMarker.infection == null ||
+                existingMarker.infection.pathogenType != InfectionPathogenType.Viral)
+                continue;
+
+            BeginRemovingInfectionMarker(existingMarker);
+        }
+    }
+
+    /// <summary>Returns the collectible icon linked to a specific tutorial infection.</summary>
+    public GameObject GetTutorialAntigenIcon(InfectionMarker marker)
+    {
+        if (marker == null)
+            return null;
+
+        foreach (PendingAntigenCollection collection in pendingAntigenCollections)
+        {
+            if (collection != null && collection.tutorialMarker == marker && collection.icon != null)
+                return collection.icon;
+        }
+
+        return null;
+    }
+
+
+    /// <summary>Collects the pending antigen belonging to the specified tutorial infection.</summary>
+    public bool TryCollectTutorialAntigen(InfectionMarker marker)
+    {
+        if (marker == null)
+            return false;
+
+        for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
+        {
+            PendingAntigenCollection collection = pendingAntigenCollections[index];
+            if (collection == null || collection.tutorialMarker != marker || collection.icon == null)
+                continue;
+
+            CollectAntigen(collection);
+            return true;
+        }
+
+        return false;
+    }
+
 
     /// <summary>Advances one contained tutorial virus directly to the existing antigen-collection path.</summary>
     public bool ResolveTutorialContainmentImmediately(InfectionMarker marker)
@@ -646,6 +730,10 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         VoiceLineAudioPlayer.Play(dendriticContainmentCompleteVoiceLine);
+        PlayInfectionClearedSfx();
+        string infectionName = marker.infection.displayName;
+        BeginRemovingInfectionMarker(marker);
+        LogWbcSquadMessage($"Adaptive response cleared {infectionName}.", ConsoleLogUI.LogType.Success);
         return true;
     }
 
@@ -654,6 +742,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (marker == null || !marker.isTutorialMarker)
             return;
+        if (marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
+            EndTutorialViralIsolation();
 
         for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
         {
@@ -677,6 +767,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (marker == null || !marker.isTutorialMarker)
             return;
 
+        EndTutorialViralIsolation();
         marker.isTutorialMarker = false;
         if (marker.isContained && marker.tutorialAntigenCollectionAttempted)
             BeginRemovingInfectionMarker(marker);
@@ -826,6 +917,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         public BoxCollider iconCollider;
         public Vector3 iconBasePosition;
         public Vector3 scaleAnchor;
+        public InfectionMarker infectionMarker;
         public InfectionMarker tutorialMarker;
     }
 
@@ -2300,6 +2392,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             iconCollider = iconCollider,
             iconBasePosition = iconPosition,
             scaleAnchor = marker.worldPosition,
+            infectionMarker = marker,
             tutorialMarker = marker.isTutorialMarker ? marker : null
         });
         marker.containedDendriticCell = null;
@@ -2403,32 +2496,46 @@ public sealed class InfectionSpawner : MonoBehaviour
         RaycastHit[] hits = Physics.RaycastAll(ray, gameplayCamera.farClipPlane,
             Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
 
-        for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
+        for (int pass = 0; pass < 2; pass++)
         {
-            PendingAntigenCollection collection = pendingAntigenCollections[index];
-            if (collection == null || collection.iconCollider == null || !collection.iconCollider.enabled)
-                continue;
-
-            bool colliderHit = false;
-            foreach (RaycastHit hit in hits)
+            bool tutorialCollectionsOnly = pass == 0;
+            for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
             {
-                if (hit.collider != collection.iconCollider)
+                PendingAntigenCollection collection = pendingAntigenCollections[index];
+                if (collection == null || collection.iconCollider == null || !collection.iconCollider.enabled ||
+                    (collection.tutorialMarker != null) != tutorialCollectionsOnly)
                     continue;
 
-                colliderHit = true;
-                break;
+                if (!IsAntigenIconAtScreenPosition(collection, ray, hits, Input.mousePosition))
+                    continue;
+
+                CollectAntigen(collection);
+                return true;
             }
-
-            if (!colliderHit)
-                colliderHit = collection.iconCollider.Raycast(ray, out RaycastHit iconHit, gameplayCamera.farClipPlane);
-            if (!colliderHit && !IsScreenPointInsideColliderBounds(gameplayCamera, Input.mousePosition, collection.iconCollider))
-                continue;
-
-            CollectAntigen(collection);
-            return true;
         }
 
         return false;
+    }
+
+    private bool IsAntigenIconAtScreenPosition(PendingAntigenCollection collection, Ray ray,
+        RaycastHit[] hits, Vector2 screenPosition)
+    {
+        bool colliderHit = false;
+        foreach (RaycastHit hit in hits)
+        {
+            if (hit.collider != collection.iconCollider)
+                continue;
+
+            colliderHit = true;
+            break;
+        }
+
+        if (!colliderHit)
+            colliderHit = collection.iconCollider.Raycast(ray, out _, gameplayCamera.farClipPlane);
+        if (colliderHit)
+            return true;
+
+        return IsScreenPointInsideColliderBounds(gameplayCamera, screenPosition, collection.iconCollider);
     }
 
     private static bool IsScreenPointInsideColliderBounds(Camera camera, Vector2 screenPosition, Collider targetCollider)
@@ -2457,8 +2564,13 @@ public sealed class InfectionSpawner : MonoBehaviour
             maximumScreenY = Mathf.Max(maximumScreenY, screenCorner.y);
         }
 
-        return screenPosition.x >= minimumScreenX && screenPosition.x <= maximumScreenX &&
-            screenPosition.y >= minimumScreenY && screenPosition.y <= maximumScreenY;
+        if (float.IsInfinity(minimumScreenX) || float.IsInfinity(minimumScreenY))
+            return false;
+
+        return screenPosition.x >= minimumScreenX - AntigenIconClickPaddingPixels &&
+            screenPosition.x <= maximumScreenX + AntigenIconClickPaddingPixels &&
+            screenPosition.y >= minimumScreenY - AntigenIconClickPaddingPixels &&
+            screenPosition.y <= maximumScreenY + AntigenIconClickPaddingPixels;
     }
 
     private void CollectAntigen(PendingAntigenCollection collection)
@@ -3615,8 +3727,17 @@ public sealed class InfectionSpawner : MonoBehaviour
                     currentDay >= marker.containedResolveDay && !marker.tutorialAntigenCollectionAttempted)
                 {
                     marker.tutorialAntigenCollectionAttempted = true;
-                    if (CreatePendingAntigenCollection(marker))
-                        VoiceLineAudioPlayer.Play(dendriticContainmentCompleteVoiceLine);
+                    if (!CreatePendingAntigenCollection(marker))
+                    {
+                        marker.tutorialAntigenCollectionAttempted = false;
+                        continue;
+                    }
+
+                    string tutorialInfectionName = marker.infection.displayName;
+                    VoiceLineAudioPlayer.Play(dendriticContainmentCompleteVoiceLine);
+                    PlayInfectionClearedSfx();
+                    BeginRemovingInfectionMarker(marker);
+                    LogWbcSquadMessage($"Adaptive response cleared {tutorialInfectionName}.", ConsoleLogUI.LogType.Success);
                 }
 
                 continue;
@@ -4003,7 +4124,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         bool wasBarrierMutated = ApplyBarrierMutation(infection);
-        SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
+        InfectionMarker marker = SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
+        if (marker == null)
+            return;
         LogInfection(infection, bodyPartButton);
         DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
         Debug.Log($"[InfectionSpawner] Spawn roll {namedRoll}/100 with NamedChance={difficultyStats.namedInfectionChance:0.##}% => {(isGeneric ? "Generic" : "Named")}. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", this);
@@ -4358,8 +4481,17 @@ public sealed class InfectionSpawner : MonoBehaviour
         InfectionData infection,
         InfectionBodyPartButtonReference bodyPartButton,
         bool wasBarrierMutated = false,
-        Vector3? worldPositionOverride = null)
+        Vector3? worldPositionOverride = null,
+        bool isTutorialMarker = false)
     {
+        if (infection == null || bodyPartButton == null)
+            return null;
+        if (tutorialViralIsolationActive && infection.pathogenType == InfectionPathogenType.Viral && !isTutorialMarker)
+        {
+            Debug.Log("[InfectionSpawner] Suppressed an unrelated viral infection during the isolated tutorial virus section.", this);
+            return null;
+        }
+
         int vesselSpawnPointIndex = -1;
         Vector3 requestedPosition = worldPositionOverride.HasValue
             ? worldPositionOverride.Value
@@ -4385,6 +4517,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             canvas = hudCanvas,
             unresolvedDays = Mathf.Max(0, infection.daysUntreated),
             wasBarrierMutated = wasBarrierMutated,
+            isTutorialMarker = isTutorialMarker,
             notificationIcon = ResolvePathogenNotificationIcon(infection.pathogenType)
         };
 

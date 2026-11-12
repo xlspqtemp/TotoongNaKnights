@@ -182,6 +182,8 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             UpdateNotification(state, circulatoryActive, GameplaySpeed.DeltaTime);
             if (state.fadingOut && state.alpha <= 0f)
             {
+                if (state.marker != null && state.marker.notificationRenderer == state.spriteRenderer)
+                    state.marker.notificationRenderer = null;
                 if (state.gameObject != null)
                     Destroy(state.gameObject);
                 removalBuffer.Add(entry.Key);
@@ -196,6 +198,8 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     {
         foreach (NotificationState state in notifications.Values)
         {
+            if (state.marker != null && state.marker.notificationRenderer == state.spriteRenderer)
+                state.marker.notificationRenderer = null;
             if (state.gameObject != null)
                 Destroy(state.gameObject);
         }
@@ -278,6 +282,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
         SpriteRenderer spriteRenderer = notificationObject.GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
             spriteRenderer = notificationObject.AddComponent<SpriteRenderer>();
+        marker.notificationRenderer = spriteRenderer;
         AssignNotificationSprite(spriteRenderer, marker);
 
         BoxCollider boxCollider = notificationObject.GetComponent<BoxCollider>();

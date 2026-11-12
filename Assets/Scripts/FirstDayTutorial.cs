@@ -28,6 +28,8 @@ public sealed class FirstDayTutorial : MonoBehaviour
     private const int FinalTutorialStep = 25;
     private const float DimCanvasOrderOffset = -1f;
     private const float TutorialCanvasOrderOffset = 1f;
+    private const int MaximumTutorialResearchDays = 3;
+    private const float TutorialResearchDayPauseSeconds = 0.35f;
     private const float FramePadding = 10f;
     private const float FrameThickness = 3f;
     private const float PanelMaximumWidth = 560f;
@@ -92,11 +94,11 @@ public sealed class FirstDayTutorial : MonoBehaviour
         "A bacterial infection has appeared! Tap the floating red icon to see what it is.",
         "This popup tells you everything you need to know about the pathogen and the best unit to deploy. Close it when you're ready.",
         "Tap the Neutrophil batch, then tap the bacteria icon to send your immune cells. Use Fast Forward to speed up their arrival, then wait for the Neutrophil to clear the bacteria.",
-        "A virus has appeared! WBCs can't kill viruses. They can only contain them. Let's see what we need.",
+        "A virus has appeared! WBCs can't kill viruses. They can only contain them. Click the highlighted viral icon to see what it is, close the intel popup, then click Next.",
         "We need a specialized unit for this. Let's go back to the Factory and train a Macrophage. Use Fast Forward to speed it up!",
         "Click the Circulatory layer to return to the bloodstream.",
         "Deploy the Macrophage to the virus to contain it. This will buy you time.",
-        "The Dendritic Cell has collected the antigen! The adaptive immune system is building a response. Tap the icon to claim it.",
+        "The Dendritic Cell is researching the contained virus. The tutorial will advance 2–3 days for the antigen to be ready; click the icon or anywhere inside its cyan highlight to collect it.",
         "The lungs are breached! Tap the Cough button to clear the infection, then Repair to seal the breach. Completing this grants the Oxygen Boost perk—your units move twice as fast for 15 seconds!",
         "You must maintain barrier integrity to prevent the Breached State. If a barrier is breached, pathogens become mutated and far deadlier. The Digestive layer's Vomit button only works when the body is awake.",
         "Reach Day 14 with a Wellness score of 50 or above to win. Go lower than 50, or hit 0, and you lose. Good luck, Defender.",
@@ -339,6 +341,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
 
         EnsureHudGroups();
         TryHandleTutorialNotificationClick();
+        TryHandleTutorialAntigenClick();
         UpdateGameplayGates();
         RefreshDynamicGameplayTarget();
         UpdateHighlight();
@@ -563,7 +566,9 @@ public sealed class FirstDayTutorial : MonoBehaviour
         }
         else if (stepIndex == 21)
         {
-            currentTarget = GameObject.Find("Antigen Collection Icon");
+            currentTarget = infectionSpawner != null
+                ? infectionSpawner.GetTutorialAntigenIcon(tutorialViralMarker)
+                : null;
         }
         else if (stepIndex == 22 && coughButtonClicked)
         {
@@ -576,13 +581,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         if (marker == null || marker.infection == null)
             return null;
 
-        if (marker.notificationRenderer != null)
-            return marker.notificationRenderer.gameObject;
-
-        GameObject notificationObject = GameObject.Find("Infection Notification - " + marker.infection.displayName);
-        if (notificationObject != null)
-            marker.notificationRenderer = notificationObject.GetComponent<SpriteRenderer>();
-        return marker.notificationRenderer != null ? marker.notificationRenderer.gameObject : notificationObject;
+        return marker.notificationRenderer != null ? marker.notificationRenderer.gameObject : null;
     }
 
     private static bool IsGameplayActionGated(int stepIndex)
@@ -670,7 +669,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
             SetGameplayClockRunning(false);
             actionGateComplete = false;
             if (tutorialViralMarker != null)
-                infectionSpawner?.ResolveTutorialContainmentImmediately(tutorialViralMarker);
+                StartCoroutine(AdvanceTutorialResearchDays(tutorialViralMarker));
         }
         else if (stepIndex == 22)
         {
@@ -683,6 +682,42 @@ public sealed class FirstDayTutorial : MonoBehaviour
             SetGameplayClockRunning(false);
             actionGateComplete = true;
         }
+    }
+
+    private IEnumerator AdvanceTutorialResearchDays(InfectionSpawner.InfectionMarker marker)
+    {
+        if (marker == null || infectionSpawner == null || !marker.isContained)
+            yield break;
+
+        DayCounterUI dayCounter = FindFirstObjectByType<DayCounterUI>();
+        if (dayCounter == null)
+        {
+            Debug.LogWarning("[FirstDayTutorial] DayCounterUI is missing; completing tutorial viral research immediately.", this);
+            infectionSpawner.ResolveTutorialContainmentImmediately(marker);
+            yield break;
+        }
+
+        int targetDay = marker.containedResolveDay;
+        int daysToAdvance = Mathf.Clamp(targetDay - dayCounter.CurrentDay, 0, MaximumTutorialResearchDays);
+        for (int dayOffset = 0; dayOffset < daysToAdvance; dayOffset++)
+        {
+            if (!tutorialIsOpen || currentStepIndex != 21)
+                yield break;
+            if (marker.tutorialAntigenCollectionAttempted)
+                break;
+
+            dayCounter.AdvanceDay();
+            yield return new WaitForSecondsRealtime(TutorialResearchDayPauseSeconds);
+        }
+
+        if (!tutorialIsOpen || currentStepIndex != 21)
+            yield break;
+
+        if (!marker.tutorialAntigenCollectionAttempted)
+            infectionSpawner.ResolveTutorialContainmentImmediately(marker);
+
+        if (marker.tutorialAntigenCollectionAttempted && bodyText != null)
+            bodyText.text = "The Dendritic Cell has finished its research. Click the antigen icon to collect it.";
     }
 
     private void SelectTutorialLayer(int layerNumber)
@@ -888,13 +923,14 @@ public sealed class FirstDayTutorial : MonoBehaviour
             return;
 
         Collider notificationCollider = notificationObject.GetComponent<Collider>();
-        Camera gameplayCamera = Camera.main;
-        if (notificationCollider == null || !notificationCollider.enabled || gameplayCamera == null)
+        Camera gameplayCamera = GetGameplayCamera();
+        if (gameplayCamera == null)
             return;
 
         Ray clickRay = gameplayCamera.ScreenPointToRay(Input.mousePosition);
-        bool clickedNotification = notificationCollider.Raycast(clickRay, out _, gameplayCamera.farClipPlane);
-        if (!clickedNotification && TryGetScreenRect(notificationObject, out Rect notificationScreenRect))
+        bool clickedNotification = notificationCollider != null && notificationCollider.enabled &&
+            notificationCollider.Raycast(clickRay, out _, gameplayCamera.farClipPlane);
+        if (!clickedNotification && TryGetScreenRect(notificationObject, gameplayCamera, out Rect notificationScreenRect))
             clickedNotification = notificationScreenRect.Contains(Input.mousePosition);
         if (!clickedNotification)
             return;
@@ -908,6 +944,29 @@ public sealed class FirstDayTutorial : MonoBehaviour
         infectionIntelPopup.Show(marker, infectionSpawner);
         HandleIntelOpened(marker);
     }
+    private void TryHandleTutorialAntigenClick()
+    {
+        if (currentStepIndex != 21 || !Input.GetMouseButtonDown(0) ||
+            tutorialViralMarker == null || infectionSpawner == null)
+        {
+            return;
+        }
+
+        GameObject antigenIcon = infectionSpawner.GetTutorialAntigenIcon(tutorialViralMarker);
+        if (antigenIcon == null || highlightRect == null || !highlightRect.gameObject.activeInHierarchy)
+            return;
+
+        Vector2 highlightCenter = new Vector2(
+            Screen.width * 0.5f + highlightRect.anchoredPosition.x,
+            Screen.height * 0.5f + highlightRect.anchoredPosition.y);
+        Rect clickableRect = CenteredRect(highlightCenter, highlightRect.sizeDelta.x, highlightRect.sizeDelta.y);
+        if (!clickableRect.Contains(Input.mousePosition))
+            return;
+
+        infectionSpawner.TryCollectTutorialAntigen(tutorialViralMarker);
+    }
+
+
 
     private void HandleIntelOpened(InfectionSpawner.InfectionMarker marker)
     {
@@ -927,13 +986,16 @@ public sealed class FirstDayTutorial : MonoBehaviour
         {
             SetGameplayClockRunning(false);
             popupWasOpened = true;
-            actionGateComplete = true;
-            tutorialCanvas.sortingOrder = 101;
-            Image panelImage = panelRect.GetComponent<Image>();
-            if (panelImage != null)
-                panelImage.raycastTarget = false;
+            actionGateComplete = false;
+            if (panelRect != null)
+            {
+                TextMeshProUGUI body = panelRect.Find("Body")?.GetComponent<TextMeshProUGUI>();
+                if (body != null)
+                    body.text = "Review the virus intel, close the popup, then click Next to continue.";
+            }
+            tutorialCanvas.sortingOrder = hudCanvas.sortingOrder + (int)TutorialCanvasOrderOffset + 1;
             if (nextButton != null)
-                nextButton.interactable = true;
+                nextButton.interactable = false;
         }
     }
 
@@ -987,11 +1049,25 @@ public sealed class FirstDayTutorial : MonoBehaviour
         else if (currentStepIndex == 17)
             target = FindInfectionNotificationTarget(tutorialViralMarker);
         else if (currentStepIndex == 21)
-            target = GameObject.Find("Antigen Collection Icon");
+            target = infectionSpawner != null
+                ? infectionSpawner.GetTutorialAntigenIcon(tutorialViralMarker)
+                : null;
         else if (currentStepIndex == 22 && coughButtonClicked)
             target = GameObject.Find("Lung Virus Response UI/Panel/Repair Button");
 
-        if (target == null || target == currentTarget)
+        if (target == null)
+        {
+            if (currentStepIndex == 14 || currentStepIndex == 17 || currentStepIndex == 21 ||
+                (currentStepIndex == 22 && coughButtonClicked))
+            {
+                currentTarget = null;
+                highlightRect.gameObject.SetActive(false);
+                UpdatePanelPlacement();
+            }
+            return;
+        }
+
+        if (target == currentTarget)
             return;
 
         currentTarget = target;
@@ -1022,6 +1098,15 @@ public sealed class FirstDayTutorial : MonoBehaviour
             }
         }
         else if (currentStepIndex == 15 && popupWasOpened && infectionIntelPopup != null && !infectionIntelPopup.IsOpen)
+        {
+            actionGateComplete = true;
+            popupWasOpened = false;
+            tutorialCanvas.sortingOrder = hudCanvas.sortingOrder + (int)TutorialCanvasOrderOffset + 1;
+            if (nextButton != null)
+                nextButton.interactable = true;
+            SetGameplayClockRunning(false);
+        }
+        else if (currentStepIndex == 17 && popupWasOpened && infectionIntelPopup != null && !infectionIntelPopup.IsOpen)
         {
             actionGateComplete = true;
             popupWasOpened = false;
@@ -1086,6 +1171,9 @@ public sealed class FirstDayTutorial : MonoBehaviour
             BeginFreshRun();
             return;
         }
+
+        if (currentStepIndex == 21)
+            infectionSpawner?.EndTutorialViralIsolation();
 
         currentStepIndex++;
         if (currentStepIndex >= StepTitles.Length)
@@ -1344,6 +1432,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
 
         if (infectionSpawner != null)
         {
+            infectionSpawner.EndTutorialViralIsolation();
             foreach (InfectionSpawner.InfectionMarker marker in tutorialInfectionMarkers)
             {
                 if (marker != null && marker.isTutorialMarker)
@@ -1410,7 +1499,8 @@ public sealed class FirstDayTutorial : MonoBehaviour
 
     private void UpdateHighlight()
     {
-        if (currentTarget == null || highlightRect == null || !TryGetScreenRect(currentTarget, out Rect targetRect))
+        if (currentTarget == null || highlightRect == null ||
+            !TryGetScreenRect(currentTarget, GetGameplayCamera(), out Rect targetRect))
         {
             if (highlightRect != null)
                 highlightRect.gameObject.SetActive(false);
@@ -1420,7 +1510,10 @@ public sealed class FirstDayTutorial : MonoBehaviour
         highlightRect.gameObject.SetActive(true);
         Vector2 center = targetRect.center;
         highlightRect.anchoredPosition = new Vector2(center.x - Screen.width * 0.5f, center.y - Screen.height * 0.5f);
-        highlightRect.sizeDelta = new Vector2(targetRect.width + FramePadding * 2f, targetRect.height + FramePadding * 2f);
+        float highlightPadding = currentStepIndex == 17 ? FramePadding * 2f : FramePadding;
+        highlightRect.sizeDelta = new Vector2(
+            targetRect.width + highlightPadding * 2f,
+            targetRect.height + highlightPadding * 2f);
 
         float pulse = 0.62f + 0.38f * (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * PulseSpeed));
         Color edgeColor = new Color(AccentColor.r, AccentColor.g, AccentColor.b, pulse);
@@ -1442,7 +1535,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         float panelHeight = Mathf.Min(PanelMaximumHeight, Mathf.Max(180f, Screen.height - ScreenEdgeMargin * 2f));
         panelRect.sizeDelta = new Vector2(panelWidth, panelHeight);
 
-        if (currentTarget == null || !TryGetScreenRect(currentTarget, out Rect targetRect))
+        if (currentTarget == null || !TryGetScreenRect(currentTarget, GetGameplayCamera(), out Rect targetRect))
         {
             SetPanelCenter(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
             return;
@@ -1528,14 +1621,22 @@ public sealed class FirstDayTutorial : MonoBehaviour
         return new Rect(center.x - width * 0.5f, center.y - height * 0.5f, width, height);
     }
 
-    private static bool TryGetScreenRect(GameObject target, out Rect screenRect)
+    private Camera GetGameplayCamera()
+    {
+        Camera gameplayCamera = cameraController != null
+            ? cameraController.GetComponentInChildren<Camera>()
+            : null;
+        return gameplayCamera != null ? gameplayCamera : Camera.main;
+    }
+
+    private static bool TryGetScreenRect(GameObject target, Camera gameplayCamera, out Rect screenRect)
     {
         RectTransform targetRect = target.GetComponent<RectTransform>();
         if (targetRect != null)
         {
             Canvas targetCanvas = target.GetComponentInParent<Canvas>();
             Camera uiCamera = targetCanvas != null && targetCanvas.renderMode != RenderMode.ScreenSpaceOverlay
-                ? targetCanvas.worldCamera != null ? targetCanvas.worldCamera : Camera.main
+                ? targetCanvas.worldCamera != null ? targetCanvas.worldCamera : gameplayCamera
                 : null;
             Vector3[] corners = new Vector3[4];
             targetRect.GetWorldCorners(corners);
@@ -1553,8 +1654,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         }
 
         Renderer targetRenderer = target.GetComponent<Renderer>();
-        Camera worldCamera = Camera.main;
-        if (targetRenderer == null || worldCamera == null)
+        if (targetRenderer == null || gameplayCamera == null)
         {
             screenRect = default;
             return false;
@@ -1573,7 +1673,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
                 (corner & 1) == 0 ? minimumWorld.x : maximumWorld.x,
                 (corner & 2) == 0 ? minimumWorld.y : maximumWorld.y,
                 (corner & 4) == 0 ? minimumWorld.z : maximumWorld.z);
-            Vector3 screenCorner = worldCamera.WorldToScreenPoint(worldCorner);
+            Vector3 screenCorner = gameplayCamera.WorldToScreenPoint(worldCorner);
             if (screenCorner.z <= 0f)
                 continue;
 
