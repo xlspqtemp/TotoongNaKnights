@@ -630,6 +630,47 @@ public sealed class InfectionSpawner : MonoBehaviour
         return marker;
     }
 
+    /// <summary>Advances one contained tutorial virus directly to the existing antigen-collection path.</summary>
+    public bool ResolveTutorialContainmentImmediately(InfectionMarker marker)
+    {
+        if (marker == null || !marker.isTutorialMarker || !marker.isContained || marker.infection == null ||
+            marker.infection.pathogenType != InfectionPathogenType.Viral || marker.tutorialAntigenCollectionAttempted)
+            return false;
+
+        marker.containedResolveDay = dayCounter != null ? dayCounter.CurrentDay : 0;
+        marker.tutorialAntigenCollectionAttempted = true;
+        if (!CreatePendingAntigenCollection(marker))
+        {
+            marker.tutorialAntigenCollectionAttempted = false;
+            return false;
+        }
+
+        VoiceLineAudioPlayer.Play(dendriticContainmentCompleteVoiceLine);
+        return true;
+    }
+
+    /// <summary>Removes one tutorial-owned infection and any antigen collectible linked to it.</summary>
+    public void RemoveTutorialMarker(InfectionMarker marker)
+    {
+        if (marker == null || !marker.isTutorialMarker)
+            return;
+
+        for (int index = pendingAntigenCollections.Count - 1; index >= 0; index--)
+        {
+            PendingAntigenCollection collection = pendingAntigenCollections[index];
+            if (collection == null || collection.tutorialMarker != marker)
+                continue;
+
+            if (collection.icon != null)
+                Destroy(collection.icon);
+            if (collection.dendriticCell != null)
+                Destroy(collection.dendriticCell);
+            pendingAntigenCollections.RemoveAt(index);
+        }
+
+        BeginRemovingInfectionMarker(marker);
+    }
+
     /// <summary>Releases an unfinished tutorial virus back to normal containment resolution when the tutorial closes.</summary>
     public void ReleaseTutorialInfection(InfectionMarker marker)
     {
