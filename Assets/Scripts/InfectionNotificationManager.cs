@@ -149,25 +149,32 @@ public sealed class InfectionNotificationManager : MonoBehaviour
             state.desired = false;
 
         int visibleInfectionCount = 0;
-        for (int index = 0; index < activeInfections.Count && visibleInfectionCount < MaximumNotifications; index++)
+        for (int tutorialPass = 0; tutorialPass < 2 && visibleInfectionCount < MaximumNotifications; tutorialPass++)
         {
-            InfectionSpawner.InfectionMarker marker = activeInfections[index];
-            if (marker == null || marker.isRemoving || marker.infection == null)
-                continue;
-
-            visibleInfectionCount++;
-            if (notifications.TryGetValue(marker, out NotificationState existing))
+            bool tutorialMarkersFirst = tutorialPass == 0;
+            for (int index = 0; index < activeInfections.Count && visibleInfectionCount < MaximumNotifications; index++)
             {
-                existing.desired = true;
-                existing.fadingOut = false;
-            }
-            else
-            {
-                NotificationState created = CreateNotification(marker);
-                if (created != null)
+                InfectionSpawner.InfectionMarker marker = activeInfections[index];
+                if (marker == null || marker.isRemoving || marker.infection == null ||
+                    marker.isTutorialMarker != tutorialMarkersFirst)
                 {
-                    created.desired = true;
-                    notifications.Add(marker, created);
+                    continue;
+                }
+
+                visibleInfectionCount++;
+                if (notifications.TryGetValue(marker, out NotificationState existing))
+                {
+                    existing.desired = true;
+                    existing.fadingOut = false;
+                }
+                else
+                {
+                    NotificationState created = CreateNotification(marker);
+                    if (created != null)
+                    {
+                        created.desired = true;
+                        notifications.Add(marker, created);
+                    }
                 }
             }
         }

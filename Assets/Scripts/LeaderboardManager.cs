@@ -25,6 +25,7 @@ public class LeaderboardManager : MonoBehaviour
     private const string HardDifficultyName = "Hard";
     private const string MissingDifficultyLabel = "-";
     private const string LegacyDifficultyLabel = "Legacy";
+    private const string LocalGuestSessionKey = "localGuestSessionActive";
 
     [Serializable]
     private sealed class ScoreMetadata
@@ -152,6 +153,13 @@ public class LeaderboardManager : MonoBehaviour
         }
 
         scoreSubmissionAttempted = true;
+        if (IsLocalGuestSession())
+        {
+            Debug.Log("[LEADERBOARD] Score submission skipped: active session is a local-only Guest.");
+            onStatus?.Invoke(GuestWinMessage);
+            return;
+        }
+
         if (!TryGetActivePlayer(out string playerUlid, out LootLockerPlayerData playerData))
         {
             Debug.LogWarning("[LEADERBOARD] Score submission skipped: no active LootLocker session.");
@@ -207,11 +215,34 @@ public class LeaderboardManager : MonoBehaviour
         }, playerUlid);
     }
 
+    /// <summary>Activates a local-only guest session without creating a cloud account.</summary>
+    public static void ActivateLocalGuestSession()
+    {
+        PlayerPrefs.SetInt(LocalGuestSessionKey, 1);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>Clears local guest mode after a cloud-backed session successfully starts.</summary>
+    public static void ClearLocalGuestSession()
+    {
+        PlayerPrefs.DeleteKey(LocalGuestSessionKey);
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>Returns whether the current game session was started as an offline local guest.</summary>
+    public static bool IsLocalGuestSession()
+    {
+        return PlayerPrefs.GetInt(LocalGuestSessionKey, 0) == 1;
+    }
+
     /// <summary>
     /// Returns the active player's LootLocker authentication platform for run diagnostics.
     /// </summary>
     public static string GetActiveSessionType()
     {
+        if (IsLocalGuestSession())
+            return "Guest";
+
         if (!TryGetActivePlayer(out _, out LootLockerPlayerData playerData))
         {
             return "NoActiveSession";

@@ -99,7 +99,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         "Click the Circulatory layer to return to the bloodstream.",
         "Deploy the Macrophage to the virus to contain it. This will buy you time.",
         "The Dendritic Cell is researching the contained virus. The tutorial will advance 2–3 days for the antigen to be ready; click the icon or anywhere inside its cyan highlight to collect it.",
-        "The lungs are breached! Tap the Cough button to clear the infection, then Repair to seal the breach. Completing this grants the Oxygen Boost perk—your units move twice as fast for 15 seconds!",
+        "The lungs are breached! Tap the Cough button to clear the infection, then Repair to seal the breach. Completing this grants the Oxygen Boost perk. Your units move twice as fast for 15 seconds!",
         "You must maintain barrier integrity to prevent the Breached State. If a barrier is breached, pathogens become mutated and far deadlier. The Digestive layer's Vomit button only works when the body is awake.",
         "Reach Day 14 with a Wellness score of 50 or above to win. Go lower than 50, or hit 0, and you lose. Good luck, Defender.",
         "You've completed the tutorial. You're ready to defend the body."

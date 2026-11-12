@@ -68,6 +68,7 @@ public class RandomEventSystem : MonoBehaviour
 
     private void HandleHourAdvanced(int currentDay, int currentHour)
     {
+        if (Time.timeScale == 0f) return;
         RollForEvent(currentDay, currentHour, false);
     }
 
@@ -80,6 +81,7 @@ public class RandomEventSystem : MonoBehaviour
     /// <summary>Forces a random event and reports whether an event was generated.</summary>
     public bool TryForceTriggerEvent()
     {
+        if (Time.timeScale == 0f) return false;
         int day = dayCounter != null ? dayCounter.CurrentDay : 1;
         int hour = dayCounter != null ? dayCounter.CurrentHour : 0;
         return RollForEvent(day, hour, true);
@@ -88,6 +90,7 @@ public class RandomEventSystem : MonoBehaviour
     /// <summary>Triggers the tutorial's deterministic Common Cold respiratory QTE through the random-event pipeline.</summary>
     public void TriggerTutorialColdQte()
     {
+        if (Time.timeScale == 0f) return;
         int day = dayCounter != null ? dayCounter.CurrentDay : 1;
         int hour = dayCounter != null ? dayCounter.CurrentHour : 0;
         RandomEventData eventData = CreateEventData(
@@ -122,6 +125,7 @@ public class RandomEventSystem : MonoBehaviour
 
     private bool RollForEvent(int day, int hour, bool forceTrigger)
     {
+        if (Time.timeScale == 0f) return false;
         RoutineSystem routineSystem = RoutineSystem.Instance;
         if (!forceTrigger && routineSystem != null && routineSystem.IsSleepingAtHour(hour))
             return false;
@@ -162,6 +166,7 @@ public class RandomEventSystem : MonoBehaviour
 
     private void DispatchRandomEvent(RandomEventData eventData)
     {
+        if (Time.timeScale == 0f) return;
         if (eventData.triggersQTE)
             GameplaySpeed.BeginQTE(eventData.eventName);
 

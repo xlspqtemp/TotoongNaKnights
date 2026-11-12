@@ -583,8 +583,13 @@ public sealed class InfectionSpawner : MonoBehaviour
     /// <summary>Spawns the named Common Cold viral profile for the tutorial without using weighted pathogen selection.</summary>
     public InfectionMarker SpawnTutorialCommonColdInfection()
     {
-        if (tutorialViralIsolationActive && isolatedTutorialViralMarker != null)
+        if (tutorialViralIsolationActive && isolatedTutorialViralMarker != null &&
+            !isolatedTutorialViralMarker.isRemoving && activeInfectionMarkers.Contains(isolatedTutorialViralMarker))
+        {
             return isolatedTutorialViralMarker;
+        }
+
+        isolatedTutorialViralMarker = null;
 
         if (GetValidBodyPartButtonCount() == 0)
         {
@@ -624,12 +629,6 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         RemoveExistingVirusesForTutorial();
-        if (activeInfectionMarkers.Count >= maxActiveInfections)
-        {
-            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because the active infection cap has been reached after clearing other viruses.", this);
-            return null;
-        }
-
         tutorialViralIsolationActive = true;
         InfectionMarker marker = SpawnMarker(infection, bodyPartButton, false, null, true);
         if (marker != null)
@@ -4486,9 +4485,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     {
         if (infection == null || bodyPartButton == null)
             return null;
-        if (tutorialViralIsolationActive && infection.pathogenType == InfectionPathogenType.Viral && !isTutorialMarker)
+        if (tutorialViralIsolationActive && !isTutorialMarker)
         {
-            Debug.Log("[InfectionSpawner] Suppressed an unrelated viral infection during the isolated tutorial virus section.", this);
+            Debug.Log($"[InfectionSpawner] Suppressed unrelated {infection.pathogenType} spawn during the tutorial's isolated Common Cold section.", this);
             return null;
         }
 

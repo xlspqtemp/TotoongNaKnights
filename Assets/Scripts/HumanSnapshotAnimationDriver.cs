@@ -20,6 +20,9 @@ public sealed class HumanSnapshotAnimationDriver : MonoBehaviour
 
     private int lastRequestedStateHash = IdleState;
 
+    /// <summary>Returns the Animator that drives the 3D Human Snapshot model.</summary>
+    public Animator CharacterAnimator => characterAnimator;
+
     private void Awake()
     {
         if (characterAnimator == null)
@@ -125,6 +128,6 @@ public sealed class HumanSnapshotAnimationDriver : MonoBehaviour
     private void ApplyGameplaySpeed()
     {
         if (characterAnimator != null)
-            characterAnimator.speed = 1f;
+            characterAnimator.speed = Time.timeScale == 0f ? 0f : 1f;
     }
 }

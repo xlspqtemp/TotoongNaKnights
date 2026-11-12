@@ -16,6 +16,7 @@ public class AuthManager : MonoBehaviour
     private const string SignUpGenericFailureMessage = "Sign up couldn't be completed. Please try again.";
     private const string LoginGenericFailureMessage = "Login couldn't be completed. Please try again.";
     private const string MainMenuSceneNameFallback = "MainMenu";
+    private const string LocalGuestStartedMessage = "Offline guest started. Progress is local; scores aren't uploaded.";
 
     [SerializeField] private TMP_InputField emailInputField;
     [SerializeField] private TMP_InputField passwordInputField;
@@ -141,6 +142,12 @@ public class AuthManager : MonoBehaviour
             return;
         }
 
+        if (Application.internetReachability == NetworkReachability.NotReachable)
+        {
+            StartLocalGuestSession();
+            return;
+        }
+
         BeginRequest("Starting guest session...");
         LootLockerSDKManager.StartGuestSession(response =>
         {
@@ -149,15 +156,24 @@ public class AuthManager : MonoBehaviour
                 return;
             }
 
-            if (!response.success)
+            if (response == null || !response.success)
             {
-                FinishRequest("Guest login failed. Please try again.");
+                LeaderboardManager.ActivateLocalGuestSession();
+                FinishAndLoadMainMenu(LocalGuestStartedMessage);
                 return;
             }
 
+            LeaderboardManager.ClearLocalGuestSession();
             FinishAndLoadMainMenu("Guest session started.");
         });
     }
+    private void StartLocalGuestSession()
+    {
+        LeaderboardManager.ActivateLocalGuestSession();
+        FinishAndLoadMainMenu(LocalGuestStartedMessage);
+    }
+
+
 
     private void StartWhiteLabelLogin(string email, string password)
     {
@@ -174,6 +190,7 @@ public class AuthManager : MonoBehaviour
                 return;
             }
 
+            LeaderboardManager.ClearLocalGuestSession();
             LeaderboardManager.EnsureWhiteLabelDisplayName(email,
                 response.SessionResponse != null ? response.SessionResponse.player_ulid : string.Empty,
                 response.SessionResponse != null ? response.SessionResponse.player_name : string.Empty);

@@ -9,6 +9,8 @@ public class PauseController : MonoBehaviour
 {
     [SerializeField] private GameObject pausePanel;
     private GameObject pauseRaycastBlocker;
+    private DayCounterUI dayCounter;
+    private HumanSnapshotAnimationDriver humanSnapshotAnimationDriver;
 
     private bool isPaused;
 
@@ -85,6 +87,16 @@ public class PauseController : MonoBehaviour
     {
         isPaused = paused;
         Time.timeScale = isPaused ? 0f : GameplaySpeed.ResumeTimeScale;
+
+        if (dayCounter == null)
+            dayCounter = FindFirstObjectByType<DayCounterUI>();
+        if (dayCounter != null)
+            dayCounter.SetActive(!isPaused);
+
+        if (humanSnapshotAnimationDriver == null)
+            humanSnapshotAnimationDriver = FindFirstObjectByType<HumanSnapshotAnimationDriver>();
+        if (humanSnapshotAnimationDriver != null && humanSnapshotAnimationDriver.CharacterAnimator != null)
+            humanSnapshotAnimationDriver.CharacterAnimator.speed = isPaused ? 0f : 1f;
 
         if (pauseRaycastBlocker != null)
         {

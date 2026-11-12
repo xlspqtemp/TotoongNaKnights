@@ -25,6 +25,7 @@ public class LoginGuestScreen : MonoBehaviour
     private const int InputFontSize = 20;
     private const int LabelFontSize = 17;
     private const int StatusFontSize = 16;
+    private const string OfflineWelcomeMessage = "Offline: Play as Guest. Sign-in and leaderboards require internet.";
 
     private static readonly Color BackgroundColor = new Color(0.012f, 0.022f, 0.032f, 1f);
     private static readonly Color PanelColor = new Color(0.035f, 0.072f, 0.09f, 0.98f);
@@ -40,8 +41,11 @@ public class LoginGuestScreen : MonoBehaviour
     private GameObject welcomePanel;
     private PopupControls loginPopup;
     private PopupControls signUpPopup;
+    private Button loginOpenButton;
+    private Button signUpOpenButton;
     private Button guestButton;
     private TextMeshProUGUI welcomeStatusText;
+    private bool? lastInternetAvailable;
 
     private void Start()
     {
@@ -54,6 +58,44 @@ public class LoginGuestScreen : MonoBehaviour
         }
 
         CreateScreen();
+        RefreshNetworkAvailability();
+    }
+
+    private void Update()
+    {
+        RefreshNetworkAvailability();
+    }
+
+    private void RefreshNetworkAvailability()
+    {
+        bool internetAvailable = Application.internetReachability != NetworkReachability.NotReachable;
+        if (lastInternetAvailable.HasValue && lastInternetAvailable.Value == internetAvailable)
+            return;
+
+        lastInternetAvailable = internetAvailable;
+        if (loginOpenButton != null)
+            loginOpenButton.interactable = internetAvailable;
+        if (signUpOpenButton != null)
+            signUpOpenButton.interactable = internetAvailable;
+        if (loginPopup != null)
+            loginPopup.submitButton.interactable = internetAvailable;
+        if (signUpPopup != null)
+            signUpPopup.submitButton.interactable = internetAvailable;
+
+        bool authenticationPopupOpen =
+            (loginPopup != null && loginPopup.panel.activeSelf) ||
+            (signUpPopup != null && signUpPopup.panel.activeSelf);
+        if (!internetAvailable)
+        {
+            if (authenticationPopupOpen)
+                ShowWelcomePanel();
+            if (welcomeStatusText != null)
+                welcomeStatusText.text = OfflineWelcomeMessage;
+        }
+        else if (welcomeStatusText != null && welcomeStatusText.text == OfflineWelcomeMessage)
+        {
+            welcomeStatusText.text = string.Empty;
+        }
     }
 
     private static void EnsureEventSystem()
@@ -89,11 +131,11 @@ public class LoginGuestScreen : MonoBehaviour
             FontStyles.Normal, MutedTextColor, new Vector2(0f, 132f), new Vector2(PanelWidth - 80, 34),
             TextAlignmentOptions.Center);
 
-        Button loginOpenButton = CreateButton(welcomePanel.transform, "LoginButton", "Login",
+        loginOpenButton = CreateButton(welcomePanel.transform, "LoginButton", "Login",
             new Vector2(0f, 48f), MainButtonWidth, MainButtonHeight);
-        Button signUpOpenButton = CreateButton(welcomePanel.transform, "SignUpButton", "Sign Up",
+        signUpOpenButton = CreateButton(welcomePanel.transform, "SignUpButton", "Sign Up",
             new Vector2(0f, -38f), MainButtonWidth, MainButtonHeight);
-        guestButton = CreateButton(welcomePanel.transform, "GuestButton", "Guest",
+        guestButton = CreateButton(welcomePanel.transform, "GuestButton", "Play as Guest",
             new Vector2(0f, -142f), MainButtonWidth, MainButtonHeight);
         welcomeStatusText = CreateText(welcomePanel.transform, "StatusText", string.Empty, StatusFontSize,
             FontStyles.Normal, MutedTextColor, new Vector2(0f, -211f), new Vector2(PanelWidth - 80, 34),

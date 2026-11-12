@@ -74,6 +74,8 @@ public class RoutineSystem : MonoBehaviour
 
     private void Update()
     {
+        if (Time.timeScale == 0f) return;
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
         HandleDebuggerInput();
 #endif
@@ -219,12 +221,14 @@ public class RoutineSystem : MonoBehaviour
 
     private void HandleHourAdvanced(int currentDay, int currentHour)
     {
+        if (Time.timeScale == 0f) return;
         UpdateCurrentActivity(currentDay, currentHour);
     }
 
     [ContextMenu("Routine/Force Advance One Hour")]
     public void ForceAdvanceHour()
     {
+        if (Time.timeScale == 0f) return;
         if (dayCounter == null)
         {
             Debug.LogWarning("[RoutineSystem] Cannot advance an hour without a DayCounterUI reference.");
@@ -236,6 +240,7 @@ public class RoutineSystem : MonoBehaviour
 
     public void JumpToHour(int hour)
     {
+        if (Time.timeScale == 0f) return;
         if (dayCounter == null)
         {
             Debug.LogWarning("[RoutineSystem] Cannot jump hours without a DayCounterUI reference.");
@@ -281,6 +286,7 @@ public class RoutineSystem : MonoBehaviour
 
     private void UpdateCurrentActivity(int day, int hour)
     {
+        if (Time.timeScale == 0f) return;
         RoutineActivity nextActivity = GetActivityForHour(activeDifficulty, hour);
         if (hasCurrentActivity && currentActivity == nextActivity)
             return;

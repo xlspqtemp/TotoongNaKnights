@@ -125,14 +125,11 @@ public sealed class GameplayTutorial : MonoBehaviour
         }
 
         Transform pausePanel = transform.Find("PausePanel/PauseCard");
-        if (pausePanel != null && pausePanel.Find("TutorialReplayButton") == null)
-        {
-            pauseTutorialButton = CreateButton("TutorialReplayButton", pausePanel, "TUTORIAL",
-                new Vector2(150f, 44f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f),
-                OpenTutorial, AccentColor, 16f);
-            RectTransform pauseButtonRect = pauseTutorialButton.GetComponent<RectTransform>();
-            pauseButtonRect.anchoredPosition = new Vector2(-18f, -18f);
-        }
+        Transform pauseTutorialButtonTransform = pausePanel != null
+            ? pausePanel.Find("TutorialReplayButton")
+            : null;
+        if (pauseTutorialButtonTransform != null)
+            pauseTutorialButtonTransform.gameObject.SetActive(false);
     }
 
     private void BuildOverlay()
