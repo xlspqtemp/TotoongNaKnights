@@ -91,7 +91,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         "Click the Circulatory layer to return to the bloodstream.",
         "A bacterial infection has appeared! Tap the floating red icon to see what it is.",
         "This popup tells you everything you need to know about the pathogen and the best unit to deploy. Close it when you're ready.",
-        "Tap the Neutrophil batch, then tap the bacteria icon to send your immune cells.",
+        "Tap the Neutrophil batch, then tap the bacteria icon to send your immune cells. Use Fast Forward to speed up their arrival, then wait for the Neutrophil to clear the bacteria.",
         "A virus has appeared! WBCs can't kill viruses. They can only contain them. Let's see what we need.",
         "We need a specialized unit for this. Let's go back to the Factory and train a Macrophage. Use Fast Forward to speed it up!",
         "Click the Circulatory layer to return to the bloodstream.",
