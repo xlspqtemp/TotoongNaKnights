@@ -27,6 +27,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
     private InfectionIntelPopup infectionIntelPopup;
     private LymphaticBatchConsoleUI batchConsoleUI;
     public Sprite fungalIcon;
+    public event System.Action<InfectionSpawner.InfectionMarker> OnIntelOpened;
     [SerializeField, HideInInspector] private Texture2D bacteriaSprite;
     [SerializeField, HideInInspector] private Texture2D virusSprite;
     [Header("Pathogen Icon Textures")]
@@ -508,6 +509,7 @@ public sealed class InfectionNotificationManager : MonoBehaviour
 
         EnsureIntelPopup();
         infectionIntelPopup.Show(nearestNotification.marker, infectionSpawner);
+        OnIntelOpened?.Invoke(nearestNotification.marker);
     }
 
     private bool IsTargetPickerActive()

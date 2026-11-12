@@ -2953,36 +2953,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TutorialManager
   steps:
-  - title: WELCOME TO NA-KNIGHTS
-    body: You are the immune system of a human body. Over the next 14 days, infections
-      will enter the bloodstream. Your job is to find them, deploy white blood cells,
-      and keep the body alive.
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: 
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: NAVIGATION
-    body: "Drag with the RIGHT MOUSE BUTTON to pan the camera. Use the SCROLL WHEEL
-      to zoom. Your job is to find infections and defend the body \u2014 get comfortable
-      moving around."
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 1
-    actionId: panOrZoomCamera
-    targetKey: navigationFrame
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: THE WELLNESS BAR
-    body: This is the body's overall health. It starts at 100. Every infection you
-      clear adds points. Every infection you neglect or fail costs points. Reach
-      Day 14 with wellness at 50 or higher to win.
+  - title: THE BODY'S DEFENSE
+    body: You are the immune system. Keep the Wellness Bar above 50 for 14 days to
+      win.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
@@ -2992,217 +2965,86 @@ MonoBehaviour:
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: THE DAY COUNTER
-    body: Each in-game day lasts about 1 minute of real time. Your run is 14 days
-      long. The label at the top shows the current day and time. Reach Day 14 with
-      wellness 50+ to win.
+  - title: INNATE RESPONSE
+    body: An infection has appeared! Click the floating red icon to see the Intel.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: dayCounter
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: FAST FORWARD
-    body: Use the fast-forward button to speed up calm periods. Press it to cycle
-      through 1x, 2x, 4x, and 6x speed. Slow back down to 1x when things get dangerous
-      so you can react quickly.
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: fastForward
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: HUMAN SNAPSHOT
-    body: This is the human you're protecting. Routines like sleeping, eating, and
-      working happen here. They can affect the body's state.
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: humanSnapshot
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: CONSOLE LOG
-    body: "Everything that happens in the body is logged here \u2014 infections,
-      routines, random events. Watch this to know what's going on."
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: consoleLog
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: THE BODY'S LAYERS
-    body: 'The body has four defense layers: Circulatory, Lymphatic, Digestive, Respiratory.
-      You''ll explore each one now. Click the LAYERS header to collapse or expand
-      that panel.'
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: layers
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: CIRCULATORY SYSTEM
-    body: The bloodstream. Pathogens travel through here. This is where most of your
-      defenses will be needed.
-    icon: {fileID: 21300000, guid: cc84a6d8bceec06479321fd81d38f51d, type: 3}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: frameLayer2
-    targetKey: layers
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: LYMPHATIC SYSTEM
-    body: The body's drainage and adaptive-immune highway. Viruses and adaptive responses
-      live here. (More gameplay will be added in a future update.)
-    icon: {fileID: 21300000, guid: ee7c8e14a4d818f4f97166613b7e81a0, type: 3}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: frameLayer1
-    targetKey: layers
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: DIGESTIVE SYSTEM
-    body: Your gut barrier. Food and drink enter here, and contaminated intake can
-      spawn infections in the bloodstream.
-    icon: {fileID: 21300000, guid: a6258ebc1846ad94aa8639b5106a045b, type: 3}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: frameLayer3
-    targetKey: layers
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: RESPIRATORY SYSTEM
-    body: Your airway barrier. Airborne pathogens can breach here during commutes
-      and crowded places.
-    icon: {fileID: 21300000, guid: b5f7d9d7c960b7a4ca15f43a2146eae2, type: 3}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: frameLayer4
-    targetKey: layers
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: YOUR FIRST INFECTION
-    body: 'An infection just entered the body. You''ll see two types of infections:
-      bacterial (red) and viral (blue). Your job is to clear them before they drain
-      the body''s wellness.'
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: spawnFirstInfection
+    requiresAction: 1
+    actionId: clickTutorialBacteriaIcon
     targetKey: notificationIcon
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: BACTERIAL VS VIRAL
-    body: "BACTERIAL (RED) \u2014 Cleared directly by white blood cells via phagocytosis.
-      Deploy WBCs to eliminate.\n\nVIRAL (BLUE) \u2014 Contained by WBCs, not cleared.
-      The body's adaptive response takes ~2 days to resolve."
+  - title: DEPLOYMENT
+    body: Click Next to prepare a Neutrophil batch. Then right-click its batch, select
+      NEUTROPHIL, and click this infection to clear it.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: infectionTypes
+    requiresAction: 1
+    actionId: clearTutorialBacteria
     targetKey: 
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: PENDING INFECTIONS
-    body: "Each active infection shows here. Click a row to focus the camera on that
-      infection. States will change as you engage: Pending \u2192 Ongoing \u2192
-      Cleared.\n\nClick the pending infection row to focus on it."
+  - title: THE BARRIERS
+    body: Switch to the Respiratory layer.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
     requiresAction: 1
-    actionId: clickPendingRow
-    targetKey: pendingInfections
+    actionId: selectRespiratoryLayer
+    targetKey: layers
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: DEPLOY YOUR DEFENDERS
-    body: "Click the WBC headshot to start a deployment. A prompt will ask you to
-      select an infection \u2014 click the infection on the map or its panel row
-      to send the squad. You can deploy up to 2 squads at a time, with a 5-second
-      cooldown between deploys."
-    icon: {fileID: 0}
-    revealTarget: {fileID: 0}
-    hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: wbcHeadshot
-    secondaryIcon: {fileID: 0}
-    containerAnchor: 3
-    highlightTarget: {fileID: 0}
-  - title: RESOLVE AN INFECTION
-    body: Now deploy a squad and clear the infection. You'll see wellness rise when
-      you succeed. Click the WBC headshot, then select the pending infection to send
-      your squad.
+  - title: BARRIER BREACH
+    body: The lungs are under attack! Click REPAIR to send the lung's immune response
+      and resolve the QTE. Let the response finish.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
     requiresAction: 1
-    actionId: resolveInfection
-    targetKey: wbcHeadshot
+    actionId: repairTutorialLung
+    targetKey: respiratoryOrders
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: SPEED THINGS UP
-    body: Now try the fast-forward button. Cycle through 1x, 2x, 4x, and 6x. Press
-      it now to speed up time.
+  - title: ADAPTIVE IMMUNITY
+    body: Viruses hide inside cells. Switch back to Circulatory and contain the new
+      Virus with WBCs.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
     requiresAction: 1
-    actionId: pressFastForward
-    targetKey: fastForward
+    actionId: containTutorialVirus
+    targetKey: layers
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: IGNORING INFECTIONS HAS A COST
-    body: 'Infections that aren''t resolved escalate and drain wellness each day.
-      Watch this example:'
+  - title: THE FACTORY
+    body: A Dendritic Cell has found the Antigen! Wait for and click its icon to
+      collect it, then go to the Lymphatic layer and train a Killer T-Cell specialized
+      for Common Cold.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: applyWellnessDrop
-    targetKey: wellness
+    requiresAction: 1
+    actionId: trainTutorialTCell
+    targetKey: layers
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}
-  - title: HOW TO WIN
-    body: Reach Day 14 with wellness at 50 or higher to win. If wellness drops below
-      50 by Day 14, you lose. If it ever reaches 0, the run ends immediately. Good
-      luck, defender.
+  - title: APOPTOSIS
+    body: Switch to Circulatory and deploy that Killer T-Cell to the contained virus
+      to clear it instantly. Good luck, Defender.
     icon: {fileID: 0}
     revealTarget: {fileID: 0}
     hideTarget: {fileID: 0}
-    requiresAction: 0
-    actionId: 
-    targetKey: dayCounter
+    requiresAction: 1
+    actionId: clearTutorialVirus
+    targetKey: layers
     secondaryIcon: {fileID: 0}
     containerAnchor: 3
     highlightTarget: {fileID: 0}

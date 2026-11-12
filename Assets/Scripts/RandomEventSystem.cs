@@ -85,6 +85,19 @@ public class RandomEventSystem : MonoBehaviour
         return RollForEvent(day, hour, true);
     }
 
+    /// <summary>Triggers the tutorial's deterministic Common Cold respiratory QTE through the random-event pipeline.</summary>
+    public void TriggerTutorialColdQte()
+    {
+        int day = dayCounter != null ? dayCounter.CurrentDay : 1;
+        int hour = dayCounter != null ? dayCounter.CurrentHour : 0;
+        RandomEventData eventData = CreateEventData(
+            RandomEventId.ColdFromSickPerson,
+            RandomEventSeverity.Minor,
+            day,
+            hour);
+        DispatchRandomEvent(eventData);
+    }
+
     public void SetDifficulty(RandomEventDifficulty difficulty)
     {
         activeDifficulty = difficulty;
@@ -143,6 +156,12 @@ public class RandomEventSystem : MonoBehaviour
         }
 
         RandomEventData eventData = CreateEventData(eventId, severity, day, hour);
+        DispatchRandomEvent(eventData);
+        return true;
+    }
+
+    private void DispatchRandomEvent(RandomEventData eventData)
+    {
         if (eventData.triggersQTE)
             GameplaySpeed.BeginQTE(eventData.eventName);
 
@@ -150,7 +169,6 @@ public class RandomEventSystem : MonoBehaviour
         Debug.Log(logMessage);
         LogRandomEventToConsole(logMessage, eventData, GetConsoleLogType(eventData));
         OnRandomEventTriggered?.Invoke(eventData);
-        return true;
     }
 
     private RandomEventDifficultyPreset GetActivePreset()

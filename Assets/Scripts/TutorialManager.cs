@@ -41,6 +41,10 @@ public sealed class TutorialManager : MonoBehaviour
     private const float NavigationPanThresholdPixels = 5f;
     private const float WellnessDemoInfectionRevealDelaySeconds = 1.5f;
     private const int WellnessDemoInfectionSpawnCount = 2;
+    private const int CirculatoryLayerNumber = 2;
+    private const int LymphaticLayerNumber = 1;
+    private const int RespiratoryLayerNumber = 4;
+    private const string TutorialVirusName = "Common Cold";
 
     [Serializable]
     public sealed class TutorialStep
@@ -71,6 +75,7 @@ public sealed class TutorialManager : MonoBehaviour
     [Header("Launch Behavior")]
     [SerializeField] private bool ForceShowOnEveryStart = true;
     [SerializeField] private bool AlwaysShowForGuest = true;
+    [SerializeField] private bool useLegacyTutorial = false;
 
     [Header("Overlay References")]
     [SerializeField] private GameObject tutorialPanel;
@@ -125,6 +130,23 @@ public sealed class TutorialManager : MonoBehaviour
     private int currentScrollStepIndex = -1;
     private bool navigationPanTracking;
     private Vector2 navigationPanStartPosition;
+    private bool infectionTargetClickListenerAttached;
+    private bool infectionIntelOpenedListenerAttached;
+    private InfectionNotificationManager infectionNotificationManager;
+    private bool tutorialBacterialDeploymentObserved;
+    private bool tutorialBacteriaBatchPrepared;
+    private bool tutorialVirusDeploymentObserved;
+    private bool tutorialVirusCameraFocused;
+    private bool tutorialLungRepairStarted;
+    private bool tutorialTCellDispatched;
+    private InfectionSpawner.InfectionMarker tutorialBacterialMarker;
+    private InfectionSpawner.InfectionMarker tutorialViralMarker;
+    private LungInfectionResponse tutorialLungResponse;
+    private readonly Dictionary<LungInfectionResponse, int> tutorialLungInfiltrationBaselines = new Dictionary<LungInfectionResponse, int>();
+    private CameraScript cameraController;
+    private RandomEventSystem randomEventSystem;
+    private LymphaticBatchSpawner lymphaticBatchSpawner;
+    private readonly List<LymphaticBatchGroup> tutorialBatches = new List<LymphaticBatchGroup>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneLoadHandler()
@@ -143,6 +165,85 @@ public sealed class TutorialManager : MonoBehaviour
     {
         EnsureOverlayForScene(scene);
     }
+    private static List<TutorialStep> CreateFinalTutorialSteps()
+    {
+        return new List<TutorialStep>
+        {
+            new TutorialStep
+            {
+                title = "THE BODY'S DEFENSE",
+                body = "You are the immune system. Keep the Wellness Bar above 50 for 14 days to win.",
+                requiresAction = false,
+                targetKey = "wellness",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "INNATE RESPONSE",
+                body = "An infection has appeared! Click the floating red icon to see the Intel.",
+                requiresAction = true,
+                actionId = "clickTutorialBacteriaIcon",
+                targetKey = "notificationIcon",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "DEPLOYMENT",
+                body = "Now deploy the starting Neutrophils: click the WBC headshot, then click this infection to clear it.",
+                requiresAction = true,
+                actionId = "clearTutorialBacteria",
+                targetKey = "wbcHeadshot",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "THE BARRIERS",
+                body = "Switch to the Respiratory layer.",
+                requiresAction = true,
+                actionId = "selectRespiratoryLayer",
+                targetKey = "layers",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "BARRIER BREACH",
+                body = "The lungs are under attack! Click REPAIR to send the lung's immune response and resolve the QTE. Let the response finish.",
+                requiresAction = true,
+                actionId = "repairTutorialLung",
+                targetKey = "respiratoryOrders",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "ADAPTIVE IMMUNITY",
+                body = "Viruses hide inside cells. Switch back to Circulatory and contain the new Virus with WBCs.",
+                requiresAction = true,
+                actionId = "containTutorialVirus",
+                targetKey = "layers",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "THE FACTORY",
+                body = "A Dendritic Cell has found the Antigen! Wait for and click its icon to collect it, then go to the Lymphatic layer and train a Killer T-Cell specialized for Common Cold.",
+                requiresAction = true,
+                actionId = "trainTutorialTCell",
+                targetKey = "layers",
+                containerAnchor = ContainerAnchor.BottomCenter
+            },
+            new TutorialStep
+            {
+                title = "APOPTOSIS",
+                body = "Switch to Circulatory and deploy that Killer T-Cell to the contained virus to clear it instantly. Good luck, Defender.",
+                requiresAction = true,
+                actionId = "clearTutorialVirus",
+                targetKey = "layers",
+                containerAnchor = ContainerAnchor.BottomCenter
+            }
+        };
+    }
+
+
 
     private static void EnsureOverlayForScene(Scene scene)
     {
@@ -190,6 +291,9 @@ public sealed class TutorialManager : MonoBehaviour
     private IEnumerator InitializeAfterSceneSetup()
     {
         yield return null;
+        if (!useLegacyTutorial)
+            yield break;
+
         ResolveSceneTargets();
         BindPendingInfectionsPanel();
 
@@ -204,8 +308,9 @@ public sealed class TutorialManager : MonoBehaviour
         bool shouldOpenForGuest = isGuest && AlwaysShowForGuest;
         bool shouldOpenForAccount = !isGuest && hasAuthenticatedSession &&
                                     (PlayerPrefs.GetInt(TutorialSeenPreferenceKey, 0) == 0 || ForceShowOnEveryStart);
+        bool shouldOpenWithoutSession = !isGuest && !hasAuthenticatedSession && ForceShowOnEveryStart;
 
-        if (shouldOpenForGuest || shouldOpenForAccount)
+        if (shouldOpenForGuest || shouldOpenForAccount || shouldOpenWithoutSession)
             OpenTutorial();
     }
 
@@ -255,8 +360,13 @@ public sealed class TutorialManager : MonoBehaviour
         ResolveSceneTargets();
         DetectNavigationPanOrZoom();
         BindPendingInfectionsPanel();
+        BindInfectionTargetClickListener();
+        BindInfectionIntelOpenedListener();
         BindFastForwardButtonForCurrentStep();
         RevealSpawnedNotificationIcon();
+        if (currentStepIndex >= 0 && currentStepIndex < steps.Count)
+            RevealAdditionalTargetsForStep(steps[currentStepIndex]);
+        CheckCurrentActionProgress();
         EnforceHiddenTargets();
         UpdateHighlightPulse();
     }
@@ -313,6 +423,7 @@ public sealed class TutorialManager : MonoBehaviour
             RegisterTarget("digestiveOrders", hudCanvas.Find("DigestiveOrdersContainer")?.gameObject, true);
             RegisterTarget("respiratoryOrders", hudCanvas.Find("RespiratoryOrdersContainer")?.gameObject, true);
             RegisterTarget("lymphaticOrders", hudCanvas.Find("LymphaticTrainingConsole")?.gameObject, true);
+            RegisterTarget("lymphaticBatchConsole", hudCanvas.Find("UnitBatchConsolePanel")?.gameObject, true);
         }
 
         RegisterTarget("wbcHeadshot", GameObject.Find("WBC Squad HUD"), true);
@@ -369,6 +480,64 @@ public sealed class TutorialManager : MonoBehaviour
                 RegisterTarget("notificationIcon", spriteRenderer.gameObject, true);
         }
     }
+    private void BindInfectionTargetClickListener()
+    {
+        if (infectionSpawner == null)
+            infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+        if (infectionSpawner == null)
+            return;
+
+        if (tutorialIsOpen && !infectionTargetClickListenerAttached)
+        {
+            infectionSpawner.OnInfectionMapIconClicked += HandleInfectionTargetClicked;
+            infectionTargetClickListenerAttached = true;
+        }
+        else if (!tutorialIsOpen && infectionTargetClickListenerAttached)
+        {
+            infectionSpawner.OnInfectionMapIconClicked -= HandleInfectionTargetClicked;
+            infectionTargetClickListenerAttached = false;
+        }
+    }
+
+    private void HandleInfectionTargetClicked(InfectionSpawner.InfectionMarker marker)
+    {
+        if (!tutorialIsOpen || marker == null)
+            return;
+
+        if (IsCurrentAction("clickTutorialBacteriaIcon") && marker == tutorialBacterialMarker)
+            CompleteCurrentStep();
+    }
+
+    private void BindInfectionIntelOpenedListener()
+    {
+        if (infectionNotificationManager == null)
+            infectionNotificationManager = FindFirstObjectByType<InfectionNotificationManager>();
+        if (infectionNotificationManager == null)
+            return;
+
+        if (tutorialIsOpen && !infectionIntelOpenedListenerAttached)
+        {
+            infectionNotificationManager.OnIntelOpened += HandleInfectionIntelOpened;
+            infectionIntelOpenedListenerAttached = true;
+        }
+        else if (!tutorialIsOpen && infectionIntelOpenedListenerAttached)
+        {
+            infectionNotificationManager.OnIntelOpened -= HandleInfectionIntelOpened;
+            infectionIntelOpenedListenerAttached = false;
+        }
+    }
+
+    private void HandleInfectionIntelOpened(InfectionSpawner.InfectionMarker marker)
+    {
+        if (tutorialIsOpen && IsCurrentAction("clickTutorialBacteriaIcon") &&
+            marker != null && marker == tutorialBacterialMarker)
+        {
+            CompleteCurrentStep();
+        }
+    }
+
+
+
 
     private void BindPendingInfectionsPanel()
     {
@@ -425,10 +594,166 @@ public sealed class TutorialManager : MonoBehaviour
             elapsed += Time.unscaledDeltaTime;
             yield return null;
         }
-
         if (tutorialIsOpen && IsCurrentAction("clickPendingRow"))
             CompleteCurrentStep();
     }
+
+    private void CheckCurrentActionProgress()
+    {
+        if (!tutorialIsOpen || steps == null || currentStepIndex < 0 || currentStepIndex >= steps.Count ||
+            currentActionCompleted)
+        {
+            return;
+        }
+
+        TutorialStep step = steps[currentStepIndex];
+        if (step == null || !step.requiresAction)
+            return;
+
+        switch (step.actionId)
+        {
+            case "clearTutorialBacteria":
+                if (tutorialBacterialMarker != null && infectionSpawner != null)
+                {
+                    tutorialBacterialDeploymentObserved |= infectionSpawner.IsSquadDispatchedTo(tutorialBacterialMarker);
+                    if (tutorialBacterialDeploymentObserved && !infectionSpawner.IsInfectionActive(tutorialBacterialMarker))
+                        CompleteCurrentStep();
+                }
+                break;
+            case "selectRespiratoryLayer":
+                cameraController = cameraController != null ? cameraController : FindFirstObjectByType<CameraScript>();
+                if (cameraController != null && cameraController.SelectedLayer == RespiratoryLayerNumber)
+                    CompleteCurrentStep();
+                break;
+            case "repairTutorialLung":
+                CheckTutorialLungRepairProgress();
+                break;
+            case "containTutorialVirus":
+                cameraController = cameraController != null ? cameraController : FindFirstObjectByType<CameraScript>();
+                if (cameraController != null && cameraController.SelectedLayer == CirculatoryLayerNumber &&
+                    tutorialViralMarker != null && !tutorialVirusCameraFocused)
+                {
+                    cameraController.FocusOnWorldPosition(tutorialViralMarker.worldPosition);
+                    tutorialVirusCameraFocused = true;
+                }
+
+                if (tutorialViralMarker != null && infectionSpawner != null)
+                {
+                    tutorialVirusDeploymentObserved |= infectionSpawner.IsSquadDispatchedTo(tutorialViralMarker);
+                    if (tutorialVirusDeploymentObserved && tutorialViralMarker.isContained)
+                        CompleteCurrentStep();
+                }
+                break;
+            case "trainTutorialTCell":
+                CheckTutorialTCellTrainingProgress();
+                break;
+            case "clearTutorialVirus":
+                CheckTutorialTCellClearProgress();
+                break;
+        }
+    }
+
+    private void CheckTutorialLungRepairProgress()
+    {
+        if (tutorialLungResponse == null)
+        {
+            LungInfectionResponse[] responses = FindObjectsByType<LungInfectionResponse>(FindObjectsSortMode.None);
+            foreach (LungInfectionResponse response in responses)
+            {
+                if (response == null)
+                    continue;
+
+                if (!tutorialLungInfiltrationBaselines.TryGetValue(response, out int baseline))
+                    baseline = 0;
+                if (response.InfiltrationCount > baseline && response.IsResponseInProgress)
+                {
+                    tutorialLungResponse = response;
+                    tutorialLungRepairStarted = true;
+                    break;
+                }
+            }
+        }
+        else if (tutorialLungResponse.IsResponseInProgress)
+        {
+            tutorialLungRepairStarted = true;
+        }
+
+        if (tutorialLungRepairStarted && tutorialLungResponse != null &&
+            !tutorialLungResponse.IsResponseInProgress && tutorialLungResponse.InfiltrationCount == 0)
+        {
+            CompleteCurrentStep();
+        }
+    }
+
+    private void CheckTutorialTCellTrainingProgress()
+    {
+        if (tutorialViralMarker == null || !tutorialViralMarker.tutorialAntigenCollected || !IsTutorialAntigenUnlocked())
+            return;
+
+        if (cameraController == null)
+            cameraController = FindFirstObjectByType<CameraScript>();
+        if (cameraController == null || cameraController.SelectedLayer != LymphaticLayerNumber)
+            return;
+
+        if (lymphaticBatchSpawner == null)
+            lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        if (lymphaticBatchSpawner == null)
+            return;
+
+        lymphaticBatchSpawner.GetBatches(tutorialBatches);
+        foreach (LymphaticBatchGroup batch in tutorialBatches)
+        {
+            if (batch != null && string.Equals(batch.UnitType, "T Cell", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(batch.PathogenVariant, TutorialVirusName, StringComparison.OrdinalIgnoreCase) &&
+                batch.Status == LymphaticBatchGroup.BatchStatus.Ready)
+            {
+                CompleteCurrentStep();
+                return;
+            }
+        }
+    }
+
+    private void CheckTutorialTCellClearProgress()
+    {
+        if (tutorialViralMarker == null || infectionSpawner == null)
+            return;
+
+        if (lymphaticBatchSpawner == null)
+            lymphaticBatchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        if (lymphaticBatchSpawner == null)
+            return;
+
+        lymphaticBatchSpawner.GetBatches(tutorialBatches);
+        foreach (LymphaticBatchGroup batch in tutorialBatches)
+        {
+            if (batch != null && string.Equals(batch.UnitType, "T Cell", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(batch.PathogenVariant, TutorialVirusName, StringComparison.OrdinalIgnoreCase) &&
+                batch.TargetInfection == tutorialViralMarker)
+            {
+                tutorialTCellDispatched = true;
+                break;
+            }
+        }
+
+        if (tutorialTCellDispatched && !infectionSpawner.IsInfectionActive(tutorialViralMarker))
+            CompleteCurrentStep();
+    }
+
+    private static bool IsTutorialAntigenUnlocked()
+    {
+        List<string> unlockedAntigens = Databank.UnlockedAntigens;
+        if (unlockedAntigens == null)
+            return false;
+
+        foreach (string antigen in unlockedAntigens)
+        {
+            if (string.Equals(antigen, TutorialVirusName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
 
     private void BindFastForwardButtonForCurrentStep()
     {
@@ -562,48 +887,75 @@ public sealed class TutorialManager : MonoBehaviour
 
         switch (step.actionId)
         {
-            case "spawnFirstInfection":
+            case "spawnTutorialBacteria":
+            case "clickTutorialBacteriaIcon":
                 ResolveSceneTargets();
-                CameraScript cameraController = FindFirstObjectByType<CameraScript>();
+                cameraController = FindFirstObjectByType<CameraScript>();
                 if (cameraController != null)
                 {
-                    cameraController.SelectLayer(2);
-                    Debug.Log("[Tutorial] Selected the Circulatory layer before the first infection step.", this);
+                    cameraController.SelectLayer(CirculatoryLayerNumber);
+                    Debug.Log("[Tutorial] Selected the Circulatory layer before the tutorial bacteria step.", this);
                 }
-                else
-                {
-                    Debug.LogWarning("[Tutorial] Cannot select the Circulatory layer because no CameraScript was found.", this);
-                }
+
                 infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
-                tutorialSpawnedMarker = null;
+                tutorialBacterialMarker = null;
+                tutorialBacterialDeploymentObserved = false;
                 if (infectionSpawner != null)
                 {
                     HashSet<InfectionSpawner.InfectionMarker> existingMarkers = new HashSet<InfectionSpawner.InfectionMarker>(infectionSpawner.ActiveInfections);
-                    Debug.Log("[Tutorial] Forced spawn fired on the 'YOUR FIRST INFECTION' step.", this);
                     infectionSpawner.ForceSpawnOneBacterialInfection();
                     foreach (InfectionSpawner.InfectionMarker marker in infectionSpawner.ActiveInfections)
                     {
-                        if (marker != null && !existingMarkers.Contains(marker))
-                        {
-                            tutorialSpawnedMarker = marker;
-                            Debug.Log($"[Tutorial] Forced spawn created '{marker.infection?.displayName ?? "infection"}' at {marker.worldPosition}.", this);
-                            CameraScript focusController = FindFirstObjectByType<CameraScript>();
-                            if (focusController != null)
-                            {
-                                focusController.FocusOnWorldPosition(marker.worldPosition);
-                                Debug.Log("[Tutorial] Requested camera focus on the spawned infection.", this);
-                            }
-                            break;
-                        }
+                        if (marker == null || existingMarkers.Contains(marker))
+                            continue;
+
+                        tutorialBacterialMarker = marker;
+                        if (cameraController != null)
+                            cameraController.FocusOnWorldPosition(marker.worldPosition);
+                        Debug.Log($"[Tutorial] Forced bacterial infection '{marker.infection?.displayName ?? "infection"}' for the tutorial.", this);
+                        break;
                     }
 
-                    if (tutorialSpawnedMarker == null)
-                        Debug.LogWarning("[Tutorial] Forced spawn call completed without adding a new active infection marker. Check spawner warnings above.", this);
+                    if (tutorialBacterialMarker == null)
+                        Debug.LogWarning("[Tutorial] The tutorial bacteria spawn did not create a new marker.", this);
                 }
                 else
                 {
-                    Debug.LogWarning("[Tutorial] Forced infection spawn was skipped because no InfectionSpawner was found.", this);
+                    Debug.LogWarning("[Tutorial] Cannot spawn the tutorial bacteria because no InfectionSpawner was found.", this);
                 }
+                tutorialSpawnedMarker = tutorialBacterialMarker;
+                break;
+            case "spawnTutorialVirus":
+            case "containTutorialVirus":
+                infectionSpawner = FindFirstObjectByType<InfectionSpawner>();
+                tutorialViralMarker = infectionSpawner != null
+                    ? infectionSpawner.SpawnTutorialCommonColdInfection()
+                    : null;
+                tutorialVirusDeploymentObserved = false;
+                tutorialVirusCameraFocused = false;
+                if (tutorialViralMarker == null)
+                    Debug.LogWarning("[Tutorial] The tutorial Common Cold spawn could not be created.", this);
+                else
+                    Debug.Log($"[Tutorial] Forced tutorial virus '{tutorialViralMarker.infection.displayName}'.", this);
+                break;
+            case "forceLungQte":
+            case "repairTutorialLung":
+                randomEventSystem = RandomEventSystem.Instance != null
+                    ? RandomEventSystem.Instance
+                    : FindFirstObjectByType<RandomEventSystem>();
+                tutorialLungResponse = null;
+                tutorialLungRepairStarted = false;
+                tutorialLungInfiltrationBaselines.Clear();
+                foreach (LungInfectionResponse response in FindObjectsByType<LungInfectionResponse>(FindObjectsSortMode.None))
+                {
+                    if (response != null)
+                        tutorialLungInfiltrationBaselines[response] = response.InfiltrationCount;
+                }
+
+                if (randomEventSystem != null)
+                    randomEventSystem.TriggerTutorialColdQte();
+                else
+                    Debug.LogWarning("[Tutorial] Cannot force the respiratory QTE because no RandomEventSystem was found.", this);
                 break;
             case "applyWellnessDrop":
                 StartCoroutine(RunWellnessDrainDemonstration());
@@ -728,6 +1080,19 @@ public sealed class TutorialManager : MonoBehaviour
         tutorialIsOpen = true;
         SetWellnessForTutorial();
         BindPendingInfectionsPanel();
+        BindInfectionTargetClickListener();
+        BindInfectionIntelOpenedListener();
+        tutorialBacterialMarker = null;
+        tutorialSpawnedMarker = null;
+        tutorialViralMarker = null;
+        tutorialBacterialDeploymentObserved = false;
+        tutorialBacteriaBatchPrepared = false;
+        tutorialVirusDeploymentObserved = false;
+        tutorialVirusCameraFocused = false;
+        tutorialLungResponse = null;
+        tutorialLungInfiltrationBaselines.Clear();
+        tutorialLungRepairStarted = false;
+        tutorialTCellDispatched = false;
         currentStepIndex = 0;
         currentActionCompleted = false;
         completedActionSteps.Clear();
@@ -754,12 +1119,64 @@ public sealed class TutorialManager : MonoBehaviour
             return;
 
         TutorialStep step = steps[currentStepIndex];
+        if (IsCurrentAction("clearTutorialBacteria") && !tutorialBacteriaBatchPrepared)
+        {
+            PrepareTutorialBacteriaBatch();
+            return;
+        }
+
         if (step.requiresAction && !currentActionCompleted)
             return;
 
         currentStepIndex++;
         currentActionCompleted = false;
         ShowCurrentStep();
+    }
+
+    private void PrepareTutorialBacteriaBatch()
+    {
+        cameraController = cameraController != null ? cameraController : FindFirstObjectByType<CameraScript>();
+        if (cameraController != null && cameraController.SelectedLayer != CirculatoryLayerNumber)
+            cameraController.SelectLayer(CirculatoryLayerNumber);
+
+        lymphaticBatchSpawner = lymphaticBatchSpawner != null
+            ? lymphaticBatchSpawner
+            : FindFirstObjectByType<LymphaticBatchSpawner>();
+        if (lymphaticBatchSpawner == null)
+        {
+            Debug.LogWarning("[Tutorial] Cannot prepare the Neutrophil batch because no LymphaticBatchSpawner was found.", this);
+            return;
+        }
+
+        if (!lymphaticBatchSpawner.TryReserveBatch(out int nodeIndex))
+        {
+            Debug.LogWarning("[Tutorial] Cannot prepare the Neutrophil batch because no validated lymph node is available.", this);
+            return;
+        }
+
+        if (!lymphaticBatchSpawner.CompleteReservedBatch(nodeIndex, "Neutrophil", string.Empty))
+        {
+            Debug.LogWarning("[Tutorial] The reserved Neutrophil batch could not be completed.", this);
+            return;
+        }
+
+        tutorialBacteriaBatchPrepared = true;
+        LymphaticBatchConsoleUI batchConsole = FindFirstObjectByType<LymphaticBatchConsoleUI>();
+        if (batchConsole != null)
+            batchConsole.SetLayerAvailable(true);
+
+        ResolveSceneTargets();
+        RevealTargetGroup("layers");
+        RevealTargetGroup("lymphaticBatchConsole");
+        if (bodyLabel != null)
+        {
+            bodyLabel.text = "Your Neutrophil batch is ready. Right-click its slot, select NEUTROPHIL, then click the infection icon to deploy it. The bacteria must be cleared before you can continue.";
+            ResizePanelToBodyContent();
+        }
+
+        ApplyContainerAnchor(ContainerAnchor.TopRight);
+        RefreshNavigationState();
+        Debug.Log($"[Tutorial] Prepared a ready Neutrophil batch in lymph node {nodeIndex + 1}.", this);
     }
 
     /// <summary>Returns to the previous step without hiding previously revealed targets.</summary>
@@ -781,7 +1198,9 @@ public sealed class TutorialManager : MonoBehaviour
 
         currentActionCompleted = true;
         completedActionSteps.Add(currentStepIndex);
-        Time.timeScale = IsLiveDemonstrationStep() ? GameplaySpeed.ResumeTimeScale : 0f;
+        Time.timeScale = 0f;
+        if (currentStepIndex == steps.Count - 1 && startGameButton != null)
+            startGameButton.gameObject.SetActive(true);
         RefreshNavigationState();
     }
 
@@ -888,7 +1307,9 @@ public sealed class TutorialManager : MonoBehaviour
             titleLabel.text = step.title ?? string.Empty;
         if (bodyLabel != null)
         {
-            bodyLabel.text = step.body ?? string.Empty;
+            bodyLabel.text = IsCurrentAction("clearTutorialBacteria") && tutorialBacteriaBatchPrepared
+                ? "Your Neutrophil batch is ready. Right-click its slot, select NEUTROPHIL, then click the infection icon to deploy it. The bacteria must be cleared before you can continue."
+                : step.body ?? string.Empty;
             bodyLabel.enableAutoSizing = false;
             bodyLabel.fontSize = bodyFontSize;
         }
@@ -916,12 +1337,15 @@ public sealed class TutorialManager : MonoBehaviour
 
         bool isFinalStep = currentStepIndex == steps.Count - 1;
         if (startGameButton != null)
-            startGameButton.gameObject.SetActive(isFinalStep);
+            startGameButton.gameObject.SetActive(isFinalStep && currentActionCompleted);
+        RevealAdditionalTargetsForStep(step);
         RefreshNavigationState();
         ResizePanelToBodyContent();
-        ApplyContainerAnchor(step.containerAnchor);
+        ApplyContainerAnchor(IsCurrentAction("clearTutorialBacteria") && tutorialBacteriaBatchPrepared
+            ? ContainerAnchor.TopRight
+            : step.containerAnchor);
         Debug.Log($"[Tutorial] Applied {step.containerAnchor} container anchor for step {currentStepIndex + 1} of {steps.Count}.", this);
-        Time.timeScale = IsLiveDemonstrationStep() ? GameplaySpeed.ResumeTimeScale : 0f;
+        Time.timeScale = step.requiresAction ? GameplaySpeed.ResumeTimeScale : 0f;
         if (IsCurrentAction("resolveInfection") && tutorialSpawnedMarker != null)
         {
             CameraScript focusController = FindFirstObjectByType<CameraScript>();
@@ -952,6 +1376,51 @@ public sealed class TutorialManager : MonoBehaviour
 
         return null;
     }
+
+    private void RevealAdditionalTargetsForStep(TutorialStep step)
+    {
+        if (step == null)
+            return;
+
+        switch (step.actionId)
+        {
+            case "clearTutorialBacteria":
+                RevealTargetGroup("layers");
+                if (tutorialBacteriaBatchPrepared)
+                    RevealTargetGroup("lymphaticBatchConsole");
+                break;
+            case "clearTutorialVirus":
+                RevealTargetGroup("layers");
+                RevealTargetGroup("lymphaticBatchConsole");
+                break;
+            case "repairTutorialLung":
+                RevealTargetGroup("respiratoryOrders");
+                break;
+            case "trainTutorialTCell":
+                RevealTargetGroup("layers");
+                RevealTargetGroup("lymphaticOrders");
+                RevealTargetGroup("lymphaticBatchConsole");
+                RevealTargetGroup("fastForward");
+                break;
+        }
+    }
+
+    private void RevealTargetGroup(string targetKey)
+    {
+        if (!targetsByKey.TryGetValue(targetKey, out List<GameObject> targets))
+            return;
+
+        foreach (GameObject target in targets)
+        {
+            if (target == null)
+                continue;
+
+            CaptureTargetState(target);
+            revealedTargets.Add(target);
+            target.SetActive(true);
+        }
+    }
+
 
     private void ApplyHighlightPulse(GameObject target)
     {
@@ -1096,7 +1565,8 @@ public sealed class TutorialManager : MonoBehaviour
             backButton.interactable = currentStepIndex > 0;
         if (nextButton != null)
         {
-            bool waitingForAction = steps[currentStepIndex].requiresAction && !currentActionCompleted;
+            bool isPreparingBacteriaBatch = IsCurrentAction("clearTutorialBacteria") && !tutorialBacteriaBatchPrepared;
+            bool waitingForAction = steps[currentStepIndex].requiresAction && !currentActionCompleted && !isPreparingBacteriaBatch;
             nextButton.interactable = !waitingForAction && currentStepIndex < steps.Count - 1;
         }
     }
@@ -1280,6 +1750,18 @@ public sealed class TutorialManager : MonoBehaviour
             pendingInfectionsPanel.OnRowClickedPublic -= HandlePendingInfectionRowClicked;
             pendingInfectionRowListenerAttached = false;
         }
+        if (infectionSpawner != null && infectionTargetClickListenerAttached)
+        {
+            infectionSpawner.OnInfectionMapIconClicked -= HandleInfectionTargetClicked;
+            infectionTargetClickListenerAttached = false;
+        }
+        if (infectionNotificationManager != null && infectionIntelOpenedListenerAttached)
+        {
+            infectionNotificationManager.OnIntelOpened -= HandleInfectionIntelOpened;
+            infectionIntelOpenedListenerAttached = false;
+        }
+        if (infectionSpawner != null && tutorialViralMarker != null)
+            infectionSpawner.ReleaseTutorialInfection(tutorialViralMarker);
         if (wellnessManager != null && wellnessResolutionListenerAttached)
         {
             wellnessManager.OnWellnessDeltaApplied -= HandleWellnessDeltaApplied;

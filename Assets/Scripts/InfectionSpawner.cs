@@ -57,6 +57,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const int MinimumViralContainmentDays = 2;
     private const int MaximumViralContainmentDays = 3;
     private const string TCellUnitName = "T Cell";
+    private const string TutorialCommonColdPathogenName = "Common Cold";
     private const string BCellUnitName = "B Cell";
     private const string NeutrophilUnitName = "Neutrophil";
     private const string NeutrophilDisplayName = "Neutrophil";
@@ -416,6 +417,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     /// <summary>Raised when the player clicks a live infection row or map icon while assigning a batch target.</summary>
     public event Action<InfectionMarker> OnInfectionTargetClicked;
+    public event Action<InfectionMarker> OnInfectionMapIconClicked;
 
     /// <summary>Forwards a clicked live infection marker to batch targeting and any active legacy target picker.</summary>
     public void NotifyInfectionTargetClicked(InfectionMarker marker)
@@ -575,6 +577,94 @@ public sealed class InfectionSpawner : MonoBehaviour
             LogInfection(infectionToSpawn, selectedBodyPart);
     }
 
+    /// <summary>Spawns the named Common Cold viral profile for the tutorial without using weighted pathogen selection.</summary>
+    public InfectionMarker SpawnTutorialCommonColdInfection()
+    {
+        if (activeInfectionMarkers.Count >= maxActiveInfections)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because the active infection cap has been reached.", this);
+            return null;
+        }
+
+        if (GetValidBodyPartButtonCount() == 0)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because no body-part mappings are configured.", this);
+            return null;
+        }
+
+        InfectionData commonColdProfile = null;
+        foreach (InfectionData profile in BuildValidInfectionEntries())
+        {
+            string profileName = string.IsNullOrWhiteSpace(profile.pathogenDatabaseName)
+                ? profile.displayName
+                : profile.pathogenDatabaseName;
+            if (profile.pathogenType == InfectionPathogenType.Viral &&
+                string.Equals(profileName, TutorialCommonColdPathogenName, StringComparison.OrdinalIgnoreCase))
+            {
+                commonColdProfile = profile;
+                break;
+            }
+        }
+
+        if (commonColdProfile == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because its viral profile is unavailable.", this);
+            return null;
+        }
+
+        InfectionData infection = CloneInfectionData(commonColdProfile);
+        InfectionBodyPartButtonReference bodyPartButton = SelectTutorialBodyPartButton(infection);
+        if (bodyPartButton == null)
+        {
+            Debug.LogWarning("[InfectionSpawner] Cannot spawn the tutorial Common Cold because no valid body-part mapping was selected.", this);
+            return null;
+        }
+
+        InfectionMarker marker = SpawnMarker(infection, bodyPartButton);
+        if (marker != null)
+        {
+            marker.isTutorialMarker = true;
+            LogInfection(infection, bodyPartButton);
+        }
+
+        return marker;
+    }
+
+    /// <summary>Releases an unfinished tutorial virus back to normal containment resolution when the tutorial closes.</summary>
+    public void ReleaseTutorialInfection(InfectionMarker marker)
+    {
+        if (marker == null || !marker.isTutorialMarker)
+            return;
+
+        marker.isTutorialMarker = false;
+        if (marker.isContained && marker.tutorialAntigenCollectionAttempted)
+            BeginRemovingInfectionMarker(marker);
+    }
+
+
+    private InfectionBodyPartButtonReference SelectTutorialBodyPartButton(InfectionData infection)
+    {
+        if (bodyPartButtons == null)
+            return null;
+
+        foreach (InfectionBodyPartButtonReference mapping in bodyPartButtons)
+        {
+            if (mapping != null && mapping.button != null && infection.preferredBodyParts != null &&
+                infection.preferredBodyParts.Contains(mapping.bodyPartGroup))
+            {
+                return mapping;
+            }
+        }
+
+        foreach (InfectionBodyPartButtonReference mapping in bodyPartButtons)
+        {
+            if (mapping != null && mapping.button != null)
+                return mapping;
+        }
+
+        return null;
+    }
+
     /// <summary>Spawns a Staph infection, falling back to Strep, at the supplied world position.</summary>
     public InfectionMarker ForceSpawnWoundBacterialInfection(Vector3 worldPosition)
     {
@@ -637,6 +727,9 @@ public sealed class InfectionSpawner : MonoBehaviour
         public float animationElapsed;
         public bool isRemoving;
         public bool isContained;
+        public bool isTutorialMarker;
+        public bool tutorialAntigenCollectionAttempted;
+        public bool tutorialAntigenCollected;
         public bool isTagged;
         public bool bCellTagInProgress;
         public bool resolutionPending;
@@ -692,6 +785,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         public BoxCollider iconCollider;
         public Vector3 iconBasePosition;
         public Vector3 scaleAnchor;
+        public InfectionMarker tutorialMarker;
     }
 
     /// <summary>Returns the nearest arrived WBC deployed against the pathogen visual.</summary>
@@ -1298,6 +1392,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!TryGetInfectionTargetAtScreenPosition(Input.mousePosition, out InfectionMarker infectionTarget))
             return;
 
+        OnInfectionMapIconClicked?.Invoke(infectionTarget);
         NotifyInfectionTargetClicked(infectionTarget);
     }
 
@@ -2163,7 +2258,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             iconRenderer = iconRenderer,
             iconCollider = iconCollider,
             iconBasePosition = iconPosition,
-            scaleAnchor = marker.worldPosition
+            scaleAnchor = marker.worldPosition,
+            tutorialMarker = marker.isTutorialMarker ? marker : null
         });
         marker.containedDendriticCell = null;
         marker.containedDendriticUsesProceduralIdle = false;
@@ -2329,6 +2425,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (collection == null)
             return;
 
+        if (collection.tutorialMarker != null)
+            collection.tutorialMarker.tutorialAntigenCollected = true;
         VoiceLineAudioPlayer.Play(dendriticAntigenCollectedVoiceLine);
         bool antigenAlreadyUnlocked = IsAntigenUnlocked(collection.antigenName);
         if (!antigenAlreadyUnlocked)
@@ -3248,8 +3346,13 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
 
         bool isParasite = marker.infection.pathogenType == InfectionPathogenType.Parasite;
+        bool isViral = marker.infection.pathogenType == InfectionPathogenType.Viral;
+        bool isKillerTCell = sourceBatch != null &&
+            string.Equals(sourceBatch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase);
+        bool isMatchingTutorialKillerTCell = marker.isTutorialMarker && isViral && isKillerTCell &&
+            string.Equals(sourceBatch.PathogenVariant, marker.infection.displayName, StringComparison.OrdinalIgnoreCase);
         bool isEosinophilParasiteResponder = isParasite && IsEosinophilResponder(sourceBatch);
-        if (marker.isContained && !isEosinophilParasiteResponder)
+        if (marker.isContained && !isEosinophilParasiteResponder && !isMatchingTutorialKillerTCell)
             return;
 
         if (isParasite)
@@ -3266,9 +3369,6 @@ public sealed class InfectionSpawner : MonoBehaviour
             return;
         }
 
-        bool isViral = marker.infection.pathogenType == InfectionPathogenType.Viral;
-        bool isKillerTCell = sourceBatch != null &&
-            string.Equals(sourceBatch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase);
         if (isViral && isKillerTCell)
         {
             if (!string.Equals(sourceBatch.PathogenVariant, marker.infection.displayName, StringComparison.OrdinalIgnoreCase))
@@ -3467,6 +3567,19 @@ public sealed class InfectionSpawner : MonoBehaviour
             InfectionMarker marker = activeInfectionMarkers[index];
             if (marker == null || !marker.isContained || marker.isRemoving)
                 continue;
+
+            if (marker.isTutorialMarker)
+            {
+                if (marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral &&
+                    currentDay >= marker.containedResolveDay && !marker.tutorialAntigenCollectionAttempted)
+                {
+                    marker.tutorialAntigenCollectionAttempted = true;
+                    if (CreatePendingAntigenCollection(marker))
+                        VoiceLineAudioPlayer.Play(dendriticContainmentCompleteVoiceLine);
+                }
+
+                continue;
+            }
 
             float containedWellnessCost = containedDailyWellnessCost;
             if (marker.wasBarrierMutated)

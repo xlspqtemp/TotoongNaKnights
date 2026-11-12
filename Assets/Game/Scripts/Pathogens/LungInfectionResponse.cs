@@ -52,6 +52,12 @@ public sealed class LungInfectionResponse : MonoBehaviour
     private float remainingResponseSeconds;
     private bool responseInProgress;
 
+    /// <summary>Gets the current number of contaminated-air infiltrations at this lung.</summary>
+    public int InfiltrationCount => infiltrationCount;
+
+    /// <summary>Gets whether the lung's immune-cell repair response is currently running.</summary>
+    public bool IsResponseInProgress => responseInProgress;
+
     private void Awake()
     {
         CreateFloatingPrompt();
