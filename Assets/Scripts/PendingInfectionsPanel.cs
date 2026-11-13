@@ -95,6 +95,8 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
     private Coroutine panelSlideCoroutine;
     private bool isCollapsed;
     private bool isLayerVisible;
+    private bool tutorialPresentationActive;
+    private bool tutorialWasCollapsed;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void RegisterSceneLoadedHandler()
@@ -205,9 +207,41 @@ public sealed class PendingInfectionsPanel : MonoBehaviour
         if (layerVisibilityGroup == null)
             return;
 
-        layerVisibilityGroup.alpha = isLayerVisible ? 1f : 0f;
-        layerVisibilityGroup.interactable = isLayerVisible;
-        layerVisibilityGroup.blocksRaycasts = isLayerVisible;
+        bool shouldBeVisible = isLayerVisible || tutorialPresentationActive;
+        layerVisibilityGroup.alpha = shouldBeVisible ? 1f : 0f;
+        layerVisibilityGroup.interactable = shouldBeVisible;
+        layerVisibilityGroup.blocksRaycasts = shouldBeVisible;
+    }
+
+    /// <summary>Temporarily reveals and expands this panel for its tutorial step without changing the saved user preference.</summary>
+    public void SetTutorialPresentation(bool enabled)
+    {
+        if (enabled)
+        {
+            if (!tutorialPresentationActive)
+                tutorialWasCollapsed = isCollapsed;
+            tutorialPresentationActive = true;
+            isCollapsed = false;
+        }
+        else
+        {
+            if (tutorialPresentationActive)
+                isCollapsed = tutorialWasCollapsed;
+            tutorialPresentationActive = false;
+        }
+
+        if (panelSlideCoroutine != null)
+            StopCoroutine(panelSlideCoroutine);
+        panelSlideCoroutine = null;
+        ApplyPanelCollapsedState();
+        if (layerVisibilityGroup != null)
+        {
+            bool shouldBeVisible = isLayerVisible || tutorialPresentationActive;
+            layerVisibilityGroup.alpha = shouldBeVisible ? 1f : 0f;
+            layerVisibilityGroup.interactable = shouldBeVisible;
+            layerVisibilityGroup.blocksRaycasts = shouldBeVisible;
+        }
+        SyncRows();
     }
 
     /// <summary>Adds a standalone row; live infection rows are synchronized from InfectionSpawner.</summary>

@@ -201,6 +201,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
     private Button boundCoughButton;
     private Button boundCirculatoryButton;
     private ScrollRect consoleScrollRect;
+    private PendingInfectionsPanel pendingInfectionsPanel;
     private float consoleScrollPositionBeforeDemo;
     private bool hasSavedConsoleScrollPosition;
     private bool restoreConsoleScrollPositionPending;
@@ -407,7 +408,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
 
         GameObject nextButtonObject = CreateUiObject("NextButton", panelRect, typeof(Image), typeof(Button));
         RectTransform nextButtonRect = nextButtonObject.GetComponent<RectTransform>();
-        SetRect(nextButtonRect, Vector2.one, Vector2.one, Vector2.one, new Vector2(-20f, 18f), new Vector2(150f, 46f));
+        SetRect(nextButtonRect, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-20f, 20f), new Vector2(150f, 46f));
         Image nextImage = nextButtonObject.GetComponent<Image>();
         nextImage.color = ButtonColor;
         nextButton = nextButtonObject.GetComponent<Button>();
@@ -419,9 +420,9 @@ public sealed class FirstDayTutorial : MonoBehaviour
 
     private void BuildSkipButton()
     {
-        GameObject skipButtonObject = CreateUiObject("SkipTutorialButton", tutorialCanvasRect, typeof(Image), typeof(Button));
+        GameObject skipButtonObject = CreateUiObject("SkipTutorialButton", panelRect, typeof(Image), typeof(Button));
         RectTransform skipRect = skipButtonObject.GetComponent<RectTransform>();
-        SetRect(skipRect, Vector2.one, Vector2.one, Vector2.one, new Vector2(-24f, -22f), new Vector2(172f, 44f));
+        SetRect(skipRect, Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(20f, 20f), new Vector2(172f, 44f));
         Image skipImage = skipButtonObject.GetComponent<Image>();
         skipImage.color = new Color(0.025f, 0.055f, 0.075f, 0.96f);
         Button skipButton = skipButtonObject.GetComponent<Button>();
@@ -528,6 +529,9 @@ public sealed class FirstDayTutorial : MonoBehaviour
                 CreatePendingDemoRows();
         }
 
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.SetTutorialPresentation(currentStepIndex == 10);
+
         string targetName = StepTargets[currentStepIndex];
         currentTarget = string.IsNullOrEmpty(targetName) ? null : GameObject.Find(targetName);
         if (gameplayPhase)
@@ -595,6 +599,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         infectionNotificationManager = FindFirstObjectByType<InfectionNotificationManager>();
         infectionIntelPopup = FindFirstObjectByType<InfectionIntelPopup>();
         batchSpawner = FindFirstObjectByType<LymphaticBatchSpawner>();
+        pendingInfectionsPanel = FindFirstObjectByType<PendingInfectionsPanel>();
         cameraController = FindFirstObjectByType<CameraScript>();
         GameObject respiratoryRoot = GameObject.Find("/Layers/Respiratory");
         respiratoryBarrier = respiratoryRoot != null ? respiratoryRoot.GetComponent<BarrierHealth>() : null;
@@ -1409,6 +1414,8 @@ public sealed class FirstDayTutorial : MonoBehaviour
 
     private void RestoreTutorialState()
     {
+        if (pendingInfectionsPanel != null)
+            pendingInfectionsPanel.SetTutorialPresentation(false);
         if (infectionIntelPopup != null && infectionIntelPopup.IsOpen)
             infectionIntelPopup.Close();
         if (infectionNotificationManager != null)
