@@ -10,8 +10,15 @@ using UnityEngine.UI;
 public class AuthManager : MonoBehaviour
 {
     private const int MinimumPasswordLength = 8;
+    private const int MaximumFailedLoginAttempts = 5;
+    private const int LoginLockoutDurationMinutes = 15;
+    private const float LoginSecondsPerMinute = 60f;
+    private const string FailedLoginAttemptsKeyPrefix = "LootLockerFailedLoginAttempts_";
+    private const string LoginLockoutExpiryKeyPrefix = "LootLockerLoginLockoutExpiry_";
+    private const string LoginLockoutMessage = "Too many failed attempts. Try again in ";
+    private const string LoginLockoutMessageSuffix = " minute(s).";
     private const string GmailAddressErrorMessage = "Please use a valid Gmail address (example@gmail.com).";
-    private const string LoginFailedMessage = "Login failed. Check your email and password.";
+    private const string LoginFailedMessage = "Wrong password, please try again.";
     private const string ServerUnavailableMessage = "Can't reach the server. Check your internet connection.";
     private const string SignUpGenericFailureMessage = "Sign up couldn't be completed. Please try again.";
     private const string LoginGenericFailureMessage = "Login couldn't be completed. Please try again.";
@@ -79,6 +86,12 @@ public class AuthManager : MonoBehaviour
         backButton = back;
         forgotPasswordButton = forgotPassword;
         resendVerificationButton = resendVerification;
+        if (loginButton != null)
+        {
+            loginButton.interactable = !requestInProgress &&
+                Application.internetReachability != NetworkReachability.NotReachable;
+        }
+
         if (resendVerificationButton != null)
         {
             resendVerificationButton.interactable = !requestInProgress &&
@@ -175,6 +188,13 @@ public class AuthManager : MonoBehaviour
         if (!TryNormalizeGmailAddress(rawEmail, out string email))
         {
             SetStatus(GmailAddressErrorMessage);
+            return;
+        }
+
+        int lockoutSecondsRemaining = GetLoginLockoutSecondsRemaining(email);
+        if (lockoutSecondsRemaining > 0)
+        {
+            SetStatus(GetLoginLockoutMessage(lockoutSecondsRemaining));
             return;
         }
 
@@ -330,21 +350,140 @@ public class AuthManager : MonoBehaviour
             }
 
             LootLockerWhiteLabelLoginResponse loginResponse = response != null ? response.LoginResponse : null;
-            if (response == null || !response.success)
+            if (loginResponse != null && !loginResponse.success)
             {
-                string failureMessage = loginResponse != null && !loginResponse.success
-                    ? GetLoginFailureMessage(loginResponse)
-                    : GetSessionFailureMessage(response != null ? response.SessionResponse : null);
-                FinishRequest(failureMessage);
+                if (IsAccountNotVerified(loginResponse))
+                {
+                    FinishRequest(GetLoginFailureMessage(loginResponse));
+                    return;
+                }
+
+                if (IsInvalidCredentials(loginResponse.statusCode,
+                    loginResponse.errorData != null ? loginResponse.errorData.code : string.Empty,
+                    loginResponse.errorData != null ? loginResponse.errorData.message : string.Empty))
+                {
+                    FinishRequest(RecordFailedLoginAttempt(email));
+                    return;
+                }
+
+                FinishRequest(GetLoginFailureMessage(loginResponse));
                 return;
             }
 
+            // Continue evaluating the LootLocker session result.
+            if (response == null || !response.success)
+            {
+                FinishRequest(GetSessionFailureMessage(response != null ? response.SessionResponse : null));
+                return;
+            }
+
+            // Successful authentication clears this email's local lockout history.
+
+
+            ClearFailedLoginAttempts(email);
             LeaderboardManager.ClearLocalGuestSession();
             LeaderboardManager.EnsureWhiteLabelDisplayName(email,
                 response.SessionResponse != null ? response.SessionResponse.player_ulid : string.Empty,
                 response.SessionResponse != null ? response.SessionResponse.player_name : string.Empty);
             FinishAndLoadMainMenu("Login successful.");
         });
+    }
+
+    private int GetCurrentEmailLockoutSecondsRemaining()
+    {
+        string rawEmail = emailInputField != null ? emailInputField.text : string.Empty;
+        return TryNormalizeGmailAddress(rawEmail, out string email)
+            ? GetLoginLockoutSecondsRemaining(email)
+            : 0;
+    }
+
+    private string RecordFailedLoginAttempt(string email)
+    {
+        string attemptsKey = GetFailedLoginAttemptsKey(email);
+        int failedAttempts = PlayerPrefs.GetInt(attemptsKey, 0) + 1;
+        PlayerPrefs.SetInt(attemptsKey, failedAttempts);
+
+        if (failedAttempts >= MaximumFailedLoginAttempts)
+        {
+            int lockoutSeconds = LoginLockoutDurationMinutes * (int)LoginSecondsPerMinute;
+            long expiryTicks = System.DateTime.UtcNow.AddSeconds(lockoutSeconds).Ticks;
+            PlayerPrefs.SetString(GetLoginLockoutExpiryKey(email),
+                expiryTicks.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            PlayerPrefs.Save();
+            return LoginFailedMessage + " " + GetLoginLockoutMessage(lockoutSeconds);
+        }
+
+        PlayerPrefs.Save();
+        return LoginFailedMessage;
+    }
+
+    private static int GetLoginLockoutSecondsRemaining(string email)
+    {
+        string expiryKey = GetLoginLockoutExpiryKey(email);
+        if (!PlayerPrefs.HasKey(expiryKey) ||
+            !long.TryParse(PlayerPrefs.GetString(expiryKey),
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+                out long expiryTicks))
+        {
+            return 0;
+        }
+
+        if (expiryTicks < System.DateTime.MinValue.Ticks || expiryTicks > System.DateTime.MaxValue.Ticks)
+        {
+            ClearFailedLoginAttempts(email);
+            return 0;
+        }
+
+        double secondsRemaining =
+            (new System.DateTime(expiryTicks, System.DateTimeKind.Utc) - System.DateTime.UtcNow).TotalSeconds;
+        if (secondsRemaining <= 0d)
+        {
+            ClearFailedLoginAttempts(email);
+            return 0;
+        }
+
+        return Mathf.CeilToInt((float)secondsRemaining);
+    }
+
+    private static string GetLoginLockoutMessage(int secondsRemaining)
+    {
+        int minutesRemaining = Mathf.CeilToInt(secondsRemaining / LoginSecondsPerMinute);
+        return LoginLockoutMessage + minutesRemaining + LoginLockoutMessageSuffix;
+    }
+
+    private static void ClearFailedLoginAttempts(string email)
+    {
+        PlayerPrefs.DeleteKey(GetFailedLoginAttemptsKey(email));
+        PlayerPrefs.DeleteKey(GetLoginLockoutExpiryKey(email));
+        PlayerPrefs.Save();
+    }
+
+    private static string GetFailedLoginAttemptsKey(string email)
+    {
+        return FailedLoginAttemptsKeyPrefix + GetEmailPreferenceHash(email);
+    }
+
+    private static string GetLoginLockoutExpiryKey(string email)
+    {
+        return LoginLockoutExpiryKeyPrefix + GetEmailPreferenceHash(email);
+    }
+
+    private static string GetEmailPreferenceHash(string email)
+    {
+        const uint FnvOffsetBasis = 2166136261u;
+        const uint FnvPrime = 16777619u;
+        uint hash = FnvOffsetBasis;
+        string normalizedEmail = email != null ? email.ToLowerInvariant() : string.Empty;
+        unchecked
+        {
+            for (int index = 0; index < normalizedEmail.Length; index++)
+            {
+                hash ^= normalizedEmail[index];
+                hash *= FnvPrime;
+            }
+        }
+
+        return hash.ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static string GetAccountNeedsVerificationMessage()
