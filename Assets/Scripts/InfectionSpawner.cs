@@ -27,6 +27,10 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float FungalHealthMultiplier = 1.25f;
     private const float BreachedBarrierPathogenMultiplier = 1.5f;
     private const float PathogenSpawnNavMeshSampleRadius = 1.25f;
+    private const float MinimumPathogenSpawnSeparation = 1.5f;
+    private const int PathogenSpawnSearchAttempts = 32;
+    private const float PathogenSpawnSearchAngleStep = 2.39996323f;
+    private const float MinimumPathogenVisualSpawnSeparation = 1.1f;
     private const int DefaultMaximumActiveWbcs = 5;
     private const int DefaultMaximumActiveInfections = 5;
     private const float SquadSpawnOffsetRadius = 1.75f;
@@ -4426,16 +4430,91 @@ public sealed class InfectionSpawner : MonoBehaviour
         return validMappings.Count == 0 ? null : validMappings[UnityEngine.Random.Range(0, validMappings.Count)];
     }
 
-    private Vector3 ResolveInitialInfectionWorldPosition(InfectionBodyPartButtonReference bodyPartButton, out int spawnPointIndex)
+    private bool TryResolveInitialInfectionWorldPosition(
+        InfectionBodyPartButtonReference bodyPartButton,
+        out Vector3 infectionWorldPosition,
+        out int spawnPointIndex)
     {
+        infectionWorldPosition = Vector3.zero;
         spawnPointIndex = -1;
         VesselSpawnPointCache vesselSpawnPointCache = FindFirstObjectByType<VesselSpawnPointCache>();
-        if (vesselSpawnPointCache == null || vesselSpawnPointCache.WorldSpawnPoints.Count == 0)
-            return GetBodyPartAnchorPosition(bodyPartButton);
+        if (vesselSpawnPointCache != null)
+        {
+            IReadOnlyList<Vector3> spawnPoints = vesselSpawnPointCache.WorldSpawnPoints;
+            if (spawnPoints.Count > 0)
+            {
+                int firstCandidate = UnityEngine.Random.Range(0, spawnPoints.Count);
+                for (int offset = 0; offset < spawnPoints.Count; offset++)
+                {
+                    int candidateIndex = (firstCandidate + offset) % spawnPoints.Count;
+                    if (!TrySampleInfectionNavMeshPosition(spawnPoints[candidateIndex], out NavMeshHit navMeshHit))
+                        continue;
+                    if (!IsPathogenSpawnPositionAvailable(navMeshHit.position))
+                        continue;
 
-        IReadOnlyList<Vector3> spawnPoints = vesselSpawnPointCache.WorldSpawnPoints;
-        spawnPointIndex = UnityEngine.Random.Range(0, spawnPoints.Count);
-        return spawnPoints[spawnPointIndex];
+                    infectionWorldPosition = navMeshHit.position;
+                    spawnPointIndex = candidateIndex;
+                    return true;
+                }
+            }
+        }
+
+        return TryFindAvailablePathogenSpawnPosition(GetBodyPartAnchorPosition(bodyPartButton), out infectionWorldPosition);
+    }
+
+    private bool TryFindAvailablePathogenSpawnPosition(Vector3 requestedPosition, out Vector3 infectionWorldPosition)
+    {
+        for (int attempt = 0; attempt < PathogenSpawnSearchAttempts; attempt++)
+        {
+            Vector3 candidatePosition = requestedPosition;
+            if (attempt > 0)
+            {
+                float ring = Mathf.Ceil(attempt / 8f);
+                float radius = ring * MinimumPathogenSpawnSeparation;
+                float angle = attempt * PathogenSpawnSearchAngleStep;
+                candidatePosition += new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+            }
+
+            if (TrySampleInfectionNavMeshPosition(candidatePosition, out NavMeshHit navMeshHit))
+            {
+                candidatePosition = navMeshHit.position;
+            }
+            else if (attempt > 0)
+            {
+                continue;
+            }
+
+            if (!IsPathogenSpawnPositionAvailable(candidatePosition))
+                continue;
+
+            infectionWorldPosition = candidatePosition;
+            return true;
+        }
+
+        infectionWorldPosition = Vector3.zero;
+        return false;
+    }
+
+    private bool IsPathogenSpawnPositionAvailable(Vector3 candidatePosition, InfectionMarker ignoredMarker = null)
+    {
+        float minimumDistanceSquared = MinimumPathogenSpawnSeparation * MinimumPathogenSpawnSeparation;
+        foreach (InfectionMarker marker in activeInfectionMarkers)
+        {
+            if (marker == null || marker == ignoredMarker)
+                continue;
+            if ((candidatePosition - marker.worldPosition).sqrMagnitude < minimumDistanceSquared)
+                return false;
+        }
+
+        foreach (InfectionMarker marker in fadingInfectionMarkers)
+        {
+            if (marker == null || marker == ignoredMarker)
+                continue;
+            if ((candidatePosition - marker.worldPosition).sqrMagnitude < minimumDistanceSquared)
+                return false;
+        }
+
+        return true;
     }
 
     private bool TrySampleInfectionNavMeshPosition(Vector3 requestedPosition, out NavMeshHit navMeshHit)
@@ -4452,8 +4531,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             agentTypeID = agent.agentTypeID,
             areaMask = agent.areaMask
         };
-        float sampleRadius = Mathf.Max(dispatchNavMeshSampleRadius, PathogenSpawnNavMeshSampleRadius);
-        return NavMesh.SamplePosition(requestedPosition, out navMeshHit, sampleRadius, filter);
+        return NavMesh.SamplePosition(requestedPosition, out navMeshHit, PathogenSpawnNavMeshSampleRadius, filter);
     }
 
     private Vector3 GetInfectionWorldPosition(InfectionMarker marker)
@@ -4466,7 +4544,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         {
             IReadOnlyList<Vector3> spawnPoints = vesselSpawnPointCache.WorldSpawnPoints;
             if (marker.vesselSpawnPointIndex < spawnPoints.Count &&
-                TrySampleInfectionNavMeshPosition(spawnPoints[marker.vesselSpawnPointIndex], out NavMeshHit navMeshHit))
+                TrySampleInfectionNavMeshPosition(spawnPoints[marker.vesselSpawnPointIndex], out NavMeshHit navMeshHit) &&
+                IsPathogenSpawnPositionAvailable(navMeshHit.position, marker))
             {
                 marker.worldPosition = navMeshHit.position;
             }
@@ -4492,17 +4571,14 @@ public sealed class InfectionSpawner : MonoBehaviour
         }
 
         int vesselSpawnPointIndex = -1;
-        Vector3 requestedPosition = worldPositionOverride.HasValue
-            ? worldPositionOverride.Value
-            : ResolveInitialInfectionWorldPosition(bodyPartButton, out vesselSpawnPointIndex);
-        Vector3 infectionWorldPosition = requestedPosition;
-        if (TrySampleInfectionNavMeshPosition(requestedPosition, out NavMeshHit infectionNavMeshHit))
+        Vector3 infectionWorldPosition;
+        bool foundAvailablePosition = worldPositionOverride.HasValue
+            ? TryFindAvailablePathogenSpawnPosition(worldPositionOverride.Value, out infectionWorldPosition)
+            : TryResolveInitialInfectionWorldPosition(bodyPartButton, out infectionWorldPosition, out vesselSpawnPointIndex);
+        if (!foundAvailablePosition)
         {
-            infectionWorldPosition = infectionNavMeshHit.position;
-        }
-        else
-        {
-            Debug.LogWarning($"[InfectionSpawner] Could not find a NavMesh point near {infection.displayName}; keeping its requested infection position.", this);
+            Debug.LogWarning($"[InfectionSpawner] Could not find an unoccupied pathogen spawn point for {infection.displayName}; spawn was cancelled to prevent overlap.", this);
+            return null;
         }
 
         InfectionMarker marker = new InfectionMarker
@@ -4564,12 +4640,9 @@ public sealed class InfectionSpawner : MonoBehaviour
 
         for (int index = 0; index < threatVisualSpawnCount; index++)
         {
-            Vector2 horizontalOffset = UnityEngine.Random.insideUnitCircle * threatVisualClusterRadius;
-            Vector3 requestedPosition = marker.worldPosition + new Vector3(horizontalOffset.x, 0f, horizontalOffset.y);
-            if (!NavMesh.SamplePosition(requestedPosition, out NavMeshHit spawnHit,
-                PathogenSpawnNavMeshSampleRadius, spawnFilter))
+            if (!TryFindAvailablePathogenVisualPosition(marker, index, spawnFilter, out NavMeshHit spawnHit))
             {
-                Debug.LogWarning($"[InfectionSpawner] Could not find a nearby NavMesh point for {marker.infection.displayName} threat visual {index + 1}; skipping this visual.", this);
+                Debug.LogWarning($"[InfectionSpawner] No unoccupied NavMesh point was available for {marker.infection.displayName} threat visual {index + 1}; skipping it rather than stacking pathogens.", this);
                 continue;
             }
 
@@ -4623,6 +4696,82 @@ public sealed class InfectionSpawner : MonoBehaviour
 
             marker.threatVisuals.Add(visual);
         }
+    }
+
+    private bool TryFindAvailablePathogenVisualPosition(
+        InfectionMarker marker,
+        int visualIndex,
+        NavMeshQueryFilter spawnFilter,
+        out NavMeshHit spawnHit)
+    {
+        for (int attempt = 0; attempt < PathogenSpawnSearchAttempts; attempt++)
+        {
+            Vector3 requestedPosition;
+            if (attempt == 0)
+            {
+                Vector2 initialOffset = UnityEngine.Random.insideUnitCircle * threatVisualClusterRadius;
+                requestedPosition = marker.worldPosition + new Vector3(initialOffset.x, 0f, initialOffset.y);
+            }
+            else
+            {
+                float ring = Mathf.Ceil(attempt / 8f);
+                float radius = Mathf.Max(threatVisualClusterRadius, MinimumPathogenVisualSpawnSeparation)
+                    + (ring - 1f) * MinimumPathogenVisualSpawnSeparation;
+                float angle = (visualIndex * 0.61803399f + attempt) * PathogenSpawnSearchAngleStep;
+                requestedPosition = marker.worldPosition + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+            }
+
+            if (!NavMesh.SamplePosition(requestedPosition, out spawnHit, PathogenSpawnNavMeshSampleRadius, spawnFilter))
+                continue;
+            if (IsPathogenVisualSpawnPositionAvailable(spawnHit.position, marker))
+                return true;
+        }
+
+        spawnHit = default;
+        return false;
+    }
+
+    private bool IsPathogenVisualSpawnPositionAvailable(Vector3 candidatePosition, InfectionMarker markerBeingSpawned)
+    {
+        float minimumDistanceSquared = MinimumPathogenVisualSpawnSeparation * MinimumPathogenVisualSpawnSeparation;
+        foreach (InfectionMarker activeMarker in activeInfectionMarkers)
+        {
+            if (!ArePathogenVisualsSeparated(candidatePosition, activeMarker, markerBeingSpawned, minimumDistanceSquared))
+                return false;
+        }
+
+        foreach (InfectionMarker fadingMarker in fadingInfectionMarkers)
+        {
+            if (!ArePathogenVisualsSeparated(candidatePosition, fadingMarker, markerBeingSpawned, minimumDistanceSquared))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool ArePathogenVisualsSeparated(
+        Vector3 candidatePosition,
+        InfectionMarker existingMarker,
+        InfectionMarker markerBeingSpawned,
+        float minimumDistanceSquared)
+    {
+        if (existingMarker == null)
+            return true;
+        if (existingMarker != markerBeingSpawned &&
+            (candidatePosition - existingMarker.worldPosition).sqrMagnitude < minimumDistanceSquared)
+            return false;
+        if (existingMarker.threatVisuals == null)
+            return true;
+
+        foreach (GameObject existingVisual in existingMarker.threatVisuals)
+        {
+            if (existingVisual == null || (existingMarker == markerBeingSpawned && !existingVisual.activeInHierarchy))
+                continue;
+            if ((candidatePosition - existingVisual.transform.position).sqrMagnitude < minimumDistanceSquared)
+                return false;
+        }
+
+        return true;
     }
 
     private void UpdateInfectionThreatVisuals()
