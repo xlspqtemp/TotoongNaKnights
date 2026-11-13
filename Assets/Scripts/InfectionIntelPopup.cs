@@ -12,13 +12,25 @@ public sealed class InfectionIntelPopup : MonoBehaviour
     private const float CloseHeight = 34f;
     private const float DetailFontSize = 19f;
     private const float TitleFontSize = 21f;
+    private const float RecommendedUnitIconSize = 60f;
+    private const string NeutrophilIconResourcePath = "UI/WBC HEADSHOT ICON";
+    private const string MacrophageIconResourcePath = "UI/Macrophage Headshot icon";
+    private const string TCellIconResourcePath = "UI/Killet t cell headshot icon";
     private static readonly Color PanelColor = new Color(0.018f, 0.035f, 0.065f, 0.98f);
     private static readonly Color CyanColor = new Color(0.16f, 0.88f, 0.98f, 1f);
     private static readonly Color BodyTextColor = new Color(0.9f, 0.96f, 1f, 1f);
     private static readonly Color ButtonColor = new Color(0.035f, 0.1f, 0.15f, 1f);
+    private static readonly Color EosinophilTint = new Color(1f, 0.28f, 0.14f, 1f);
+    private static readonly Color BasophilTint = new Color(0.48f, 0.32f, 1f, 1f);
+    private static Sprite neutrophilIconSprite;
+    private static Sprite macrophageIconSprite;
+    private static Sprite tCellIconSprite;
 
     private GameObject popupCanvasObject;
     private TextMeshProUGUI detailLabel;
+    private readonly RectTransform[] recommendedUnitIconRects = new RectTransform[2];
+    private readonly Image[] recommendedUnitIcons = new Image[2];
+    private readonly TextMeshProUGUI[] recommendedUnitLabels = new TextMeshProUGUI[2];
     private InfectionSpawner.InfectionMarker selectedMarker;
     private InfectionSpawner infectionSpawner;
     private bool isOpen;
@@ -138,11 +150,12 @@ public sealed class InfectionIntelPopup : MonoBehaviour
         CreateAccentLine(panelRect);
 
         detailLabel = CreateText("Infection Intel Details", panelRect, string.Empty,
-            new Vector2(26f, -74f), new Vector2(-52f, 280f), DetailFontSize, BodyTextColor,
+            new Vector2(26f, -74f), new Vector2(-52f, 196f), DetailFontSize, BodyTextColor,
             TextAlignmentOptions.TopLeft, FontStyles.Normal);
         detailLabel.textWrappingMode = TextWrappingModes.Normal;
         detailLabel.lineSpacing = 12f;
         detailLabel.richText = true;
+        CreateRecommendedUnitIcons(panelRect);
 
         popupCanvasObject.SetActive(false);
     }
@@ -231,6 +244,56 @@ public sealed class InfectionIntelPopup : MonoBehaviour
         lineImage.raycastTarget = false;
     }
 
+    private void CreateRecommendedUnitIcons(RectTransform panelRect)
+    {
+        for (int index = 0; index < recommendedUnitIcons.Length; index++)
+        {
+            GameObject slotObject = new GameObject("Recommended Unit Icon " + (index + 1), typeof(RectTransform));
+            slotObject.transform.SetParent(panelRect, false);
+            RectTransform slotRect = slotObject.GetComponent<RectTransform>();
+            slotRect.anchorMin = new Vector2(0.5f, 1f);
+            slotRect.anchorMax = new Vector2(0.5f, 1f);
+            slotRect.pivot = new Vector2(0.5f, 1f);
+            slotRect.anchoredPosition = new Vector2(0f, -276f);
+            slotRect.sizeDelta = new Vector2(104f, 92f);
+            recommendedUnitIconRects[index] = slotRect;
+
+            GameObject imageObject = new GameObject("Unit Headshot", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            imageObject.transform.SetParent(slotRect, false);
+            RectTransform imageRect = imageObject.GetComponent<RectTransform>();
+            imageRect.anchorMin = new Vector2(0.5f, 1f);
+            imageRect.anchorMax = new Vector2(0.5f, 1f);
+            imageRect.pivot = new Vector2(0.5f, 1f);
+            imageRect.anchoredPosition = Vector2.zero;
+            imageRect.sizeDelta = new Vector2(RecommendedUnitIconSize, RecommendedUnitIconSize);
+
+            Image icon = imageObject.GetComponent<Image>();
+            icon.preserveAspect = true;
+            icon.raycastTarget = false;
+            recommendedUnitIcons[index] = icon;
+
+            GameObject labelObject = new GameObject("Unit Name", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            labelObject.transform.SetParent(slotRect, false);
+            RectTransform labelRect = labelObject.GetComponent<RectTransform>();
+            labelRect.anchorMin = new Vector2(0f, 1f);
+            labelRect.anchorMax = new Vector2(1f, 1f);
+            labelRect.pivot = new Vector2(0.5f, 1f);
+            labelRect.anchoredPosition = new Vector2(0f, -64f);
+            labelRect.sizeDelta = new Vector2(0f, 24f);
+
+            TextMeshProUGUI label = labelObject.GetComponent<TextMeshProUGUI>();
+            label.font = Resources.Load<TMP_FontAsset>(BankGothicResourcePath) ?? TMP_Settings.defaultFontAsset;
+            label.fontSize = 12f;
+            label.fontStyle = FontStyles.Bold;
+            label.color = BodyTextColor;
+            label.alignment = TextAlignmentOptions.Center;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.raycastTarget = false;
+            recommendedUnitLabels[index] = label;
+            slotObject.SetActive(false);
+        }
+    }
+
     private void RefreshDetails()
     {
         if (detailLabel == null || selectedMarker == null || selectedMarker.infection == null)
@@ -251,6 +314,58 @@ public sealed class InfectionIntelPopup : MonoBehaviour
             $"<color=#29E0F3>SEVERITY</color>   {infection.severityStage}\n" +
             $"<color=#29E0F3>STATUS</color>     {status}\n\n" +
             $"<color=#29E0F3>RECOMMENDED UNIT</color>\n{GetRecommendedUnit(infection.pathogenType)}";
+        RefreshRecommendedUnitIcons(infection.pathogenType);
+    }
+
+    private void RefreshRecommendedUnitIcons(InfectionPathogenType pathogenType)
+    {
+        foreach (RectTransform iconRect in recommendedUnitIconRects)
+        {
+            if (iconRect != null)
+                iconRect.gameObject.SetActive(false);
+        }
+
+        switch (pathogenType)
+        {
+            case InfectionPathogenType.Bacterial:
+            case InfectionPathogenType.Fungal:
+                SetRecommendedUnitIcon(0, LoadUnitIcon(ref neutrophilIconSprite, NeutrophilIconResourcePath),
+                    "NEUTROPHIL", Color.white, -58f);
+                SetRecommendedUnitIcon(1, LoadUnitIcon(ref macrophageIconSprite, MacrophageIconResourcePath),
+                    "MACROPHAGE", Color.white, 58f);
+                break;
+            case InfectionPathogenType.Viral:
+                SetRecommendedUnitIcon(0, LoadUnitIcon(ref tCellIconSprite, TCellIconResourcePath),
+                    "KILLER T-CELL", Color.white, 0f);
+                break;
+            case InfectionPathogenType.Allergen:
+                SetRecommendedUnitIcon(0, LoadUnitIcon(ref neutrophilIconSprite, NeutrophilIconResourcePath),
+                    "BASOPHIL", BasophilTint, 0f);
+                break;
+            case InfectionPathogenType.Parasite:
+                SetRecommendedUnitIcon(0, LoadUnitIcon(ref neutrophilIconSprite, NeutrophilIconResourcePath),
+                    "EOSINOPHIL", EosinophilTint, 0f);
+                break;
+        }
+    }
+
+    private void SetRecommendedUnitIcon(int index, Sprite sprite, string unitName, Color tint, float horizontalPosition)
+    {
+        if (index < 0 || index >= recommendedUnitIcons.Length || recommendedUnitIconRects[index] == null)
+            return;
+
+        recommendedUnitIcons[index].sprite = sprite;
+        recommendedUnitIcons[index].color = tint;
+        recommendedUnitLabels[index].text = unitName;
+        recommendedUnitIconRects[index].anchoredPosition = new Vector2(horizontalPosition, -276f);
+        recommendedUnitIconRects[index].gameObject.SetActive(sprite != null);
+    }
+
+    private static Sprite LoadUnitIcon(ref Sprite cachedSprite, string resourcePath)
+    {
+        if (cachedSprite == null)
+            cachedSprite = Resources.Load<Sprite>(resourcePath);
+        return cachedSprite;
     }
 
     private static string GetCategoryName(InfectionPathogenType pathogenType)
