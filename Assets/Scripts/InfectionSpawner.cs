@@ -101,6 +101,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float NormalDifficultyWbcHp = 100f;
     private const float NormalDifficultyWbcAttack = 10f;
     private const float MacrophageAttackRange = 2f;
+    private const float CombatAgentRadiusPadding = 0.75f;
     private const float NeutrophilBaseDamage = 10f;
     private const float EosinophilBaseDamage = 15f;
     private const float BasophilBaseDamage = 12f;
@@ -2851,16 +2852,19 @@ public sealed class InfectionSpawner : MonoBehaviour
                     continue;
 
                 Health wbcHealth = wbc.GetComponent<Health>();
-                if (distance <= combatMeleeRange)
+                float attackRange = GetEffectiveCombatMeleeRange(wbc, nearestPathogen, combatMeleeRange);
+                if (distance <= attackRange)
                 {
                     float multiplier = marker.infection.pathogenType == InfectionPathogenType.Viral
                         ? stats.wbcDamageMultiplierVsVirus
                         : stats.wbcDamageMultiplierVsBacteria;
                     MacrophageScript macrophage = wbc.GetComponent<MacrophageScript>();
-                    if (TryApplyCombatHit(wbc, nearestPathogen, wbcHealth, stats.wbcAttack * multiplier, stats.attackIntervalSeconds)
-                        && macrophage != null)
+                    if (TryApplyCombatHit(wbc, nearestPathogen, wbcHealth, stats.wbcAttack * multiplier, stats.attackIntervalSeconds))
                     {
-                        TriggerMacrophageCombatAnimation(macrophage, nearestPathogen);
+                        if (macrophage != null)
+                            TriggerMacrophageCombatAnimation(macrophage, nearestPathogen);
+                        else
+                            TriggerUnitAttackAnimation(wbc);
                     }
                 }
                 else
@@ -2875,17 +2879,21 @@ public sealed class InfectionSpawner : MonoBehaviour
                         }
                         agent.enabled = false;
                     }
+
+                    float movementStep = wbcCombatMoveSpeed * (isOxygenBuffActive ? OxygenBuffMovementMultiplier : 1f) * gameplayDeltaTime;
+                    float movementDistance = Mathf.Min(movementStep, Mathf.Max(0f, distance - attackRange));
                     wbc.transform.position = Vector3.MoveTowards(
                         wbc.transform.position,
                         nearestPathogen.transform.position,
-                        wbcCombatMoveSpeed * (isOxygenBuffActive ? OxygenBuffMovementMultiplier : 1f) * gameplayDeltaTime);
+                        movementDistance);
                 }
             }
 
             foreach (GameObject pathogen in livingPathogens)
             {
                 GameObject nearestWbc = FindNearestLivingUnit(livingWbcs, pathogen.transform.position, out float distance);
-                if (nearestWbc == null || distance > combatDetectionRange || distance > combatMeleeRange)
+                float pathogenAttackRange = GetEffectiveCombatMeleeRange(pathogen, nearestWbc, combatMeleeRange);
+                if (nearestWbc == null || distance > combatDetectionRange || distance > pathogenAttackRange)
                     continue;
 
                 float pathogenDamage = marker.infection.pathogenType == InfectionPathogenType.Viral
@@ -3014,7 +3022,8 @@ public sealed class InfectionSpawner : MonoBehaviour
                     continue;
 
                 NavMeshAgent agent = member.GetComponent<NavMeshAgent>();
-                if (distance > attackRange)
+                float effectiveAttackRange = GetEffectiveCombatMeleeRange(member, nearestPathogen, attackRange);
+                if (distance > effectiveAttackRange)
                 {
                     if (agent != null && agent.enabled && agent.isOnNavMesh && !agent.pathPending &&
                         (!agent.hasPath || (agent.destination - nearestPathogen.transform.position).sqrMagnitude > 0.25f))
@@ -3031,10 +3040,12 @@ public sealed class InfectionSpawner : MonoBehaviour
                     agent.isStopped = true;
                 }
 
-                if (TryApplyCombatHit(member, nearestPathogen, memberHealth, attackDamage, stats.attackIntervalSeconds)
-                    && macrophage != null)
+                if (TryApplyCombatHit(member, nearestPathogen, memberHealth, attackDamage, stats.attackIntervalSeconds))
                 {
-                    TriggerMacrophageCombatAnimation(macrophage, nearestPathogen);
+                    if (macrophage != null)
+                        TriggerMacrophageCombatAnimation(macrophage, nearestPathogen);
+                    else
+                        TriggerUnitAttackAnimation(member);
                 }
             }
         }
@@ -3444,6 +3455,22 @@ public sealed class InfectionSpawner : MonoBehaviour
         return false;
     }
 
+
+    private static float GetEffectiveCombatMeleeRange(GameObject attacker, GameObject target, float configuredRange)
+    {
+        float agentSeparation = 0f;
+        NavMeshAgent attackerAgent = attacker != null ? attacker.GetComponent<NavMeshAgent>() : null;
+        NavMeshAgent targetAgent = target != null ? target.GetComponent<NavMeshAgent>() : null;
+        if (attackerAgent != null && attackerAgent.enabled)
+            agentSeparation += Mathf.Max(0f, attackerAgent.radius);
+        if (targetAgent != null && targetAgent.enabled)
+            agentSeparation += Mathf.Max(0f, targetAgent.radius);
+
+        float safeReach = agentSeparation > 0f
+            ? agentSeparation + CombatAgentRadiusPadding
+            : configuredRange;
+        return Mathf.Max(configuredRange, safeReach);
+    }
 
     private bool TryApplyCombatHit(GameObject attacker, GameObject target, Health attackerHealth, float damage, float attackInterval)
     {
