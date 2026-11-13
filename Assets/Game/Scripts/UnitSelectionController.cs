@@ -13,6 +13,7 @@ public sealed class UnitSelectionController : MonoBehaviour
     private const float PanelHeight = 64f;
     private const float InfoLineHeight = 20f;
     private const float HealthUnitScreenSelectRadius = 36f;
+    private const float ScreenSelectionBoundsPadding = 12f;
     private const float ScreenPadding = 24f;
 
     [SerializeField] private Camera targetCamera;
@@ -73,10 +74,10 @@ public sealed class UnitSelectionController : MonoBehaviour
             return;
         }
 
-        Health screenSelectedHealth = FindHealthUnitAtScreenPosition(Input.mousePosition);
-        if (screenSelectedHealth != null)
+        FindSelectableAtScreenPosition(Input.mousePosition, out SelectableUnit screenSelectedUnit, out Health screenSelectedHealth);
+        if (screenSelectedUnit != null || screenSelectedHealth != null)
         {
-            SetSelectedUnit(screenSelectedHealth.GetComponentInParent<SelectableUnit>(), screenSelectedHealth);
+            SetSelectedUnit(screenSelectedUnit, screenSelectedHealth);
             return;
         }
 
@@ -85,29 +86,95 @@ public sealed class UnitSelectionController : MonoBehaviour
         SetSelectedUnit(null, null);
     }
 
-    private Health FindHealthUnitAtScreenPosition(Vector2 screenPosition)
+    private void FindSelectableAtScreenPosition(Vector2 screenPosition, out SelectableUnit nearestUnit, out Health nearestHealth)
     {
-        Health nearestHealth = null;
-        float nearestDistanceSquared = HealthUnitScreenSelectRadius * HealthUnitScreenSelectRadius;
+        nearestUnit = null;
+        nearestHealth = null;
+        float nearestDistanceSquared = float.PositiveInfinity;
+        float nearestDepth = float.PositiveInfinity;
         Health[] healthComponents = FindObjectsByType<Health>(FindObjectsSortMode.None);
         foreach (Health health in healthComponents)
         {
             if (health == null || health.IsDead || !health.gameObject.activeInHierarchy)
                 continue;
 
-            Vector3 projectedPosition = targetCamera.WorldToScreenPoint(health.transform.position);
-            if (projectedPosition.z <= 0f)
-                continue;
-
-            float distanceSquared = ((Vector2)projectedPosition - screenPosition).sqrMagnitude;
-            if (distanceSquared >= nearestDistanceSquared)
+            float distanceSquared = GetScreenDistanceToSelectable(health.transform, screenPosition, out bool hasVisibleRenderer, out float screenDepth);
+            float selectionPadding = hasVisibleRenderer ? ScreenSelectionBoundsPadding : HealthUnitScreenSelectRadius;
+            if (distanceSquared > selectionPadding * selectionPadding ||
+                distanceSquared > nearestDistanceSquared ||
+                (Mathf.Approximately(distanceSquared, nearestDistanceSquared) && screenDepth >= nearestDepth))
                 continue;
 
             nearestDistanceSquared = distanceSquared;
+            nearestDepth = screenDepth;
             nearestHealth = health;
+            nearestUnit = health.GetComponentInParent<SelectableUnit>();
         }
 
-        return nearestHealth;
+        SelectableUnit[] selectableUnits = FindObjectsByType<SelectableUnit>(FindObjectsSortMode.None);
+        foreach (SelectableUnit unit in selectableUnits)
+        {
+            if (unit == null || !unit.gameObject.activeInHierarchy || unit.GetComponentInParent<Health>() != null)
+                continue;
+
+            float distanceSquared = GetScreenDistanceToSelectable(unit.transform, screenPosition, out bool hasVisibleRenderer, out float screenDepth);
+            float selectionPadding = hasVisibleRenderer ? ScreenSelectionBoundsPadding : HealthUnitScreenSelectRadius;
+            if (distanceSquared > selectionPadding * selectionPadding ||
+                distanceSquared > nearestDistanceSquared ||
+                (Mathf.Approximately(distanceSquared, nearestDistanceSquared) && screenDepth >= nearestDepth))
+                continue;
+
+            nearestDistanceSquared = distanceSquared;
+            nearestDepth = screenDepth;
+            nearestUnit = unit;
+            nearestHealth = null;
+        }
+    }
+
+    private float GetScreenDistanceToSelectable(Transform selectableTransform, Vector2 screenPosition, out bool hasVisibleRenderer, out float screenDepth)
+    {
+        Vector3 projectedPosition = targetCamera.WorldToScreenPoint(selectableTransform.position);
+        screenDepth = projectedPosition.z;
+        hasVisibleRenderer = false;
+        if (screenDepth <= 0f)
+            return float.PositiveInfinity;
+
+        Renderer[] renderers = selectableTransform.GetComponentsInChildren<Renderer>();
+        float minX = float.PositiveInfinity;
+        float minY = float.PositiveInfinity;
+        float maxX = float.NegativeInfinity;
+        float maxY = float.NegativeInfinity;
+
+        foreach (Renderer renderer in renderers)
+        {
+            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
+                continue;
+
+            Bounds bounds = renderer.bounds;
+            for (int cornerIndex = 0; cornerIndex < 8; cornerIndex++)
+            {
+                Vector3 corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                    (cornerIndex & 1) == 0 ? -1f : 1f,
+                    (cornerIndex & 2) == 0 ? -1f : 1f,
+                    (cornerIndex & 4) == 0 ? -1f : 1f));
+                Vector3 projectedCorner = targetCamera.WorldToScreenPoint(corner);
+                if (projectedCorner.z <= 0f)
+                    continue;
+
+                hasVisibleRenderer = true;
+                minX = Mathf.Min(minX, projectedCorner.x);
+                minY = Mathf.Min(minY, projectedCorner.y);
+                maxX = Mathf.Max(maxX, projectedCorner.x);
+                maxY = Mathf.Max(maxY, projectedCorner.y);
+            }
+        }
+
+        if (!hasVisibleRenderer)
+            return ((Vector2)projectedPosition - screenPosition).sqrMagnitude;
+
+        float distanceX = Mathf.Max(minX - screenPosition.x, 0f, screenPosition.x - maxX);
+        float distanceY = Mathf.Max(minY - screenPosition.y, 0f, screenPosition.y - maxY);
+        return distanceX * distanceX + distanceY * distanceY;
     }
 
     private void LateUpdate()
