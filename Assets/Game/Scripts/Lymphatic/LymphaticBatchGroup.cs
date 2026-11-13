@@ -16,6 +16,7 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
     [SerializeField] private GameObject[] batchMembers = new GameObject[0];
     [SerializeField] private string unitType;
     [SerializeField] private string pathogenVariant;
+    [SerializeField] private string innateCellVariant;
     [SerializeField] private int lymphNodeIndex;
     [SerializeField] private BatchStatus status;
     [SerializeField] private InfectionSpawner.InfectionMarker targetInfection;
@@ -35,6 +36,9 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
 
     /// <summary>Gets the selected pathogen specialization, if any.</summary>
     public string PathogenVariant => GroupLeader.pathogenVariant;
+
+    /// <summary>Gets the deployed innate-cell subtype, if this is a neutrophil-derived batch.</summary>
+    public string InnateCellVariant => GroupLeader.innateCellVariant;
 
     /// <summary>Gets the one-based batch identifier, matching its lymph-node slot.</summary>
     public int BatchId => GroupLeader.lymphNodeIndex;
@@ -67,6 +71,7 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
         lymphNodeIndex = nodeIndex;
         if (groupLeader == this)
         {
+            innateCellVariant = string.Empty;
             status = BatchStatus.Ready;
             targetInfection = null;
             selectedDuct = null;
@@ -74,6 +79,13 @@ public sealed class LymphaticBatchGroup : MonoBehaviour
             hasEnteredCirculatorySystem = false;
             targetWasAborted = false;
         }
+    }
+
+    /// <summary>Records the selected Neutrophil-derived cell subtype for this shared batch.</summary>
+    /// <param name="variant">The subtype name, such as Eosinophil or Basophil.</param>
+    public void SetInnateCellVariant(string variant)
+    {
+        GroupLeader.innateCellVariant = variant ?? string.Empty;
     }
 
     /// <summary>Assigns a pending infection and begins movement toward the selected duct or infection.</summary>

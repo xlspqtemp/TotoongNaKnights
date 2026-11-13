@@ -5207,6 +5207,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (!lymphaticBatchSpawner.DispatchBatch(batchId, marker, out failureReason))
             return false;
 
+        batch.SetInnateCellVariant(variantName);
         string displayName = GetNeutrophilVariantDisplayName(variantName);
         foreach (GameObject member in batch.Members)
         {

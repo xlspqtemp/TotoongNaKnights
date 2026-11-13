@@ -46,6 +46,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private static readonly Color NeutrophilIconColor = new Color(0.38f, 0.95f, 1f, 1f);
     private static readonly Color EosinophilIconColor = new Color(1f, 0.34f, 0.18f, 1f);
     private static readonly Color BasophilIconColor = new Color(0.53f, 0.42f, 1f, 1f);
+    private static readonly Color EosinophilModelTint = new Color(1f, 0.28f, 0.14f, 1f);
+    private static readonly Color BasophilModelTint = new Color(0.48f, 0.32f, 1f, 1f);
 
     private sealed class NeutrophilVariantOption
     {
@@ -535,6 +537,21 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         return solidColorSprite;
     }
 
+    private Color GetBatchIconColor(int batchId, LymphaticBatchGroup batch)
+    {
+        if (batch == null || !string.Equals(batch.UnitType, NeutrophilUnitName, StringComparison.OrdinalIgnoreCase))
+            return Color.white;
+
+        string variant = batchId == selectedBatchId && !string.IsNullOrWhiteSpace(selectedNeutrophilVariantName)
+            ? selectedNeutrophilVariantName
+            : batch.InnateCellVariant;
+        if (string.Equals(variant, EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return EosinophilModelTint;
+        if (string.Equals(variant, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return BasophilModelTint;
+        return Color.white;
+    }
+
     private static Sprite GetUnitIcon(string unitType)
     {
         if (string.IsNullOrWhiteSpace(unitType))
@@ -676,6 +693,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             slot.Background.color = !isOccupied ? EmptySlotColor : isSelected ? SelectedSlotColor : ActiveSlotColor;
             slot.Icon.sprite = isOccupied ? GetUnitIcon(batch.UnitType) : null;
             slot.Icon.enabled = slot.Icon.sprite != null;
+            slot.Icon.color = isOccupied ? GetBatchIconColor(batchId, batch) : Color.white;
             slot.NameLabel.enabled = isOccupied;
             slot.StatusLabel.enabled = isOccupied;
             slot.TravelTimeLabel.enabled = isOccupied && batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing;
