@@ -5,7 +5,7 @@ public sealed class HumanSnapshotAnimationDriver : MonoBehaviour
 {
     private const float CrossfadeDuration = 0.25f;
     private const float DefaultOrthographicSize = 10.5f;
-    private const float SleepingModelRollDegrees = 90f;
+    private const float SleepingModelRollDegrees = -90f;
     private const float FramingPadding = 1.12f;
     private const float FramingSmoothing = 8f;
     private static readonly int IdleState = Animator.StringToHash("Base Layer.Breathing Idle");
