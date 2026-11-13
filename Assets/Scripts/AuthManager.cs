@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Handles LootLocker guest, white-label login, and account creation requests for the login screen.
+/// Handles LootLocker guest, white-label login, account creation, verification, and password recovery.
 /// </summary>
 public class AuthManager : MonoBehaviour
 {
@@ -17,6 +17,23 @@ public class AuthManager : MonoBehaviour
     private const string LoginGenericFailureMessage = "Login couldn't be completed. Please try again.";
     private const string MainMenuSceneNameFallback = "MainMenu";
     private const string LocalGuestStartedMessage = "Offline guest started. Progress is local; scores aren't uploaded.";
+    private const string AccountCreatedVerificationMessage = "Account created. Check your email and Spam folders. Use Resend Verification only if the message does not arrive.";
+    private const string AccountCreatedVerifiedMessage = "Account created and verified. Logging in...";
+    private const string PasswordResetSentMessage = "If an account exists for this email, a password-reset link has been requested. Check your inbox and Spam folders.";
+    private const string PasswordResetRateLimitedMessage = "LootLocker is temporarily rate-limiting email requests. Wait before trying again.";
+    private const string PasswordResetServerErrorMessage = "LootLocker couldn't process the reset request right now. Try again later.";
+    private const string PasswordResetConfigurationErrorMessage = "LootLocker rejected the reset request. Check the White Label password-reset email settings and Console.";
+    private const string PasswordResetFailedMessage = "Couldn't reach LootLocker. Check your connection and try again.";
+    private const string AccountNeedsVerificationMessage = "LootLocker says this account isn't verified. Check your inbox and Spam, or request a verification email.";
+    private const string VerificationResendPromptSuffix = " Select Resend Verification when ready.";
+    private const string VerificationResendCooldownSuffix = " You can request another email in ";
+    private const string VerificationResendSuccessMessage = "LootLocker accepted the verification-email request. Check your inbox and Spam folders.";
+    private const string VerificationResendRateLimitedMessage = "LootLocker is limiting verification emails. Wait before retrying; check Spam or contact LootLocker support.";
+    private const string VerificationResendFailedMessage = "LootLocker couldn't request a verification email. Check your connection and try again later.";
+    private const string VerificationCooldownKey = "LootLockerExplicitVerificationResendCooldownUtcTicksV2";
+    private const int VerificationResendCooldownSeconds = 900;
+    private const float SecondsPerMinute = 60f;
+    private const float VerificationButtonRefreshInterval = 1f;
 
     [SerializeField] private TMP_InputField emailInputField;
     [SerializeField] private TMP_InputField passwordInputField;
@@ -25,15 +42,33 @@ public class AuthManager : MonoBehaviour
     [SerializeField] private Button signUpButton;
     [SerializeField] private Button guestButton;
     [SerializeField] private Button backButton;
+    [SerializeField] private Button forgotPasswordButton;
+    [SerializeField] private Button resendVerificationButton;
     [SerializeField] private string mainMenuSceneName = MainMenuSceneNameFallback;
 
     private bool requestInProgress;
+    private float nextVerificationButtonRefreshTime;
+
+    private void Update()
+    {
+        if (resendVerificationButton == null || requestInProgress ||
+            Time.unscaledTime < nextVerificationButtonRefreshTime)
+        {
+            return;
+        }
+
+        nextVerificationButtonRefreshTime = Time.unscaledTime + VerificationButtonRefreshInterval;
+        resendVerificationButton.interactable =
+            Application.internetReachability != NetworkReachability.NotReachable &&
+            GetVerificationCooldownSecondsRemaining() == 0;
+    }
 
     /// <summary>
     /// Connects the generated login UI to this authentication manager.
     /// </summary>
     public void Configure(TMP_InputField emailField, TMP_InputField passwordField, TextMeshProUGUI messageText,
-        Button login, Button signUp, Button guest, Button back, string destinationScene)
+        Button login, Button signUp, Button guest, Button back, string destinationScene,
+        Button forgotPassword = null, Button resendVerification = null)
     {
         emailInputField = emailField;
         passwordInputField = passwordField;
@@ -42,13 +77,22 @@ public class AuthManager : MonoBehaviour
         signUpButton = signUp;
         guestButton = guest;
         backButton = back;
+        forgotPasswordButton = forgotPassword;
+        resendVerificationButton = resendVerification;
+        if (resendVerificationButton != null)
+        {
+            resendVerificationButton.interactable = !requestInProgress &&
+                Application.internetReachability != NetworkReachability.NotReachable &&
+                GetVerificationCooldownSecondsRemaining() == 0;
+        }
+
         mainMenuSceneName = string.IsNullOrWhiteSpace(destinationScene)
             ? MainMenuSceneNameFallback
             : destinationScene;
     }
 
     /// <summary>
-    /// Creates a LootLocker white-label account, then immediately starts a session for it.
+    /// Creates a LootLocker white-label account and requires email verification before gameplay login.
     /// </summary>
     public void OnSignUpClicked()
     {
@@ -99,8 +143,14 @@ public class AuthManager : MonoBehaviour
                 return;
             }
 
-            SetStatus("Account created. Logging in...");
-            StartWhiteLabelLogin(email, password);
+            if (!string.IsNullOrWhiteSpace(response.VerifiedAt))
+            {
+                SetStatus(AccountCreatedVerifiedMessage);
+                StartWhiteLabelLogin(email, password);
+                return;
+            }
+
+            FinishRequest(AccountCreatedVerificationMessage);
         });
     }
 
@@ -130,6 +180,101 @@ public class AuthManager : MonoBehaviour
 
         BeginRequest("Logging in...");
         StartWhiteLabelLogin(email, password);
+    }
+
+    /// <summary>
+    /// Requests a LootLocker password-reset email for the entered email address.
+    /// </summary>
+    public void OnForgotPasswordClicked()
+    {
+        if (requestInProgress)
+        {
+            return;
+        }
+
+        string rawEmail = emailInputField != null ? emailInputField.text : string.Empty;
+        if (!TryNormalizeGmailAddress(rawEmail, out string email))
+        {
+            SetStatus(string.IsNullOrWhiteSpace(rawEmail)
+                ? "Enter your email address first."
+                : GmailAddressErrorMessage);
+            return;
+        }
+
+        BeginRequest("Requesting password reset...");
+        LootLockerSDKManager.WhiteLabelRequestPassword(email, response =>
+        {
+            if (this == null)
+            {
+                return;
+            }
+
+            if (response != null && response.success)
+            {
+                FinishRequest(PasswordResetSentMessage);
+                return;
+            }
+
+            Debug.LogWarning(BuildEmailRequestDiagnostic("password reset", response));
+            FinishRequest(GetEmailRequestFailureMessage(response));
+        });
+    }
+
+    /// <summary>
+    /// Explicitly requests another LootLocker verification email, subject to a local cooldown.
+    /// </summary>
+    public void OnResendVerificationClicked()
+    {
+        if (requestInProgress)
+        {
+            return;
+        }
+
+        string rawEmail = emailInputField != null ? emailInputField.text : string.Empty;
+        if (!TryNormalizeGmailAddress(rawEmail, out string email))
+        {
+            SetStatus(string.IsNullOrWhiteSpace(rawEmail)
+                ? "Enter your email address first."
+                : GmailAddressErrorMessage);
+            return;
+        }
+
+        int cooldownSecondsRemaining = GetVerificationCooldownSecondsRemaining();
+        if (cooldownSecondsRemaining > 0)
+        {
+            int minutesRemaining = Mathf.CeilToInt(cooldownSecondsRemaining / SecondsPerMinute);
+            SetStatus("Please wait " + minutesRemaining + " minute(s) before requesting another verification email.");
+            return;
+        }
+
+        BeginRequest("Requesting verification email...");
+        LootLockerSDKManager.WhiteLabelRequestVerification(email, response =>
+        {
+            if (this == null)
+            {
+                return;
+            }
+
+            if (IsVerificationRateLimited(response))
+            {
+                int retrySeconds = response.errorData != null && response.errorData.retry_after_seconds.HasValue
+                    ? response.errorData.retry_after_seconds.Value
+                    : VerificationResendCooldownSeconds;
+                SaveVerificationCooldown(Mathf.Max(VerificationResendCooldownSeconds, retrySeconds));
+                FinishRequest(VerificationResendRateLimitedMessage);
+                return;
+            }
+
+            if (response != null && response.success)
+            {
+                SaveVerificationCooldown(VerificationResendCooldownSeconds);
+                FinishRequest(VerificationResendSuccessMessage);
+                return;
+            }
+
+            Debug.LogWarning(BuildEmailRequestDiagnostic("verification email", response));
+            FinishRequest(VerificationResendFailedMessage);
+        });
     }
 
     /// <summary>
@@ -184,9 +329,13 @@ public class AuthManager : MonoBehaviour
                 return;
             }
 
+            LootLockerWhiteLabelLoginResponse loginResponse = response != null ? response.LoginResponse : null;
             if (response == null || !response.success)
             {
-                FinishRequest(GetLoginFailureMessage(response));
+                string failureMessage = loginResponse != null && !loginResponse.success
+                    ? GetLoginFailureMessage(loginResponse)
+                    : GetSessionFailureMessage(response != null ? response.SessionResponse : null);
+                FinishRequest(failureMessage);
                 return;
             }
 
@@ -196,6 +345,109 @@ public class AuthManager : MonoBehaviour
                 response.SessionResponse != null ? response.SessionResponse.player_name : string.Empty);
             FinishAndLoadMainMenu("Login successful.");
         });
+    }
+
+    private static string GetAccountNeedsVerificationMessage()
+    {
+        int cooldownSecondsRemaining = GetVerificationCooldownSecondsRemaining();
+        if (cooldownSecondsRemaining <= 0)
+        {
+            return AccountNeedsVerificationMessage + VerificationResendPromptSuffix;
+        }
+
+        int minutesRemaining = Mathf.CeilToInt(cooldownSecondsRemaining / SecondsPerMinute);
+        return AccountNeedsVerificationMessage + VerificationResendCooldownSuffix + minutesRemaining + " minute(s).";
+    }
+
+    private static int GetVerificationCooldownSecondsRemaining()
+    {
+        if (!PlayerPrefs.HasKey(VerificationCooldownKey) ||
+            !long.TryParse(PlayerPrefs.GetString(VerificationCooldownKey),
+                System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+                out long expiryTicks))
+        {
+            return 0;
+        }
+
+        if (expiryTicks < System.DateTime.MinValue.Ticks || expiryTicks > System.DateTime.MaxValue.Ticks)
+        {
+            PlayerPrefs.DeleteKey(VerificationCooldownKey);
+            return 0;
+        }
+
+        System.DateTime expiry = new System.DateTime(expiryTicks, System.DateTimeKind.Utc);
+        double secondsRemaining = (expiry - System.DateTime.UtcNow).TotalSeconds;
+        if (secondsRemaining <= 0d)
+        {
+            PlayerPrefs.DeleteKey(VerificationCooldownKey);
+            return 0;
+        }
+
+        return Mathf.CeilToInt((float)secondsRemaining);
+    }
+
+    private static void SaveVerificationCooldown(int cooldownSeconds)
+    {
+        int safeCooldownSeconds = Mathf.Max(1, cooldownSeconds);
+        long expiryTicks = System.DateTime.UtcNow.AddSeconds(safeCooldownSeconds).Ticks;
+        PlayerPrefs.SetString(VerificationCooldownKey,
+            expiryTicks.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        PlayerPrefs.Save();
+    }
+
+    private static string GetEmailRequestFailureMessage(LootLocker.LootLockerResponse response)
+    {
+        if (response == null || response.statusCode == 0)
+        {
+            return PasswordResetFailedMessage;
+        }
+
+        if (response.statusCode == 429)
+        {
+            return PasswordResetRateLimitedMessage;
+        }
+
+        if (response.statusCode >= 500)
+        {
+            return PasswordResetServerErrorMessage;
+        }
+
+        return PasswordResetConfigurationErrorMessage;
+    }
+
+    private static string BuildEmailRequestDiagnostic(string requestName, LootLocker.LootLockerResponse response)
+    {
+        if (response == null)
+        {
+            return "LootLocker " + requestName + " request failed without a response.";
+        }
+
+        string requestId = response.errorData != null ? response.errorData.request_id : string.Empty;
+        string traceId = response.errorData != null ? response.errorData.trace_id : string.Empty;
+        string errorCode = response.errorData != null ? response.errorData.code : string.Empty;
+        return "LootLocker " + requestName + " request failed. HTTP " + response.statusCode +
+               ", code " + (string.IsNullOrEmpty(errorCode) ? "unknown" : errorCode) +
+               ", request ID " + (string.IsNullOrEmpty(requestId) ? "unknown" : requestId) +
+               ", trace ID " + (string.IsNullOrEmpty(traceId) ? "unknown" : traceId) + ".";
+    }
+
+    private static bool IsVerificationRateLimited(LootLocker.LootLockerResponse response)
+    {
+        if (response == null)
+        {
+            return false;
+        }
+
+        string errorCode = response.errorData != null ? response.errorData.code : string.Empty;
+        string errorMessage = response.errorData != null ? response.errorData.message : string.Empty;
+        string responseText = response.text != null ? response.text : string.Empty;
+        string normalizedCode = errorCode.ToLowerInvariant();
+        string normalizedMessage = errorMessage.ToLowerInvariant();
+        string normalizedText = responseText.ToLowerInvariant();
+        return response.statusCode == 429 ||
+               ContainsAny(normalizedCode, "rate_limit", "too_many_requests", "too_many_verification") ||
+               ContainsAny(normalizedMessage, "too many verification emails", "too many requests", "rate limit") ||
+               ContainsAny(normalizedText, "too many verification emails", "too many requests", "rate limit");
     }
 
     private static bool TryNormalizeGmailAddress(string email, out string normalizedEmail)
@@ -247,41 +499,50 @@ public class AuthManager : MonoBehaviour
         return SignUpGenericFailureMessage;
     }
 
-    private static string GetLoginFailureMessage(LootLockerWhiteLabelLoginAndStartSessionResponse response)
+    private static string GetLoginFailureMessage(LootLockerWhiteLabelLoginResponse response)
     {
         if (response == null)
         {
             return LoginGenericFailureMessage;
         }
 
-        if (response.LoginResponse != null && !response.LoginResponse.success)
+        if (IsAccountNotVerified(response))
         {
-            string loginErrorCode = response.LoginResponse.errorData != null
-                ? response.LoginResponse.errorData.code
-                : string.Empty;
-            string loginErrorMessage = response.LoginResponse.errorData != null
-                ? response.LoginResponse.errorData.message
-                : string.Empty;
-
-            if (IsServerUnavailable(response.LoginResponse.statusCode, loginErrorCode, loginErrorMessage))
-            {
-                return ServerUnavailableMessage;
-            }
-
-            if (IsInvalidCredentials(response.LoginResponse.statusCode, loginErrorCode, loginErrorMessage))
-            {
-                return LoginFailedMessage;
-            }
-
-            return LoginGenericFailureMessage;
+            return GetAccountNeedsVerificationMessage();
         }
 
-        if (response.SessionResponse != null && !response.SessionResponse.success &&
-            IsServerUnavailable(response.SessionResponse.statusCode,
-                response.SessionResponse.errorData != null ? response.SessionResponse.errorData.code : string.Empty,
-                response.SessionResponse.errorData != null ? response.SessionResponse.errorData.message : string.Empty))
+        string errorCode = response.errorData != null ? response.errorData.code : string.Empty;
+        string errorMessage = response.errorData != null ? response.errorData.message : string.Empty;
+        if (IsServerUnavailable(response.statusCode, errorCode, errorMessage))
         {
             return ServerUnavailableMessage;
+        }
+
+        return IsInvalidCredentials(response.statusCode, errorCode, errorMessage)
+            ? LoginFailedMessage
+            : LoginGenericFailureMessage;
+    }
+
+    private static bool IsAccountNotVerified(LootLockerWhiteLabelLoginResponse response)
+    {
+        if (response == null)
+        {
+            return false;
+        }
+
+        string errorMessage = response.errorData != null ? response.errorData.message : string.Empty;
+        string responseText = response.text != null ? response.text : string.Empty;
+        string normalizedMessage = errorMessage.ToLowerInvariant();
+        string normalizedText = responseText.ToLowerInvariant();
+        return ContainsAny(normalizedMessage, "account not verified", "account is not verified", "not verified", "unverified") ||
+               ContainsAny(normalizedText, "account not verified", "account is not verified", "not verified", "unverified");
+    }
+
+    private static string GetSessionFailureMessage(LootLockerSessionResponse response)
+    {
+        if (response == null)
+        {
+            return LoginGenericFailureMessage;
         }
 
         string errorCode = response.errorData != null ? response.errorData.code : string.Empty;
@@ -389,6 +650,16 @@ public class AuthManager : MonoBehaviour
         if (backButton != null)
         {
             backButton.interactable = interactable;
+        }
+
+        if (forgotPasswordButton != null)
+        {
+            forgotPasswordButton.interactable = interactable;
+        }
+
+        if (resendVerificationButton != null)
+        {
+            resendVerificationButton.interactable = interactable && GetVerificationCooldownSecondsRemaining() == 0;
         }
     }
 

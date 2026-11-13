@@ -22,9 +22,22 @@ public class LoginGuestScreen : MonoBehaviour
     private const int TitleFontSize = 46;
     private const int SubtitleFontSize = 20;
     private const int ButtonFontSize = 22;
+    private const int AuthenticationActionFontSize = 16;
     private const int InputFontSize = 20;
     private const int LabelFontSize = 17;
     private const int StatusFontSize = 16;
+    private const int ForgotPasswordButtonWidth = 220;
+    private const int ForgotPasswordButtonHeight = 34;
+    private const int PopupStatusHeight = 42;
+    private const float ForgotPasswordButtonPositionX = -118f;
+    private const float ResendVerificationButtonPositionX = 118f;
+    private const float AuthenticationActionsPositionY = -68f;
+    private const float LoginStatusPositionY = -111f;
+    private const float SignUpStatusPositionY = -95f;
+    private const float LoginSubmitPositionY = -164f;
+    private const float LoginBackPositionY = -230f;
+    private const float SignUpSubmitPositionY = -157f;
+    private const float SignUpBackPositionY = -222f;
     private const string OfflineWelcomeMessage = "Offline: Play as Guest. Sign-in and leaderboards require internet.";
 
     private static readonly Color BackgroundColor = new Color(0.012f, 0.022f, 0.032f, 1f);
@@ -78,7 +91,13 @@ public class LoginGuestScreen : MonoBehaviour
         if (signUpOpenButton != null)
             signUpOpenButton.interactable = internetAvailable;
         if (loginPopup != null)
+        {
             loginPopup.submitButton.interactable = internetAvailable;
+            if (loginPopup.forgotPasswordButton != null)
+                loginPopup.forgotPasswordButton.interactable = internetAvailable;
+            if (loginPopup.resendVerificationButton != null)
+                loginPopup.resendVerificationButton.interactable = internetAvailable;
+        }
         if (signUpPopup != null)
             signUpPopup.submitButton.interactable = internetAvailable;
 
@@ -141,8 +160,8 @@ public class LoginGuestScreen : MonoBehaviour
             FontStyles.Normal, MutedTextColor, new Vector2(0f, -211f), new Vector2(PanelWidth - 80, 34),
             TextAlignmentOptions.Center);
 
-        loginPopup = CreatePopup(background.transform, "LoginPopup", "Login", "Login", false);
-        signUpPopup = CreatePopup(background.transform, "SignUpPopup", "Sign Up", "Create Account", true);
+        loginPopup = CreatePopup(background.transform, "LoginPopup", "Login", "Login", false, true);
+        signUpPopup = CreatePopup(background.transform, "SignUpPopup", "Sign Up", "Create Account", true, false);
         loginPopup.panel.SetActive(false);
         signUpPopup.panel.SetActive(false);
 
@@ -153,6 +172,8 @@ public class LoginGuestScreen : MonoBehaviour
         signUpOpenButton.onClick.AddListener(ShowSignUpPopup);
         guestButton.onClick.AddListener(authManager.OnGuestClicked);
         loginPopup.submitButton.onClick.AddListener(authManager.OnLoginClicked);
+        loginPopup.forgotPasswordButton.onClick.AddListener(authManager.OnForgotPasswordClicked);
+        loginPopup.resendVerificationButton.onClick.AddListener(authManager.OnResendVerificationClicked);
         signUpPopup.submitButton.onClick.AddListener(authManager.OnSignUpClicked);
         loginPopup.backButton.onClick.AddListener(ShowWelcomePanel);
         signUpPopup.backButton.onClick.AddListener(ShowWelcomePanel);
@@ -170,7 +191,7 @@ public class LoginGuestScreen : MonoBehaviour
     }
 
     private PopupControls CreatePopup(Transform parent, string panelName, string title, string submitLabel,
-        bool showPasswordHint)
+        bool showPasswordHint, bool showForgotPassword)
     {
         GameObject panel = CreatePanel(parent, panelName);
         CreateText(panel.transform, "Title", title, TitleFontSize, FontStyles.Bold, TextColor,
@@ -190,15 +211,29 @@ public class LoginGuestScreen : MonoBehaviour
             TextAlignmentOptions.Left);
         passwordHint.gameObject.SetActive(showPasswordHint);
 
+        Button forgotPasswordButton = showForgotPassword
+            ? CreateButton(panel.transform, "ForgotPasswordButton", "Forgot Password?",
+                new Vector2(ForgotPasswordButtonPositionX, AuthenticationActionsPositionY),
+                ForgotPasswordButtonWidth, ForgotPasswordButtonHeight, AuthenticationActionFontSize)
+            : null;
+        Button resendVerificationButton = showForgotPassword
+            ? CreateButton(panel.transform, "ResendVerificationButton", "Resend Verification",
+                new Vector2(ResendVerificationButtonPositionX, AuthenticationActionsPositionY),
+                ForgotPasswordButtonWidth, ForgotPasswordButtonHeight, AuthenticationActionFontSize)
+            : null;
+        float statusPositionY = showForgotPassword ? LoginStatusPositionY : SignUpStatusPositionY;
         TextMeshProUGUI status = CreateText(panel.transform, "StatusText", string.Empty, StatusFontSize,
-            FontStyles.Normal, MutedTextColor, new Vector2(0f, -91f), new Vector2(PanelWidth - 80, 30),
-            TextAlignmentOptions.Center);
+            FontStyles.Normal, MutedTextColor, new Vector2(0f, statusPositionY),
+            new Vector2(PanelWidth - 80, PopupStatusHeight), TextAlignmentOptions.Center);
+        float submitPositionY = showForgotPassword ? LoginSubmitPositionY : SignUpSubmitPositionY;
+        float backPositionY = showForgotPassword ? LoginBackPositionY : SignUpBackPositionY;
         Button submitButton = CreateButton(panel.transform, "SubmitButton", submitLabel,
-            new Vector2(0f, -151f), PopupButtonWidth, PopupButtonHeight);
+            new Vector2(0f, submitPositionY), PopupButtonWidth, PopupButtonHeight);
         Button backButton = CreateButton(panel.transform, "BackButton", "Back",
-            new Vector2(0f, -222f), PopupButtonWidth, PopupButtonHeight);
+            new Vector2(0f, backPositionY), PopupButtonWidth, PopupButtonHeight);
 
-        return new PopupControls(panel, emailField, passwordField, status, submitButton, backButton);
+        return new PopupControls(panel, emailField, passwordField, status, submitButton, backButton,
+            forgotPasswordButton, resendVerificationButton);
     }
 
     private void ConfigureWelcomeAuthentication(Button loginButton, Button signUpButton)
@@ -211,7 +246,8 @@ public class LoginGuestScreen : MonoBehaviour
     {
         OpenPopup(loginPopup);
         authManager.Configure(loginPopup.emailField, loginPopup.passwordField, loginPopup.statusText,
-            loginPopup.submitButton, null, guestButton, loginPopup.backButton, MainMenuSceneName);
+            loginPopup.submitButton, null, guestButton, loginPopup.backButton, MainMenuSceneName,
+            loginPopup.forgotPasswordButton, loginPopup.resendVerificationButton);
     }
 
     private void ShowSignUpPopup()
@@ -292,7 +328,7 @@ public class LoginGuestScreen : MonoBehaviour
     }
 
     private Button CreateButton(Transform parent, string objectName, string label, Vector2 position,
-        int width, int height)
+        int width, int height, int labelFontSize = ButtonFontSize)
     {
         GameObject buttonObject = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Button));
         buttonObject.transform.SetParent(parent, false);
@@ -317,7 +353,7 @@ public class LoginGuestScreen : MonoBehaviour
             fadeDuration = 0.12f
         };
 
-        CreateText(buttonObject.transform, "Label", label, ButtonFontSize, FontStyles.Bold,
+        CreateText(buttonObject.transform, "Label", label, labelFontSize, FontStyles.Bold,
             TextColor, Vector2.zero, Vector2.one, TextAlignmentOptions.Center, true);
         return button;
     }
@@ -364,9 +400,12 @@ public class LoginGuestScreen : MonoBehaviour
         public readonly TextMeshProUGUI statusText;
         public readonly Button submitButton;
         public readonly Button backButton;
+        public readonly Button forgotPasswordButton;
+        public readonly Button resendVerificationButton;
 
         public PopupControls(GameObject panel, TMP_InputField emailField, TMP_InputField passwordField,
-            TextMeshProUGUI statusText, Button submitButton, Button backButton)
+            TextMeshProUGUI statusText, Button submitButton, Button backButton, Button forgotPasswordButton,
+            Button resendVerificationButton)
         {
             this.panel = panel;
             this.emailField = emailField;
@@ -374,6 +413,8 @@ public class LoginGuestScreen : MonoBehaviour
             this.statusText = statusText;
             this.submitButton = submitButton;
             this.backButton = backButton;
+            this.forgotPasswordButton = forgotPasswordButton;
+            this.resendVerificationButton = resendVerificationButton;
         }
     }
 }
