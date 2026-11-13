@@ -4029,6 +4029,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         DespawnDendriticCellsForInfection(marker);
         marker.isRemoving = true;
         marker.animationElapsed = 0f;
+        DespawnInfectionThreatVisuals(marker);
         if (marker.dispatchButton != null)
             marker.dispatchButton.interactable = false;
         activeInfectionMarkers.Remove(marker);
