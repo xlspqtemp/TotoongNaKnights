@@ -14,6 +14,8 @@ internal static class LayerSelectionHUD
     private const string HudCanvasName = "HUDCanvas";
     private const string SelectorObjectName = "LayerSelectionButton";
     private const string ControlsObjectName = "SystemLayerButtons";
+    private const string SelectedLayerArrowObjectName = "SelectedLayerArrow";
+    private const string BracketedSelectedLayerArrowObjectName = "[SelectedLayerArrow]";
     private const string BuiltInFontName = "LegacyRuntime.ttf";
     private const string BankGothicResourcePath = "BankGothicMediumSDF";
     private const float LayerToggleHeight = 36f;
@@ -32,7 +34,7 @@ internal static class LayerSelectionHUD
     private static Button[] layerButtons;
     private static Image[] layerButtonBackgrounds;
     private static TextMeshProUGUI[] layerButtonLabels;
-    private static TextMeshProUGUI[] layerButtonArrowLabels;
+    private static TextMeshProUGUI selectedLayerArrow;
     private static TextMeshProUGUI[] layerButtonQteLabels;
     private static Image[] layerButtonInfoBackgrounds;
     private static Outline[] layerButtonOutlines;
@@ -57,7 +59,7 @@ internal static class LayerSelectionHUD
         layerButtons = null;
         layerButtonBackgrounds = null;
         layerButtonLabels = null;
-        layerButtonArrowLabels = null;
+        selectedLayerArrow = null;
         layerButtonQteLabels = null;
         layerButtonInfoBackgrounds = null;
         layerButtonOutlines = null;
@@ -65,6 +67,7 @@ internal static class LayerSelectionHUD
         if (scene.name != GameSceneName)
             return;
 
+        RemoveStaleSelectedLayerArrows(scene);
         GameObject canvasObject = GameObject.Find(HudCanvasName);
         Canvas canvas = canvasObject != null ? canvasObject.GetComponent<Canvas>() : null;
         if (canvas == null)
@@ -97,6 +100,30 @@ internal static class LayerSelectionHUD
         GameplayTutorial tutorial = canvas.GetComponent<GameplayTutorial>();
         if (tutorial == null)
             canvas.gameObject.AddComponent<GameplayTutorial>();
+    }
+
+    private static void RemoveStaleSelectedLayerArrows(Scene scene)
+    {
+        GameObject[] sceneObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+        for (int index = 0; index < sceneObjects.Length; index++)
+        {
+            GameObject sceneObject = sceneObjects[index];
+            if (sceneObject == null || !sceneObject.scene.IsValid() || sceneObject.scene != scene ||
+                !IsSelectedLayerArrowName(sceneObject.name))
+            {
+                continue;
+            }
+
+            Object.Destroy(sceneObject);
+        }
+    }
+
+    private static bool IsSelectedLayerArrowName(string objectName)
+    {
+        return objectName == SelectedLayerArrowObjectName || objectName.StartsWith(SelectedLayerArrowObjectName + "(") ||
+               objectName.StartsWith(SelectedLayerArrowObjectName + " (") || objectName == BracketedSelectedLayerArrowObjectName ||
+               objectName.StartsWith(BracketedSelectedLayerArrowObjectName + "(") ||
+               objectName.StartsWith(BracketedSelectedLayerArrowObjectName + " (");
     }
 
     private static RectTransform CreateLayerControls(Transform parent, RectTransform canvasRect, out RectTransform toggleRect)
@@ -149,7 +176,6 @@ internal static class LayerSelectionHUD
         layerButtons = new Button[labels.Length];
         layerButtonBackgrounds = new Image[labels.Length];
         layerButtonLabels = new TextMeshProUGUI[labels.Length];
-        layerButtonArrowLabels = new TextMeshProUGUI[labels.Length];
         layerButtonQteLabels = new TextMeshProUGUI[labels.Length];
         layerButtonInfoBackgrounds = new Image[labels.Length];
         layerButtonOutlines = new Outline[labels.Length];
@@ -197,14 +223,6 @@ internal static class LayerSelectionHUD
             infoButton.transition = Selectable.Transition.ColorTint;
             infoButton.colors = CreateButtonColors(infoBackground.color);
             CreateLabel("InfoIndicator", infoRect, "i", 14f, TextAlignmentOptions.Center);
-            TextMeshProUGUI selectionArrow = CreateLabel("SelectedLayerArrow", rowRect, string.Empty, 18f, TextAlignmentOptions.Center);
-            RectTransform arrowRect = selectionArrow.rectTransform;
-            arrowRect.anchorMin = new Vector2(1f, 0.5f);
-            arrowRect.anchorMax = new Vector2(1f, 0.5f);
-            arrowRect.pivot = new Vector2(1f, 0.5f);
-            arrowRect.sizeDelta = new Vector2(20f, 26f);
-            arrowRect.anchoredPosition = new Vector2(-2f, 0f);
-            layerButtonArrowLabels[index] = selectionArrow;
             layerButtonInfoBackgrounds[index] = infoBackground;
 
             GameObject tooltipObject = CreateTooltip(canvasRect, descriptions[index]);
@@ -215,6 +233,10 @@ internal static class LayerSelectionHUD
             layerButtonBackgrounds[index] = layerBackground;
             layerButtonOutlines[index] = layerOutline;
         }
+
+        RectTransform initialArrowRow = layerButtons[0].transform.parent as RectTransform;
+        selectedLayerArrow = CreateLabel(SelectedLayerArrowObjectName, initialArrowRow, ">", 18f, TextAlignmentOptions.Center);
+        ConfigureSelectedLayerArrowRect(selectedLayerArrow.rectTransform);
 
         rootObject.AddComponent<LayerEventGlowAnimator>();
         return rootRect;
@@ -317,6 +339,42 @@ internal static class LayerSelectionHUD
         label.text = value;
         label.raycastTarget = false;
         return label;
+    }
+
+    private static void ConfigureSelectedLayerArrowRect(RectTransform arrowRect)
+    {
+        arrowRect.anchorMin = new Vector2(1f, 0.5f);
+        arrowRect.anchorMax = new Vector2(1f, 0.5f);
+        arrowRect.pivot = new Vector2(1f, 0.5f);
+        arrowRect.sizeDelta = new Vector2(20f, 26f);
+        arrowRect.anchoredPosition = new Vector2(-2f, 0f);
+    }
+
+    private static void MoveSelectedLayerArrowToSelectedRow()
+    {
+        if (selectedLayerArrow == null || layerButtons == null)
+            return;
+
+        int selectedIndex = -1;
+        for (int index = 0; index < LayerNumbers.Length; index++)
+        {
+            if (LayerNumbers[index] == selectedLayer)
+            {
+                selectedIndex = index;
+                break;
+            }
+        }
+
+        if (selectedIndex < 0 || layerButtons[selectedIndex] == null)
+            return;
+
+        RectTransform targetRow = layerButtons[selectedIndex].transform.parent as RectTransform;
+        RectTransform arrowRect = selectedLayerArrow.rectTransform;
+        if (targetRow == null || arrowRect.parent == targetRow)
+            return;
+
+        arrowRect.SetParent(targetRow, false);
+        ConfigureSelectedLayerArrowRect(arrowRect);
     }
 
     private static void SelectLayer(int layerNumber)
@@ -431,24 +489,20 @@ internal static class LayerSelectionHUD
             if (layerButtonInfoBackgrounds != null && layerButtonInfoBackgrounds[index] != null)
                 layerButtonInfoBackgrounds[index].color = isSelected ? SelectedLayerRowColor : InfoButtonColor;
 
-            if (layerButtonArrowLabels != null && layerButtonArrowLabels[index] != null)
-            {
-                TextMeshProUGUI arrowLabel = layerButtonArrowLabels[index];
-                string indicator = isSelected ? "◀" : "i";
-                if (arrowLabel.text != indicator)
-                    arrowLabel.text = indicator;
-
-                Color indicatorColor = isSelected ? SelectedLayerTextColor : AccentColor;
-                indicatorColor.a = isSelected ? arrowAlpha : 1f;
-                arrowLabel.color = indicatorColor;
-            }
-
             outline.enabled = hasThreat;
             if (hasThreat)
             {
                 outline.effectColor = new Color(1f, 0.08f, 0.1f, 0.35f + warningWave * 0.62f);
                 outline.effectDistance = new Vector2(1.5f + warningWave * 2f, -1.5f - warningWave * 2f);
             }
+        }
+
+        if (selectedLayerArrow != null)
+        {
+            MoveSelectedLayerArrowToSelectedRow();
+            Color arrowColor = SelectedLayerTextColor;
+            arrowColor.a = arrowAlpha;
+            selectedLayerArrow.color = arrowColor;
         }
     }
 
