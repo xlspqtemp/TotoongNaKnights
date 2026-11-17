@@ -143,12 +143,14 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
             infection == null || infection.isRemoving || infection.infection == null)
             return false;
 
-        if (!IsViralTargetCompatible(batch, infection, out failureReason))
+        if (!IsTargetCompatible(batch, infection, out failureReason))
         {
             if (string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase))
                 batch.GroupLeader.GetComponent<KillerTCellVoiceLines>()?.PlayInvalidDeployment();
             else if (string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase))
                 batch.GroupLeader.GetComponent<BCellVoiceLines>()?.PlayInvalidDeployment();
+            else if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase))
+                batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayInvalidDeployment();
             return false;
         }
 
@@ -207,9 +209,19 @@ public sealed class LymphaticBatchSpawner : MonoBehaviour
         return false;
     }
 
-    private static bool IsViralTargetCompatible(LymphaticBatchGroup batch,
+    private static bool IsTargetCompatible(LymphaticBatchGroup batch,
         InfectionSpawner.InfectionMarker infection, out string failureReason)
     {
+        if (string.Equals(batch.UnitType, MacrophageUnitName, System.StringComparison.OrdinalIgnoreCase) &&
+            (infection.infection.pathogenType == InfectionPathogenType.Allergen ||
+             infection.infection.pathogenType == InfectionPathogenType.Parasite))
+        {
+            failureReason = infection.infection.pathogenType == InfectionPathogenType.Allergen
+                ? "Macrophages cannot target Allergens."
+                : "Macrophages cannot target Parasites.";
+            return false;
+        }
+
         bool isAdaptiveCell = string.Equals(batch.UnitType, TCellUnitName, System.StringComparison.OrdinalIgnoreCase) ||
             string.Equals(batch.UnitType, BCellUnitName, System.StringComparison.OrdinalIgnoreCase);
         if (!isAdaptiveCell || !InfectionSpawner.IsKnownViralTrainingPathogenName(batch.PathogenVariant))

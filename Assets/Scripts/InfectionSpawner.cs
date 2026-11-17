@@ -27,6 +27,9 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float FungalHealthMultiplier = 1.25f;
     private const float BreachedBarrierPathogenMultiplier = 1.5f;
     private const float PathogenSpawnNavMeshSampleRadius = 1.25f;
+    private const float PathogenVisualFallbackNavMeshSampleRadius = 25f;
+    private const float PathogenVisualGroundRaycastHeight = 25f;
+    private const float PathogenVisualGroundRaycastDistance = 100f;
     private const float MinimumPathogenSpawnSeparation = 1.5f;
     private const int PathogenSpawnSearchAttempts = 32;
     private const float PathogenSpawnSearchAngleStep = 2.39996323f;
@@ -38,6 +41,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float SquadOffsetAngleStep = 2.39996323f;
     private const string DendriticDestinationObjectName = "Dendritic Infection Destination";
     private const string DendriticAnimationStateName = "Scene";
+    private const string InfectionDeploymentPromptText = "Select an infection to deploy to.";
     private const float DendriticContainmentOffset = 1.5f;
     private const float DendriticContainmentMinimumDistance = 1f;
     private const float DendriticContainmentMaximumDistance = 2f;
@@ -101,6 +105,11 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float NormalDifficultyWbcHp = 100f;
     private const float NormalDifficultyWbcAttack = 10f;
     private const float MacrophageAttackRange = 2f;
+    private const int CombatApproachSampleCount = 8;
+    private const float CombatApproachDistanceMultiplier = 0.8f;
+    private const float CombatApproachSampleRadiusMultiplier = 2f;
+    private const float MinimumCombatApproachSampleRadius = 0.5f;
+    private const float MinimumCombatApproachStandoffDistance = 0.1f;
     private const float CombatAgentRadiusPadding = 0.75f;
     private const float NeutrophilBaseDamage = 10f;
     private const float EosinophilBaseDamage = 15f;
@@ -315,6 +324,7 @@ public sealed class InfectionSpawner : MonoBehaviour
     private int idleSquadDeploymentIndex;
     private bool awaitingSquadDestination;
     private bool awaitingInfectionTargetSelection;
+    private bool awaitingBatchTargetSelection;
     private bool promptFadingOut;
     private Camera gameplayCamera;
 
@@ -1024,6 +1034,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         DifficultyStats stats = DifficultySettings.CurrentStats;
         Debug.Log($"Difficulty: {stats.difficultyName} | wbcHp={stats.wbcHp:0.##} | wbcAttack={stats.wbcAttack:0.##} | bacteriaHp={stats.bacteriaHp:0.##} | virusHp={stats.virusHp:0.##} | bacteriaAttack={stats.bacteriaAttack:0.##} | virusAttack={stats.virusAttack:0.##} | attackIntervalSeconds={stats.attackIntervalSeconds:0.##} | wbcDamageMultiplierVsBacteria={stats.wbcDamageMultiplierVsBacteria:0.##} | wbcDamageMultiplierVsVirus={stats.wbcDamageMultiplierVsVirus:0.##}", this);
         CreateAdaptiveResponsePopup();
+        CreateSquadPromptBanner();
         EnsurePendingInfectionsPanelSubscription();
         if (dayCounter == null)
             Debug.LogWarning("[InfectionSpawner] DayCounterUI is missing; timed infection spawning is disabled.", this);
@@ -1255,6 +1266,45 @@ public sealed class InfectionSpawner : MonoBehaviour
             wbcHudRoot.SetActive(isVisible);
     }
 
+    /// <summary>Shows or hides the persistent infection-deployment prompt for a selected unit batch.</summary>
+    /// <param name="isAwaitingTargetSelection">Whether a ready batch is waiting for an infection target.</param>
+    public void SetBatchDeploymentTargetSelectionPrompt(bool isAwaitingTargetSelection)
+    {
+        if (awaitingBatchTargetSelection == isAwaitingTargetSelection)
+            return;
+
+        awaitingBatchTargetSelection = isAwaitingTargetSelection;
+        if (awaitingBatchTargetSelection)
+        {
+            if (promptBannerLabel != null)
+                promptBannerLabel.text = InfectionDeploymentPromptText;
+            if (promptBannerObject == null)
+                CreateSquadPromptBanner();
+            ShowSquadPrompt();
+            return;
+        }
+
+        if (awaitingInfectionTargetSelection)
+        {
+            if (promptBannerLabel != null)
+                promptBannerLabel.text = InfectionDeploymentPromptText;
+            if (promptBannerObject != null && !promptBannerObject.activeSelf)
+                ShowSquadPrompt();
+            return;
+        }
+
+        if (awaitingSquadDestination)
+        {
+            if (promptBannerLabel != null)
+                promptBannerLabel.text = "Select a destination on the map or an infection to send your WBC squad.";
+            if (promptBannerObject != null && !promptBannerObject.activeSelf)
+                ShowSquadPrompt();
+            return;
+        }
+
+        FadeOutSquadPrompt();
+    }
+
     private void CreateWbcSquadHud()
     {
         if (hudCanvas == null || !(hudCanvas.transform is RectTransform canvasRect))
@@ -1415,7 +1465,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         promptBannerCanvasGroup.blocksRaycasts = false;
 
         promptBannerLabel = CreateSquadHudText("WBC Squad Destination Prompt Text", bannerRect,
-            "Click an infection to send your squad.", 18f, FontStyles.Bold, Color.white);
+            InfectionDeploymentPromptText, 18f, FontStyles.Bold, Color.white);
         promptBannerLabel.alignment = TextAlignmentOptions.Center;
         promptBannerLabel.textWrappingMode = TextWrappingModes.Normal;
         promptBannerLabel.rectTransform.anchorMin = Vector2.zero;
@@ -1485,7 +1535,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void FadeOutSquadPrompt()
     {
-        if (promptBannerObject == null || promptBannerCanvasGroup == null || !promptBannerObject.activeSelf)
+        if (awaitingBatchTargetSelection || promptBannerObject == null || promptBannerCanvasGroup == null || !promptBannerObject.activeSelf)
             return;
 
         promptAutoFadeRemaining = 0f;
@@ -1503,7 +1553,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             awaitingInfectionTargetSelection = false;
 
         float gameplayDeltaTime = GameplaySpeed.DeltaTime;
-        if (awaitingSquadDestination && !awaitingInfectionTargetSelection && !promptFadingOut && promptAutoFadeSeconds > 0f)
+        if (awaitingSquadDestination && !awaitingInfectionTargetSelection && !awaitingBatchTargetSelection &&
+            !promptFadingOut && promptAutoFadeSeconds > 0f)
         {
             promptAutoFadeRemaining = Mathf.Max(0f, promptAutoFadeRemaining - gameplayDeltaTime);
             if (promptAutoFadeRemaining <= 0f)
@@ -1890,7 +1941,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             awaitingInfectionTargetSelection = !useLegacySelectFirst;
             if (promptBannerLabel != null)
                 promptBannerLabel.text = awaitingInfectionTargetSelection
-                    ? "Click an infection to send your squad."
+                    ? InfectionDeploymentPromptText
                     : "Select a destination on the map or an infection to send your WBC squad.";
             ShowSquadPrompt();
         }
@@ -2254,15 +2305,33 @@ public sealed class InfectionSpawner : MonoBehaviour
     private bool TryGetDendriticContainmentPosition(InfectionMarker marker, NavMeshAgent agent, out Vector3 spawnPosition)
     {
         Vector3 pathogenPosition = GetInfectionVisualCenter(marker);
+        NavMeshAgent groundAgent = bacteriaPrefab != null ? bacteriaPrefab.GetComponent<NavMeshAgent>() : null;
+        if (groundAgent == null)
+            groundAgent = agent;
+
         NavMeshQueryFilter filter = new NavMeshQueryFilter
         {
-            agentTypeID = agent.agentTypeID,
-            areaMask = agent.areaMask
+            agentTypeID = groundAgent.agentTypeID,
+            areaMask = groundAgent.areaMask
         };
 
         bool hasGroundAnchor = NavMesh.SamplePosition(pathogenPosition, out NavMeshHit groundHit,
             Mathf.Max(dispatchNavMeshSampleRadius, DendriticContainmentNavMeshSampleDistance), filter);
-        Vector3 groundAnchor = hasGroundAnchor ? groundHit.position : pathogenPosition;
+        if (!hasGroundAnchor && TryFindPathogenGroundPosition(pathogenPosition, filter, out Vector3 raycastGroundPosition))
+        {
+            spawnPosition = raycastGroundPosition;
+            Debug.LogWarning("[InfectionSpawner] No nearby pathogen NavMesh was found for the contained Dendritic Cell; grounding it on the nearest floor surface with navigation disabled.", this);
+            return true;
+        }
+
+        if (!hasGroundAnchor)
+        {
+            spawnPosition = Vector3.zero;
+            Debug.LogWarning("[InfectionSpawner] No ground surface was found for the contained Dendritic Cell; skipping its spawn.", this);
+            return false;
+        }
+
+        Vector3 groundAnchor = groundHit.position;
         float bestScore = float.PositiveInfinity;
         spawnPosition = Vector3.zero;
         bool foundPosition = false;
@@ -2296,12 +2365,8 @@ public sealed class InfectionSpawner : MonoBehaviour
         if (foundPosition)
             return true;
 
-        Vector3 fallbackDirection = Vector3.right;
-        spawnPosition = groundAnchor + fallbackDirection * DendriticContainmentOffset;
-        if (!hasGroundAnchor)
-            Debug.LogWarning("[InfectionSpawner] No nearby NavMesh was found for the contained Dendritic Cell; spawning beside the infection anchor without NavMesh attachment.", this);
-        else
-            Debug.LogWarning("[InfectionSpawner] No NavMesh point was available 1–2 units from the contained pathogen cluster; spawning at the nearest ground anchor offset.", this);
+        spawnPosition = groundAnchor;
+        Debug.LogWarning("[InfectionSpawner] No NavMesh point was available beside the contained pathogen cluster; spawning at the sampled NavMesh anchor instead.", this);
         return true;
     }
 
@@ -2320,10 +2385,7 @@ public sealed class InfectionSpawner : MonoBehaviour
         Vector3 pathogenPosition = GetInfectionVisualCenter(marker);
         Vector3 spawnPosition;
         if (!TryGetDendriticContainmentPosition(marker, prefabAgent, out spawnPosition))
-        {
-            Debug.LogWarning("[InfectionSpawner] Could not find a NavMesh position 1–2 units from the contained pathogen cluster.", this);
             return;
-        }
 
         Quaternion spawnRotation = GetDendriticSpawnRotation(dendriticPrefab, pathogenPosition - spawnPosition);
         GameObject dendriticCell = Instantiate(dendriticPrefab, spawnPosition, spawnRotation);
@@ -2748,6 +2810,7 @@ public sealed class InfectionSpawner : MonoBehaviour
                     LogWbcSquadMessage($"WBC squad arrived at {squad.infectionTarget.infection.displayName}.", ConsoleLogUI.LogType.Success);
                     if (!squad.infectionTarget.isTagged && squad.infectionTarget.infection.pathogenType != InfectionPathogenType.Allergen)
                         BeginInfectionResolution(squad.infectionTarget, null, GetWbcVoiceLines(squad.units));
+
                     if (squad.infectionTarget.isContained &&
                         (squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Viral ||
                          squad.infectionTarget.infection.pathogenType == InfectionPathogenType.Parasite))
@@ -2925,6 +2988,7 @@ public sealed class InfectionSpawner : MonoBehaviour
             bool isBCellBatch = string.Equals(batch.UnitType, BCellUnitName, StringComparison.OrdinalIgnoreCase);
             bool isParasite = marker.infection.pathogenType == InfectionPathogenType.Parasite;
             bool isEosinophilParasiteBatch = isParasite && IsEosinophilResponder(batch);
+            bool isMacrophageBatch = string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase);
             if (marker.isContained && !isEosinophilParasiteBatch)
                 continue;
 
@@ -2937,7 +3001,9 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
             }
 
-            if (marker.infection.pathogenType == InfectionPathogenType.Viral)
+            bool isViralBatchTarget = marker.infection.pathogenType == InfectionPathogenType.Viral;
+            if (isViralBatchTarget &&
+                string.Equals(batch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase))
             {
                 BeginInfectionResolution(marker, batch);
                 continue;
@@ -2952,7 +3018,8 @@ public sealed class InfectionSpawner : MonoBehaviour
             if (marker.isTagged && !isEosinophilParasiteBatch)
                 continue;
 
-            bool usesCombatClear = marker.infection.pathogenType == InfectionPathogenType.Allergen || isEosinophilParasiteBatch;
+            bool usesCombatClear = marker.infection.pathogenType == InfectionPathogenType.Allergen ||
+                isEosinophilParasiteBatch || isViralBatchTarget || isMacrophageBatch;
             if (!usesCombatClear)
                 BeginInfectionResolution(marker, batch);
 
@@ -2970,7 +3037,6 @@ public sealed class InfectionSpawner : MonoBehaviour
                 continue;
             }
 
-            bool isMacrophageBatch = string.Equals(batch.UnitType, "Macrophage", StringComparison.OrdinalIgnoreCase);
             float attackRange = isMacrophageBatch
                 ? Mathf.Max(combatMeleeRange, MacrophageAttackRange)
                 : combatMeleeRange;
@@ -3025,11 +3091,37 @@ public sealed class InfectionSpawner : MonoBehaviour
                 float effectiveAttackRange = GetEffectiveCombatMeleeRange(member, nearestPathogen, attackRange);
                 if (distance > effectiveAttackRange)
                 {
-                    if (agent != null && agent.enabled && agent.isOnNavMesh && !agent.pathPending &&
-                        (!agent.hasPath || (agent.destination - nearestPathogen.transform.position).sqrMagnitude > 0.25f))
+                    if (agent != null && agent.enabled && agent.isOnNavMesh && !agent.pathPending)
                     {
-                        agent.isStopped = false;
-                        agent.SetDestination(nearestPathogen.transform.position);
+                        bool shouldUpdateDestination = !agent.hasPath;
+                        Vector3 combatDestination = nearestPathogen.transform.position;
+                        if (isViralBatchTarget)
+                        {
+                            float currentDestinationDistance = agent.hasPath
+                                ? Vector3.Distance(agent.destination, nearestPathogen.transform.position)
+                                : 0f;
+                            float minimumStandoff = Mathf.Max(MinimumCombatApproachStandoffDistance, agent.radius * 0.5f);
+                            shouldUpdateDestination |= currentDestinationDistance <= minimumStandoff ||
+                                currentDestinationDistance > effectiveAttackRange ||
+                                agent.remainingDistance <= Mathf.Max(agent.stoppingDistance, MinimumCombatApproachStandoffDistance);
+
+                            if (shouldUpdateDestination && !TryGetCombatApproachPosition(agent, member.transform.position,
+                                nearestPathogen.transform.position, effectiveAttackRange, out combatDestination))
+                            {
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            shouldUpdateDestination |= (agent.destination - nearestPathogen.transform.position).sqrMagnitude > 0.25f;
+                        }
+
+                        if (shouldUpdateDestination &&
+                            (!agent.hasPath || (agent.destination - combatDestination).sqrMagnitude > 0.25f))
+                        {
+                            agent.isStopped = false;
+                            agent.SetDestination(combatDestination);
+                        }
                     }
                     continue;
                 }
@@ -3470,6 +3562,55 @@ public sealed class InfectionSpawner : MonoBehaviour
             ? agentSeparation + CombatAgentRadiusPadding
             : configuredRange;
         return Mathf.Max(configuredRange, safeReach);
+    }
+
+    private static bool TryGetCombatApproachPosition(NavMeshAgent agent, Vector3 attackerPosition,
+        Vector3 targetPosition, float effectiveAttackRange, out Vector3 approachPosition)
+    {
+        approachPosition = Vector3.zero;
+        if (agent == null)
+            return false;
+
+        Vector3 baseDirection = attackerPosition - targetPosition;
+        baseDirection.y = 0f;
+        if (baseDirection.sqrMagnitude <= MinimumCombatApproachStandoffDistance * MinimumCombatApproachStandoffDistance)
+            baseDirection = Vector3.forward;
+        else
+            baseDirection.Normalize();
+
+        float approachDistance = Mathf.Max(MinimumCombatApproachStandoffDistance,
+            effectiveAttackRange * CombatApproachDistanceMultiplier);
+        float sampleRadius = Mathf.Max(MinimumCombatApproachSampleRadius,
+            agent.radius * CombatApproachSampleRadiusMultiplier);
+        NavMeshQueryFilter filter = new NavMeshQueryFilter
+        {
+            agentTypeID = agent.agentTypeID,
+            areaMask = agent.areaMask
+        };
+
+        float bestScore = float.PositiveInfinity;
+        bool foundApproach = false;
+        for (int sampleIndex = 0; sampleIndex < CombatApproachSampleCount; sampleIndex++)
+        {
+            float angle = 360f * sampleIndex / CombatApproachSampleCount;
+            Vector3 direction = Quaternion.Euler(0f, angle, 0f) * baseDirection;
+            Vector3 requestedPosition = targetPosition + direction * approachDistance;
+            if (!NavMesh.SamplePosition(requestedPosition, out NavMeshHit hit, sampleRadius, filter) ||
+                Vector3.Distance(hit.position, targetPosition) > effectiveAttackRange)
+            {
+                continue;
+            }
+
+            float score = (hit.position - attackerPosition).sqrMagnitude;
+            if (score >= bestScore)
+                continue;
+
+            bestScore = score;
+            approachPosition = hit.position;
+            foundApproach = true;
+        }
+
+        return foundApproach;
     }
 
     private bool TryApplyCombatHit(GameObject attacker, GameObject target, Health attackerHealth, float damage, float attackInterval)
@@ -4676,28 +4817,36 @@ public sealed class InfectionSpawner : MonoBehaviour
 
             GameObject visual = Instantiate(bacteriaPrefab, spawnHit.position, Quaternion.identity);
             PathogenWanderController wanderController = visual.GetComponent<PathogenWanderController>();
-            if (wanderController != null && !wanderController.Initialize(marker.infection.pathogenType, spawnHit.position))
-            {
-                Debug.LogWarning($"[InfectionSpawner] Could not attach {marker.infection.displayName} threat visual {index + 1} to the NavMesh; removing the invalid visual.", visual);
-                Destroy(visual);
-                continue;
-            }
+            bool canNavigate = wanderController == null ||
+                wanderController.Initialize(marker.infection.pathogenType, spawnHit.position);
 
             BacteriaAgent bacteriaAgent = visual.GetComponentInChildren<BacteriaAgent>(true);
             if (bacteriaAgent != null)
                 bacteriaAgent.enabled = false;
 
             NavMeshAgent navMeshAgent = visual.GetComponentInChildren<NavMeshAgent>(true);
-            if (navMeshAgent != null)
+            if (!canNavigate)
+            {
+                if (navMeshAgent != null)
+                    navMeshAgent.enabled = false;
+                if (wanderController != null)
+                    wanderController.enabled = false;
+                Debug.LogWarning($"[InfectionSpawner] {marker.infection.displayName} threat visual {index + 1} was placed on the ground without a compatible NavMesh; leaving it stationary.", visual);
+            }
+            else if (navMeshAgent != null)
             {
                 navMeshAgent.enabled = true;
                 if (!navMeshAgent.isOnNavMesh && !navMeshAgent.Warp(spawnHit.position))
                 {
-                    Debug.LogWarning($"[InfectionSpawner] Could not warp {marker.infection.displayName} threat visual {index + 1} onto its sampled NavMesh position; removing the invalid visual.", visual);
-                    Destroy(visual);
-                    continue;
+                    navMeshAgent.enabled = false;
+                    if (wanderController != null)
+                        wanderController.enabled = false;
+                    Debug.LogWarning($"[InfectionSpawner] Could not attach {marker.infection.displayName} threat visual {index + 1} to its NavMesh; keeping the grounded model stationary.", visual);
                 }
-                navMeshAgent.isStopped = false;
+                else
+                {
+                    navMeshAgent.isStopped = false;
+                }
             }
 
             Collider[] colliders = visual.GetComponentsInChildren<Collider>(true);
@@ -4755,8 +4904,72 @@ public sealed class InfectionSpawner : MonoBehaviour
                 return true;
         }
 
+        for (int attempt = 0; attempt < PathogenSpawnSearchAttempts; attempt++)
+        {
+            Vector3 requestedPosition;
+            if (attempt == 0)
+            {
+                Vector2 initialOffset = UnityEngine.Random.insideUnitCircle * threatVisualClusterRadius;
+                requestedPosition = marker.worldPosition + new Vector3(initialOffset.x, 0f, initialOffset.y);
+            }
+            else
+            {
+                float ring = Mathf.Ceil(attempt / 8f);
+                float radius = Mathf.Max(threatVisualClusterRadius, MinimumPathogenVisualSpawnSeparation)
+                    + (ring - 1f) * MinimumPathogenVisualSpawnSeparation;
+                float angle = (visualIndex * 0.61803399f + attempt) * PathogenSpawnSearchAngleStep;
+                requestedPosition = marker.worldPosition + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+            }
+
+            if (!TryFindPathogenGroundPosition(requestedPosition, spawnFilter, out Vector3 groundPosition) ||
+                !IsPathogenVisualSpawnPositionAvailable(groundPosition, marker))
+            {
+                continue;
+            }
+
+            spawnHit = new NavMeshHit { position = groundPosition };
+            return true;
+        }
+
         spawnHit = default;
         return false;
+    }
+
+    private bool TryFindPathogenGroundPosition(
+        Vector3 requestedPosition,
+        NavMeshQueryFilter spawnFilter,
+        out Vector3 groundPosition)
+    {
+        if (NavMesh.SamplePosition(requestedPosition, out NavMeshHit navMeshHit,
+            PathogenVisualFallbackNavMeshSampleRadius, spawnFilter))
+        {
+            groundPosition = navMeshHit.position;
+            return true;
+        }
+
+        Vector3 rayOrigin = requestedPosition + Vector3.up * PathogenVisualGroundRaycastHeight;
+        RaycastHit[] groundHits = Physics.RaycastAll(rayOrigin, Vector3.down,
+            PathogenVisualGroundRaycastDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+        float nearestGroundHitDistance = float.PositiveInfinity;
+        groundPosition = Vector3.zero;
+        foreach (RaycastHit groundHit in groundHits)
+        {
+            Collider groundCollider = groundHit.collider;
+            if (groundCollider == null || groundCollider.GetComponentInParent<Health>() != null ||
+                groundCollider.GetComponentInParent<NavMeshAgent>() != null ||
+                groundCollider.GetComponentInParent<SpriteRenderer>() != null)
+            {
+                continue;
+            }
+
+            if (groundHit.distance >= nearestGroundHitDistance)
+                continue;
+
+            nearestGroundHitDistance = groundHit.distance;
+            groundPosition = groundHit.point;
+        }
+
+        return !float.IsPositiveInfinity(nearestGroundHitDistance);
     }
 
     private bool IsPathogenVisualSpawnPositionAvailable(Vector3 candidatePosition, InfectionMarker markerBeingSpawned)

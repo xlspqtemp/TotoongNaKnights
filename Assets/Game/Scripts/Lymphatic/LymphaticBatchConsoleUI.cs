@@ -14,6 +14,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const int NeutrophilVariantCount = 3;
     private const string TCellUnitName = "T Cell";
     private const string BCellUnitName = "B Cell";
+    private const string MacrophageUnitName = "Macrophage";
     private const string NeutrophilUnitName = "Neutrophil";
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
@@ -152,6 +153,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             cameraScript.ClearFollowTarget();
         isFollowingBatch = false;
         followedBatchId = -1;
+        if (infectionSpawner != null)
+            infectionSpawner.SetBatchDeploymentTargetSelectionPrompt(false);
     }
 
     /// <summary>Initializes the panel with the active HUD canvas and lymphatic batch manager.</summary>
@@ -663,6 +666,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         selectedNeutrophilVariantName = null;
         awaitingTargetSelection = false;
         selectedBatchId = -1;
+        if (infectionSpawner != null)
+            infectionSpawner.SetBatchDeploymentTargetSelectionPrompt(false);
         if (isFollowingBatch && cameraScript != null)
             cameraScript.ClearFollowTarget();
         isFollowingBatch = false;
@@ -733,6 +738,11 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             awaitingTargetSelection = false;
         }
 
+        bool isAwaitingDeploymentTarget = layerAvailable && awaitingTargetSelection && selectedBatch != null &&
+            selectedBatch.Status == LymphaticBatchGroup.BatchStatus.Ready;
+        if (infectionSpawner != null)
+            infectionSpawner.SetBatchDeploymentTargetSelectionPrompt(isAwaitingDeploymentTarget);
+
         followButton.interactable = selectedBatch != null && selectedBatch.HasEnteredCirculatorySystem;
         abortButton.interactable = selectedBatch != null && selectedBatch.Status != LymphaticBatchGroup.BatchStatus.Ready;
         destroyButton.interactable = selectedBatch != null;
@@ -781,6 +791,18 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         blockReason = null;
         if (batch == null || marker == null || marker.infection == null)
             return true;
+
+        bool isMacrophageBatch = string.Equals(batch.UnitType, MacrophageUnitName, StringComparison.OrdinalIgnoreCase);
+        if (isMacrophageBatch &&
+            (marker.infection.pathogenType == InfectionPathogenType.Allergen ||
+             marker.infection.pathogenType == InfectionPathogenType.Parasite))
+        {
+            blockReason = marker.infection.pathogenType == InfectionPathogenType.Allergen
+                ? "[Deployment] Blocked: Macrophages cannot target Allergens."
+                : "[Deployment] Blocked: Macrophages cannot target Parasites.";
+            batch.GroupLeader.GetComponent<MacrophageVoiceLines>()?.PlayInvalidDeployment();
+            return false;
+        }
 
         bool isAdaptiveCell = string.Equals(batch.UnitType, TCellUnitName, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(batch.UnitType, BCellUnitName, StringComparison.OrdinalIgnoreCase);
