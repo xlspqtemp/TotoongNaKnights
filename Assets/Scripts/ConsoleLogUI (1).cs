@@ -66,7 +66,7 @@ public class ConsoleLogUI : MonoBehaviour
     private static readonly Color TabNormalColor = new Color(0.035f, 0.075f, 0.09f, 0.98f);
     private static readonly Color TabSelectedColor = new Color(0.06f, 0.32f, 0.36f, 1f);
     private static readonly Color TabTextColor = new Color(0.75f, 0.86f, 0.89f, 1f);
-    private static readonly string[] TabLabels = { "Routines", "Random Events", "Dev Mode" };
+    private static readonly string[] TabLabels = { "Routines", "Random Events" };
 
     private void Awake()
     {

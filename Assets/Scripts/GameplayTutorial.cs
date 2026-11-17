@@ -5,7 +5,6 @@ using UnityEngine.UI;
 /// <summary>Shows a replayable, skippable introduction to the current gameplay controls.</summary>
 public sealed class GameplayTutorial : MonoBehaviour
 {
-    private const string TutorialSeenKey = "tutorialSeen";
     private const string BankGothicResourcePath = "BankGothicMediumSDF";
     private const string BuiltInSpritePath = "UI/Skin/UISprite.psd";
     private const float TutorialPanelWidth = 1120f;
@@ -73,7 +72,9 @@ public sealed class GameplayTutorial : MonoBehaviour
 
         pauseController = Object.FindFirstObjectByType<PauseController>();
         CreateReplayButtons();
-        if (PlayerPrefs.GetInt(TutorialSeenKey, 0) == 0 && FindFirstObjectByType<TutorialManager>() == null)
+        if (!LeaderboardManager.HasSeenTutorialForActiveSession() &&
+            FindFirstObjectByType<TutorialManager>() == null &&
+            FindFirstObjectByType<FirstDayTutorial>() == null)
             OpenTutorial();
     }
 
@@ -306,8 +307,7 @@ public sealed class GameplayTutorial : MonoBehaviour
         if (!isOpen)
             return;
 
-        PlayerPrefs.SetInt(TutorialSeenKey, 1);
-        PlayerPrefs.Save();
+        LeaderboardManager.MarkTutorialSeenForActiveSession();
         isOpen = false;
         overlayRoot.SetActive(false);
         if (pauseController == null)

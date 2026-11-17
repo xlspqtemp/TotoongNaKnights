@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using LootLocker.Requests;
 using TMPro;
 using UnityEngine;
@@ -37,6 +39,7 @@ public class AuthManager : MonoBehaviour
     private const string VerificationResendSuccessMessage = "LootLocker accepted the verification-email request. Check your inbox and Spam folders.";
     private const string VerificationResendRateLimitedMessage = "LootLocker is limiting verification emails. Wait before retrying; check Spam or contact LootLocker support.";
     private const string VerificationResendFailedMessage = "LootLocker couldn't request a verification email. Check your connection and try again later.";
+    private const string NewAccountTutorialPendingKeyPrefix = "NewAccountTutorialPending_";
     private const string VerificationCooldownKey = "LootLockerExplicitVerificationResendCooldownUtcTicksV2";
     private const int VerificationResendCooldownSeconds = 900;
     private const float SecondsPerMinute = 60f;
@@ -155,6 +158,9 @@ public class AuthManager : MonoBehaviour
                 FinishRequest(failureMessage);
                 return;
             }
+
+            PlayerPrefs.SetInt(GetNewAccountTutorialPendingKey(email), 1);
+            PlayerPrefs.Save();
 
             if (!string.IsNullOrWhiteSpace(response.VerifiedAt))
             {
@@ -382,11 +388,35 @@ public class AuthManager : MonoBehaviour
 
             ClearFailedLoginAttempts(email);
             LeaderboardManager.ClearLocalGuestSession();
+            string playerUlid = response.SessionResponse != null
+                ? response.SessionResponse.player_ulid
+                : string.Empty;
+            string pendingTutorialKey = GetNewAccountTutorialPendingKey(email);
+            if (!string.IsNullOrWhiteSpace(playerUlid) && PlayerPrefs.GetInt(pendingTutorialKey, 0) != 0)
+            {
+                LeaderboardManager.ResetTutorialSeenForPlayer(playerUlid);
+                PlayerPrefs.DeleteKey(pendingTutorialKey);
+                PlayerPrefs.Save();
+            }
+
             LeaderboardManager.EnsureWhiteLabelDisplayName(email,
-                response.SessionResponse != null ? response.SessionResponse.player_ulid : string.Empty,
+                playerUlid,
                 response.SessionResponse != null ? response.SessionResponse.player_name : string.Empty);
             FinishAndLoadMainMenu("Login successful.");
         });
+    }
+
+    private static string GetNewAccountTutorialPendingKey(string email)
+    {
+        string normalizedEmail = (email ?? string.Empty).Trim().ToLowerInvariant();
+        using (SHA256 sha256 = SHA256.Create())
+        {
+            byte[] hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(normalizedEmail));
+            StringBuilder keyBuilder = new StringBuilder(NewAccountTutorialPendingKeyPrefix, 64);
+            for (int index = 0; index < hash.Length; index++)
+                keyBuilder.Append(hash[index].ToString("x2"));
+            return keyBuilder.ToString();
+        }
     }
 
     private int GetCurrentEmailLockoutSecondsRemaining()

@@ -10,7 +10,6 @@ public sealed class FirstDayTutorial : MonoBehaviour
 {
     private const string GameplaySceneName = "Game";
     private const string HudCanvasName = "HUDCanvas";
-    private const string TutorialSeenKey = "tutorialSeen";
     private const string RuntimeObjectName = "FirstDayTutorialRuntime";
     private const string DayCounterTargetName = "DayCounterPanel";
     private const string FastForwardTargetName = "FastForwardButton";
@@ -36,6 +35,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
     private const float PanelMaximumHeight = 242f;
     private const float ScreenEdgeMargin = 20f;
     private const float TargetGap = 18f;
+    private const float MinimumIntelTutorialPanelWidth = 240f;
     private const float PulseSpeed = 3.5f;
 
     private static readonly Color DimColor = new Color(0.28f, 0.30f, 0.32f, 0.58f);
@@ -262,7 +262,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
             "Guest",
             System.StringComparison.OrdinalIgnoreCase);
 
-        if (!isGuest && PlayerPrefs.GetInt(TutorialSeenKey, 0) != 0)
+        if (!isGuest && LeaderboardManager.HasSeenTutorialForActiveSession())
             return;
 
         StartCoroutine(BeginTutorial());
@@ -1360,8 +1360,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         if (!tutorialIsOpen)
             return;
 
-        PlayerPrefs.SetInt(TutorialSeenKey, 1);
-        PlayerPrefs.Save();
+        LeaderboardManager.MarkTutorialSeenForActiveSession();
         RestoreTutorialState();
     }
 
@@ -1370,8 +1369,7 @@ public sealed class FirstDayTutorial : MonoBehaviour
         if (!tutorialIsOpen)
             return;
 
-        PlayerPrefs.SetInt(TutorialSeenKey, 1);
-        PlayerPrefs.Save();
+        LeaderboardManager.MarkTutorialSeenForActiveSession();
         suppressTutorialOnNextGameLoad = true;
         RestoreTutorialState();
 
@@ -1546,6 +1544,26 @@ public sealed class FirstDayTutorial : MonoBehaviour
         {
             SetPanelCenter(new Vector2(Screen.width * 0.5f, Screen.height * 0.5f));
             return;
+        }
+
+        if (currentStepIndex == 15 && infectionIntelPopup != null && infectionIntelPopup.IsOpen)
+        {
+            float leftAvailableWidth = targetRect.xMin - TargetGap - ScreenEdgeMargin;
+            float rightAvailableWidth = Screen.width - ScreenEdgeMargin - targetRect.xMax - TargetGap;
+            bool placeToRight = rightAvailableWidth >= leftAvailableWidth;
+            float availableWidth = placeToRight ? rightAvailableWidth : leftAvailableWidth;
+            if (availableWidth >= MinimumIntelTutorialPanelWidth)
+            {
+                panelWidth = Mathf.Min(PanelMaximumWidth, availableWidth);
+                panelRect.sizeDelta = new Vector2(panelWidth, panelHeight);
+                float panelX = placeToRight
+                    ? targetRect.xMax + TargetGap + panelWidth * 0.5f
+                    : targetRect.xMin - TargetGap - panelWidth * 0.5f;
+                float panelY = ClampPanelCenterToScreen(
+                    new Vector2(panelX, targetRect.center.y), panelWidth, panelHeight).y;
+                SetPanelCenter(new Vector2(panelX, panelY));
+                return;
+            }
         }
 
         Vector2 targetCenter = targetRect.center;

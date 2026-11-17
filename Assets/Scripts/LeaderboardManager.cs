@@ -26,6 +26,9 @@ public class LeaderboardManager : MonoBehaviour
     private const string MissingDifficultyLabel = "-";
     private const string LegacyDifficultyLabel = "Legacy";
     private const string LocalGuestSessionKey = "localGuestSessionActive";
+    private const string TutorialSeenPreferenceKey = "tutorialSeen";
+    private const string TutorialSeenPlayerKeyPrefix = "tutorialSeenPlayer_";
+    private const string WhiteLabelPlatformName = "WhiteLabel";
 
     [Serializable]
     private sealed class ScoreMetadata
@@ -233,6 +236,63 @@ public class LeaderboardManager : MonoBehaviour
     public static bool IsLocalGuestSession()
     {
         return PlayerPrefs.GetInt(LocalGuestSessionKey, 0) == 1;
+    }
+
+    /// <summary>Returns whether the active account has completed its tutorial.</summary>
+    public static bool HasSeenTutorialForActiveSession()
+    {
+        if (TryGetWhiteLabelPlayer(out string playerUlid))
+        {
+            string accountPreferenceKey = TutorialSeenPlayerKeyPrefix + playerUlid;
+            if (PlayerPrefs.HasKey(accountPreferenceKey))
+                return PlayerPrefs.GetInt(accountPreferenceKey, 0) != 0;
+
+            bool hasSeenLegacyTutorial = PlayerPrefs.GetInt(TutorialSeenPreferenceKey, 0) != 0;
+            if (hasSeenLegacyTutorial)
+            {
+                PlayerPrefs.SetInt(accountPreferenceKey, 1);
+                PlayerPrefs.Save();
+            }
+
+            return hasSeenLegacyTutorial;
+        }
+
+        return PlayerPrefs.GetInt(TutorialSeenPreferenceKey, 0) != 0;
+    }
+
+    /// <summary>Records tutorial completion for the active account or local guest session.</summary>
+    public static void MarkTutorialSeenForActiveSession()
+    {
+        if (TryGetWhiteLabelPlayer(out string playerUlid))
+            PlayerPrefs.SetInt(TutorialSeenPlayerKeyPrefix + playerUlid, 1);
+        else
+            PlayerPrefs.SetInt(TutorialSeenPreferenceKey, 1);
+
+        PlayerPrefs.Save();
+    }
+
+    /// <summary>Marks a newly registered White Label account as needing its first tutorial.</summary>
+    public static void ResetTutorialSeenForPlayer(string playerUlid)
+    {
+        if (string.IsNullOrWhiteSpace(playerUlid))
+            return;
+
+        PlayerPrefs.SetInt(TutorialSeenPlayerKeyPrefix + playerUlid, 0);
+        PlayerPrefs.Save();
+    }
+
+    private static bool TryGetWhiteLabelPlayer(out string playerUlid)
+    {
+        playerUlid = string.Empty;
+        if (!TryGetActivePlayer(out string activePlayerUlid, out LootLockerPlayerData playerData) ||
+            !string.Equals(playerData.CurrentPlatform.Platform.ToString(), WhiteLabelPlatformName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        playerUlid = activePlayerUlid;
+        return true;
     }
 
     /// <summary>

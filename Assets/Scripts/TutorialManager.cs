@@ -21,7 +21,6 @@ public sealed class TutorialManager : MonoBehaviour
 
     private const string GameplaySceneName = "Game";
     private const string TutorialOverlayResourceName = "TutorialOverlay";
-    private const string TutorialSeenPreferenceKey = "tutorialSeen";
     private const string GuestSessionType = "Guest";
     private const string NoSessionType = "NoActiveSession";
     private const string BacterialIconResourcePath = "UI/Red bacteria icon";
@@ -307,7 +306,7 @@ public sealed class TutorialManager : MonoBehaviour
                                        !string.Equals(sessionType, NoSessionType, StringComparison.OrdinalIgnoreCase);
         bool shouldOpenForGuest = isGuest && AlwaysShowForGuest;
         bool shouldOpenForAccount = !isGuest && hasAuthenticatedSession &&
-                                    (PlayerPrefs.GetInt(TutorialSeenPreferenceKey, 0) == 0 || ForceShowOnEveryStart);
+                                    (!LeaderboardManager.HasSeenTutorialForActiveSession() || ForceShowOnEveryStart);
         bool shouldOpenWithoutSession = !isGuest && !hasAuthenticatedSession && ForceShowOnEveryStart;
 
         if (shouldOpenForGuest || shouldOpenForAccount || shouldOpenWithoutSession)
@@ -1107,8 +1106,7 @@ public sealed class TutorialManager : MonoBehaviour
         if (!tutorialIsOpen)
             return;
 
-        PlayerPrefs.SetInt(TutorialSeenPreferenceKey, 1);
-        PlayerPrefs.Save();
+        LeaderboardManager.MarkTutorialSeenForActiveSession();
         RestoreTutorialState();
     }
 
