@@ -12,6 +12,8 @@ public sealed class VesselSpawnPointCache : MonoBehaviour
     private const int DefaultKeptPointCount = 40;
     private const float DefaultMinimumPointDistance = 1.5f;
     private const float DefaultSurfaceInset = 0.02f;
+    private const float DefaultEndpointExclusionDistance = 1.5f;
+    private const float VertexWeldTolerance = 0.0001f;
     private const float GizmoSphereRadius = 0.08f;
 
     [SerializeField] private MeshFilter vesselMeshFilter;
@@ -24,10 +26,12 @@ public sealed class VesselSpawnPointCache : MonoBehaviour
     [SerializeField, Min(1)] private int keptPointCount = DefaultKeptPointCount;
     [SerializeField, Min(0f)] private float minimumPointDistance = DefaultMinimumPointDistance;
     [SerializeField, Min(0f)] private float surfaceInset = DefaultSurfaceInset;
+    [SerializeField, Min(0f)] private float endpointExclusionDistance = DefaultEndpointExclusionDistance;
     [SerializeField] private bool showGizmos = true;
 
     private readonly List<Vector3> localSpawnPoints = new List<Vector3>();
     private readonly List<Vector3> worldSpawnPoints = new List<Vector3>();
+    private readonly List<BoundaryEdge> openEndpointEdges = new List<BoundaryEdge>();
     private Matrix4x4 cachedLocalToWorld;
     private bool worldPointsInitialized;
 
@@ -59,6 +63,7 @@ public sealed class VesselSpawnPointCache : MonoBehaviour
         Mesh mesh = vesselMeshFilter.sharedMesh;
         Vector3[] vertices = mesh.vertices;
         int[] triangles = mesh.triangles;
+        CacheOpenEndpointEdges(vertices, triangles);
         Matrix4x4 localToWorld = vesselMeshFilter.transform.localToWorldMatrix;
         List<TriangleArea> weightedTriangles = BuildWeightedTriangles(vertices, triangles, localToWorld, out double totalArea);
         if (weightedTriangles.Count == 0 || totalArea <= 0d)
@@ -83,6 +88,115 @@ public sealed class VesselSpawnPointCache : MonoBehaviour
         {
             Debug.LogWarning($"VesselSpawnPointCache kept {localSpawnPoints.Count} of {Mathf.Max(1, keptPointCount)} requested points at the configured minimum spacing. No fallback points were created.", this);
         }
+    }
+
+    /// <summary>Returns whether a world-space position is too close to an open end of the vessel mesh.</summary>
+    public bool IsNearOpenVesselEnd(Vector3 worldPosition)
+    {
+        if (endpointExclusionDistance <= 0f || openEndpointEdges.Count == 0 || vesselMeshFilter == null)
+            return false;
+
+        float minimumDistanceSquared = endpointExclusionDistance * endpointExclusionDistance;
+        Transform meshTransform = vesselMeshFilter.transform;
+        for (int index = 0; index < openEndpointEdges.Count; index++)
+        {
+            BoundaryEdge edge = openEndpointEdges[index];
+            Vector3 edgeStart = meshTransform.TransformPoint(edge.LocalStart);
+            Vector3 edgeEnd = meshTransform.TransformPoint(edge.LocalEnd);
+            if (GetPointToSegmentDistanceSquared(worldPosition, edgeStart, edgeEnd) < minimumDistanceSquared)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void CacheOpenEndpointEdges(Vector3[] vertices, int[] triangles)
+    {
+        openEndpointEdges.Clear();
+        if (vertices == null || triangles == null || triangles.Length < 3)
+            return;
+
+        Dictionary<Vector3Int, int> weldedVertexIds = new Dictionary<Vector3Int, int>();
+        List<int> representativeVertexIndices = new List<int>();
+        int[] weldedVertexIndex = new int[vertices.Length];
+        float inverseWeldTolerance = 1f / VertexWeldTolerance;
+        for (int vertexIndex = 0; vertexIndex < vertices.Length; vertexIndex++)
+        {
+            Vector3 vertex = vertices[vertexIndex];
+            Vector3Int key = new Vector3Int(
+                Mathf.RoundToInt(vertex.x * inverseWeldTolerance),
+                Mathf.RoundToInt(vertex.y * inverseWeldTolerance),
+                Mathf.RoundToInt(vertex.z * inverseWeldTolerance));
+            if (!weldedVertexIds.TryGetValue(key, out int weldedId))
+            {
+                weldedId = representativeVertexIndices.Count;
+                weldedVertexIds.Add(key, weldedId);
+                representativeVertexIndices.Add(vertexIndex);
+            }
+
+            weldedVertexIndex[vertexIndex] = weldedId;
+        }
+
+        Dictionary<ulong, BoundaryEdgeCount> edgeCounts = new Dictionary<ulong, BoundaryEdgeCount>();
+        for (int triangleIndex = 0; triangleIndex + 2 < triangles.Length; triangleIndex += 3)
+        {
+            int first = triangles[triangleIndex];
+            int second = triangles[triangleIndex + 1];
+            int third = triangles[triangleIndex + 2];
+            AddEdgeOccurrence(edgeCounts, weldedVertexIndex[first], weldedVertexIndex[second]);
+            AddEdgeOccurrence(edgeCounts, weldedVertexIndex[second], weldedVertexIndex[third]);
+            AddEdgeOccurrence(edgeCounts, weldedVertexIndex[third], weldedVertexIndex[first]);
+        }
+
+        foreach (BoundaryEdgeCount edge in edgeCounts.Values)
+        {
+            if (edge.OccurrenceCount != 1)
+                continue;
+
+            Vector3 localStart = vertices[representativeVertexIndices[edge.FirstVertex]];
+            Vector3 localEnd = vertices[representativeVertexIndices[edge.SecondVertex]];
+            openEndpointEdges.Add(new BoundaryEdge(localStart, localEnd));
+        }
+
+        if (openEndpointEdges.Count == 0)
+        {
+            Debug.LogWarning("VesselSpawnPointCache found no open mesh ends; pathogen endpoint exclusion is inactive for this vessel mesh.", this);
+        }
+        else
+        {
+            Debug.Log($"VesselSpawnPointCache excluded pathogen spawns within {endpointExclusionDistance:0.##} world units of {openEndpointEdges.Count} open vessel-end edges.", this);
+        }
+    }
+
+    private static void AddEdgeOccurrence(Dictionary<ulong, BoundaryEdgeCount> edgeCounts, int firstVertex, int secondVertex)
+    {
+        if (firstVertex == secondVertex)
+            return;
+
+        int minimumVertex = Mathf.Min(firstVertex, secondVertex);
+        int maximumVertex = Mathf.Max(firstVertex, secondVertex);
+        ulong edgeKey = ((ulong)(uint)minimumVertex << 32) | (uint)maximumVertex;
+        if (edgeCounts.TryGetValue(edgeKey, out BoundaryEdgeCount edge))
+        {
+            edge.OccurrenceCount++;
+            edgeCounts[edgeKey] = edge;
+        }
+        else
+        {
+            edgeCounts.Add(edgeKey, new BoundaryEdgeCount(minimumVertex, maximumVertex));
+        }
+    }
+
+    private static float GetPointToSegmentDistanceSquared(Vector3 point, Vector3 segmentStart, Vector3 segmentEnd)
+    {
+        Vector3 segment = segmentEnd - segmentStart;
+        float segmentLengthSquared = segment.sqrMagnitude;
+        if (segmentLengthSquared <= Mathf.Epsilon)
+            return (point - segmentStart).sqrMagnitude;
+
+        float projection = Mathf.Clamp01(Vector3.Dot(point - segmentStart, segment) / segmentLengthSquared);
+        Vector3 closestPoint = segmentStart + segment * projection;
+        return (point - closestPoint).sqrMagnitude;
     }
 
     private static List<TriangleArea> BuildWeightedTriangles(Vector3[] vertices, int[] triangles, Matrix4x4 localToWorld, out double totalArea)
@@ -270,6 +384,32 @@ public sealed class VesselSpawnPointCache : MonoBehaviour
         Gizmos.color = Color.cyan;
         for (int i = 0; i < worldSpawnPoints.Count; i++)
             Gizmos.DrawSphere(worldSpawnPoints[i], GizmoSphereRadius);
+    }
+
+    private struct BoundaryEdge
+    {
+        public readonly Vector3 LocalStart;
+        public readonly Vector3 LocalEnd;
+
+        public BoundaryEdge(Vector3 localStart, Vector3 localEnd)
+        {
+            LocalStart = localStart;
+            LocalEnd = localEnd;
+        }
+    }
+
+    private struct BoundaryEdgeCount
+    {
+        public readonly int FirstVertex;
+        public readonly int SecondVertex;
+        public int OccurrenceCount;
+
+        public BoundaryEdgeCount(int firstVertex, int secondVertex)
+        {
+            FirstVertex = firstVertex;
+            SecondVertex = secondVertex;
+            OccurrenceCount = 1;
+        }
     }
 
     private struct TriangleArea

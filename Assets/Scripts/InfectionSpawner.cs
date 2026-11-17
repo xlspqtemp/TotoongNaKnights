@@ -4666,6 +4666,10 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private bool IsPathogenSpawnPositionAvailable(Vector3 candidatePosition, InfectionMarker ignoredMarker = null)
     {
+        VesselSpawnPointCache vesselSpawnPointCache = FindFirstObjectByType<VesselSpawnPointCache>();
+        if (vesselSpawnPointCache != null && vesselSpawnPointCache.IsNearOpenVesselEnd(candidatePosition))
+            return false;
+
         float minimumDistanceSquared = MinimumPathogenSpawnSeparation * MinimumPathogenSpawnSeparation;
         foreach (InfectionMarker marker in activeInfectionMarkers)
         {
