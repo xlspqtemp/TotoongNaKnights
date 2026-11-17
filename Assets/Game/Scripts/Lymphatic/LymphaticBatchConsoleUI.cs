@@ -18,7 +18,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const string NeutrophilUnitName = "Neutrophil";
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
-    private const float IconSize = 68f;
+    private const float IconSize = 88f;
+    private const float SlotSpacingAnchor = 0.08f;
     private const float NeutrophilVariantLongPressDuration = 0.5f;
     private const int NoActivePointerId = int.MinValue;
     private const float FollowZoom = 18f;
@@ -586,12 +587,12 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
     private BatchSlot CreateSlot(int index)
     {
-        float anchorX = 0.05f + (index + 0.5f) * 0.09f;
+        float anchorX = 0.5f + (index - (MaximumSlots - 1) * 0.5f) * SlotSpacingAnchor;
         GameObject iconObject = new GameObject("BatchIcon_" + (index + 1), typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
         iconObject.transform.SetParent(panelRect, false);
         RectTransform iconRect = iconObject.GetComponent<RectTransform>();
         SetRect(iconRect, new Vector2(anchorX, 0.5f), new Vector2(anchorX, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0f, 27f), new Vector2(IconSize, IconSize));
+            new Vector2(0f, IconSize * 0.5f - 7f), new Vector2(IconSize, IconSize));
         Image background = iconObject.GetComponent<Image>();
         background.color = EmptySlotColor;
         background.raycastTarget = true;
@@ -626,7 +627,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
 
         TextMeshProUGUI travelLabel = CreateText("TravelTime_" + (index + 1), panelRect, string.Empty, 9f, MobilizingColor,
             TextAlignmentOptions.Center, new Vector2(anchorX, 0.5f), new Vector2(anchorX, 0.5f), new Vector2(0.5f, 0f),
-            new Vector2(0f, 61f), new Vector2(92f, 18f));
+            new Vector2(0f, IconSize - 7f), new Vector2(92f, 18f));
         TextMeshProUGUI nameLabel = CreateText("BatchName_" + (index + 1), panelRect, string.Empty, 8f, MainTextColor,
             TextAlignmentOptions.Center, new Vector2(anchorX, 0.5f), new Vector2(anchorX, 0.5f), new Vector2(0.5f, 1f),
             new Vector2(0f, -7f), new Vector2(96f, 18f));
