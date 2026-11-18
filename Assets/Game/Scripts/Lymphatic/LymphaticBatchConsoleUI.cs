@@ -44,6 +44,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private static readonly Color EmptySlotColor = Color.black;
     private static readonly Color ActiveSlotColor = new Color(0.035f, 0.095f, 0.12f, 1f);
     private static readonly Color SelectedSlotColor = new Color(0.06f, 0.32f, 0.36f, 1f);
+    private static readonly Color FollowingSlotColor = new Color(0.08f, 0.3f, 0.15f, 1f);
+    private static readonly Color FollowingIndicatorColor = new Color(0.3f, 0.95f, 0.42f, 1f);
     private static readonly Color ReadyColor = new Color(0.25f, 0.9f, 0.4f, 1f);
     private static readonly Color MobilizingColor = new Color(0.25f, 0.65f, 1f, 1f);
     private static readonly Color WorkingColor = new Color(1f, 0.32f, 0.28f, 1f);
@@ -708,6 +710,18 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         if (panelRect == null || batchSpawner == null)
             return;
 
+        if (isFollowingBatch)
+        {
+            LymphaticBatchGroup followedBatch = batchSpawner.GetBatch(followedBatchId);
+            if (followedBatch == null || followedBatch.Status != LymphaticBatchGroup.BatchStatus.Mobilizing)
+            {
+                if (cameraScript != null)
+                    cameraScript.ClearFollowTarget();
+                isFollowingBatch = false;
+                followedBatchId = -1;
+            }
+        }
+
         for (int index = 0; index < MaximumSlots; index++)
         {
             int batchId = index + 1;
@@ -715,8 +729,11 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             LymphaticBatchGroup batch = batchSpawner.GetBatch(batchId);
             bool isOccupied = batch != null;
             bool isSelected = isOccupied && batchId == selectedBatchId;
+            bool isFollowed = isOccupied && isFollowingBatch && batchId == followedBatchId;
             slot.Button.interactable = isOccupied;
-            slot.Background.color = !isOccupied ? EmptySlotColor : isSelected ? SelectedSlotColor : ActiveSlotColor;
+            slot.Background.color = !isOccupied
+                ? EmptySlotColor
+                : isFollowed ? FollowingSlotColor : isSelected ? SelectedSlotColor : ActiveSlotColor;
             slot.Icon.sprite = isOccupied ? GetUnitIcon(batch.UnitType) : null;
             slot.Icon.enabled = slot.Icon.sprite != null;
             slot.Icon.color = isOccupied ? GetBatchIconColor(batchId, batch) : Color.white;
@@ -733,19 +750,12 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             }
 
             slot.NameLabel.text = GetBatchDisplayName(batchId, batch);
+            slot.NameLabel.color = isFollowed ? FollowingIndicatorColor : MainTextColor;
             slot.StatusLabel.text = batch.Status.ToString();
-            slot.StatusLabel.color = GetStatusColor(batch.Status);
+            slot.StatusLabel.color = isFollowed ? FollowingIndicatorColor : GetStatusColor(batch.Status);
             slot.TravelTimeLabel.text = batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing
                 ? FormatTravelTime(batchSpawner.EstimateTravelTime(batch))
                 : string.Empty;
-        }
-
-        if (isFollowingBatch && batchSpawner.GetBatch(followedBatchId) == null)
-        {
-            if (cameraScript != null)
-                cameraScript.ClearFollowTarget();
-            isFollowingBatch = false;
-            followedBatchId = -1;
         }
 
         LymphaticBatchGroup selectedBatch = batchSpawner.GetBatch(selectedBatchId);
@@ -764,10 +774,16 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         if (infectionSpawner != null)
             infectionSpawner.SetBatchDeploymentTargetSelectionPrompt(isAwaitingDeploymentTarget);
 
-        followButton.interactable = selectedBatch != null && selectedBatch.HasEnteredCirculatorySystem;
+        followButton.interactable = selectedBatch != null && selectedBatch.HasEnteredCirculatorySystem &&
+            selectedBatch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing;
         abortButton.interactable = selectedBatch != null && selectedBatch.Status != LymphaticBatchGroup.BatchStatus.Ready;
         destroyButton.interactable = selectedBatch != null;
-        followButtonLabel.text = isFollowingBatch && followedBatchId == selectedBatchId ? "UNFOLLOW" : "FOLLOW";
+        bool isSelectedBatchFollowed = isFollowingBatch && followedBatchId == selectedBatchId;
+        followButtonLabel.text = isSelectedBatchFollowed ? "UNFOLLOW" : "FOLLOW";
+        followButtonLabel.color = isSelectedBatchFollowed ? FollowingIndicatorColor : MainTextColor;
+        followButton.colors = isSelectedBatchFollowed
+            ? CreateButtonColors(FollowingSlotColor, FollowingIndicatorColor)
+            : CreateButtonColors(ActiveSlotColor, SelectedSlotColor);
 
         if (selectionHintLabel != null)
         {
@@ -937,6 +953,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
             cameraScript.ClearFollowTarget();
             isFollowingBatch = false;
             followedBatchId = -1;
+            RefreshSlots();
             return;
         }
 
