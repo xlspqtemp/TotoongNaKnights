@@ -18,6 +18,8 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
     private const string NeutrophilUnitName = "Neutrophil";
     private const string EosinophilVariantName = "EOSINOPHIL";
     private const string BasophilVariantName = "BASOPHIL";
+    private const string EosinophilDisplayName = "Eosinophil";
+    private const string BasophilDisplayName = "Basophil";
     private const float IconSize = 88f;
     private const float SlotSpacingAnchor = 0.08f;
     private const float SlotRowVerticalOffset = -24f;
@@ -557,6 +559,23 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
         return Color.white;
     }
 
+    private string GetBatchDisplayName(int batchId, LymphaticBatchGroup batch)
+    {
+        if (batch == null || !string.Equals(batch.UnitType, NeutrophilUnitName, StringComparison.OrdinalIgnoreCase))
+            return batch != null ? batch.DisplayName : string.Empty;
+
+        string variant = batchId == selectedBatchId && !string.IsNullOrWhiteSpace(selectedNeutrophilVariantName)
+            ? selectedNeutrophilVariantName
+            : batch.InnateCellVariant;
+        if (string.Equals(variant, EosinophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return EosinophilDisplayName;
+        if (string.Equals(variant, BasophilVariantName, StringComparison.OrdinalIgnoreCase))
+            return BasophilDisplayName;
+        if (string.Equals(variant, NeutrophilUnitName, StringComparison.OrdinalIgnoreCase))
+            return NeutrophilUnitName;
+        return batch.DisplayName;
+    }
+
     private static Sprite GetUnitIcon(string unitType)
     {
         if (string.IsNullOrWhiteSpace(unitType))
@@ -713,7 +732,7 @@ public sealed class LymphaticBatchConsoleUI : MonoBehaviour
                 continue;
             }
 
-            slot.NameLabel.text = batch.DisplayName;
+            slot.NameLabel.text = GetBatchDisplayName(batchId, batch);
             slot.StatusLabel.text = batch.Status.ToString();
             slot.StatusLabel.color = GetStatusColor(batch.Status);
             slot.TravelTimeLabel.text = batch.Status == LymphaticBatchGroup.BatchStatus.Mobilizing
