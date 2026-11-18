@@ -55,6 +55,17 @@ public sealed class InfectionSpawner : MonoBehaviour
     private const float KillerTCellWarCryDurationSeconds = 2.8333335f;
     private const int MinimumViralContainmentDays = 2;
     private const int MaximumViralContainmentDays = 3;
+    private const int ContainmentProgressSegmentCount = 3;
+    private const float InGameMinutesPerDay = 24f * 60f;
+    private const float ContainmentProgressCanvasScale = 0.01f;
+    private const float ContainmentProgressCanvasHeightOffset = 2.8f;
+    private const float ContainmentProgressSegmentGap = 4f;
+    private const float ContainmentProgressSegmentInset = 1f;
+    private const float ContainmentProgressSegmentCanvasWidth = 100f;
+    private const float ContainmentProgressSegmentCanvasHeight = 12f;
+    private const string ContainmentOverlayFontResourcePath = "BankGothicMediumSDF";
+    private static readonly Color ContainmentProgressFillColor = new Color(0f, 0.85f, 1f, 1f);
+    private static readonly Color ContainmentProgressUnlitColor = new Color(0.039f, 0.098f, 0.16f, 1f);
     private const string TCellUnitName = "T Cell";
     private const string BCellUnitName = "B Cell";
     private const string NeutrophilUnitName = "Neutrophil";
@@ -291,6 +302,11 @@ public sealed class InfectionSpawner : MonoBehaviour
     private TextMeshProUGUI selectedInfectionCategoryLabel;
     private TextMeshProUGUI selectedInfectionDetailsLabel;
     private InfectionMarker selectedInfectionPopupMarker;
+    private InfectionMarker selectedContainedProgressMarker;
+    private GameObject containmentDetailsCanvasObject;
+    private TextMeshProUGUI containmentDetailsTitleLabel;
+    private TextMeshProUGUI containmentDetailsDaysLabel;
+    private Image[] containmentDetailsSegments;
     private GameObject[] idleSquad;
     private readonly List<DispatchedWbcSquad> dispatchedWbcSquads = new List<DispatchedWbcSquad>();
     private readonly List<DispatchedDendriticCell> dispatchedDendriticCells = new List<DispatchedDendriticCell>();
@@ -636,6 +652,13 @@ public sealed class InfectionSpawner : MonoBehaviour
         public bool bCellTagInProgress;
         public bool resolutionPending;
         public int containedResolveDay;
+        public int containedStartDay;
+        public int containedDurationDays;
+        public int containedStartHour;
+        public int containedStartMinute;
+        public Canvas containedProgressCanvas;
+        public Image[] containedProgressSegments;
+        public Collider containedProgressClickCollider;
         public GameObject containedDendriticCell;
         public Vector3 containedDendriticBasePosition;
         public bool containedDendriticUsesProceduralIdle;
@@ -820,9 +843,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         UpdateInfectionMarkerAnimations();
         UpdateInfectionThreatVisuals();
         UpdateSelectedInfectionPopup();
+        UpdateContainmentDetailsOverlay();
         UpdateSquadPrompt();
         HandleSquadPromptCancellation();
-        HandleMapClick(antigenIconClicked);
+        bool containedDendriticClicked = HandleContainedDendriticClick(antigenIconClicked);
+        HandleMapClick(antigenIconClicked || containedDendriticClicked);
         EnsurePendingInfectionsPanelSubscription();
     }
 
@@ -947,6 +972,7 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void OnDisable()
     {
+        CloseContainmentDetails();
         if (dayCounter != null)
         {
             dayCounter.OnDayAdvanced -= HandleDayAdvanced;
@@ -1925,7 +1951,388 @@ public sealed class InfectionSpawner : MonoBehaviour
             }
 
             FaceDendriticCellToward(marker.containedDendriticCell, GetInfectionVisualCenter(marker));
+            UpdateContainedDendriticProgressBar(marker);
         }
+    }
+
+    private void UpdateContainedDendriticProgressBar(InfectionMarker marker)
+    {
+        if (marker == null || marker.containedProgressCanvas == null || marker.containedProgressSegments == null)
+            return;
+
+        Camera barCamera = gameplayCamera != null ? gameplayCamera : Camera.main;
+        if (barCamera != null)
+        {
+            Transform barTransform = marker.containedProgressCanvas.transform;
+            barTransform.rotation = Quaternion.LookRotation(barCamera.transform.position - barTransform.position);
+        }
+
+        float progress = GetContainedInfectionProgress(marker) * ContainmentProgressSegmentCount;
+        for (int index = 0; index < marker.containedProgressSegments.Length; index++)
+        {
+            Image segmentFill = marker.containedProgressSegments[index];
+            if (segmentFill != null)
+                segmentFill.fillAmount = Mathf.Clamp01(progress - index);
+        }
+    }
+
+    private float GetContainedInfectionProgress(InfectionMarker marker)
+    {
+        if (marker == null || marker.containedDurationDays <= 0 || dayCounter == null)
+            return 0f;
+        if (dayCounter.CurrentDay >= marker.containedResolveDay)
+            return 1f;
+
+        float startTimeOfDay = (marker.containedStartHour * 60f + marker.containedStartMinute) / InGameMinutesPerDay;
+        float currentTimeOfDay = (dayCounter.CurrentHour * 60f + dayCounter.CurrentMinute) / InGameMinutesPerDay;
+        float elapsedDays = dayCounter.CurrentDay - marker.containedStartDay + currentTimeOfDay - startTimeOfDay;
+        return Mathf.Clamp01(elapsedDays / marker.containedDurationDays);
+    }
+
+    private void CreateContainedDendriticProgressBar(InfectionMarker marker, Transform dendriticTransform)
+    {
+        if (marker == null || dendriticTransform == null || marker.containedProgressCanvas != null)
+            return;
+
+        GameObject canvasObject = new GameObject("Containment Progress Bar", typeof(RectTransform), typeof(Canvas));
+        canvasObject.transform.SetParent(dendriticTransform, false);
+        canvasObject.transform.localPosition = GetContainedDendriticHeadOffset(dendriticTransform);
+        canvasObject.transform.localRotation = Quaternion.identity;
+        canvasObject.transform.localScale = Vector3.one * ContainmentProgressCanvasScale;
+
+        Canvas progressCanvas = canvasObject.GetComponent<Canvas>();
+        progressCanvas.renderMode = RenderMode.WorldSpace;
+        progressCanvas.worldCamera = gameplayCamera != null ? gameplayCamera : Camera.main;
+        progressCanvas.sortingOrder = 21;
+        RectTransform canvasRect = canvasObject.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = new Vector2(ContainmentProgressSegmentCanvasWidth, ContainmentProgressSegmentCanvasHeight);
+
+        marker.containedProgressCanvas = progressCanvas;
+        marker.containedProgressSegments = new Image[ContainmentProgressSegmentCount];
+        float segmentWidth = (ContainmentProgressSegmentCanvasWidth -
+            ContainmentProgressSegmentGap * (ContainmentProgressSegmentCount - 1)) / ContainmentProgressSegmentCount;
+
+        for (int index = 0; index < ContainmentProgressSegmentCount; index++)
+        {
+            GameObject segmentObject = new GameObject($"Containment Segment {index + 1}",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            segmentObject.transform.SetParent(canvasObject.transform, false);
+            RectTransform segmentRect = segmentObject.GetComponent<RectTransform>();
+            segmentRect.anchorMin = Vector2.zero;
+            segmentRect.anchorMax = Vector2.zero;
+            segmentRect.pivot = Vector2.zero;
+            segmentRect.anchoredPosition = new Vector2(index * (segmentWidth + ContainmentProgressSegmentGap), 0f);
+            segmentRect.sizeDelta = new Vector2(segmentWidth, ContainmentProgressSegmentCanvasHeight);
+
+            Image segmentBackground = segmentObject.GetComponent<Image>();
+            segmentBackground.color = ContainmentProgressUnlitColor;
+            segmentBackground.raycastTarget = false;
+
+            GameObject fillObject = new GameObject("Fill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            fillObject.transform.SetParent(segmentObject.transform, false);
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.offsetMin = new Vector2(ContainmentProgressSegmentInset, ContainmentProgressSegmentInset);
+            fillRect.offsetMax = new Vector2(-ContainmentProgressSegmentInset, -ContainmentProgressSegmentInset);
+
+            Image segmentFill = fillObject.GetComponent<Image>();
+            segmentFill.color = ContainmentProgressFillColor;
+            segmentFill.type = Image.Type.Filled;
+            segmentFill.fillMethod = Image.FillMethod.Horizontal;
+            segmentFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            segmentFill.fillAmount = 0f;
+            segmentFill.raycastTarget = false;
+            marker.containedProgressSegments[index] = segmentFill;
+        }
+    }
+
+    private Vector3 GetContainedDendriticHeadOffset(Transform dendriticTransform)
+    {
+        Renderer[] renderers = dendriticTransform.GetComponentsInChildren<Renderer>(true);
+        float highestWorldPoint = dendriticTransform.position.y + ContainmentProgressCanvasHeightOffset;
+        foreach (Renderer item in renderers)
+        {
+            if (item != null)
+                highestWorldPoint = Mathf.Max(highestWorldPoint, item.bounds.max.y);
+        }
+
+        Vector3 headPosition = new Vector3(dendriticTransform.position.x, highestWorldPoint + 0.15f,
+            dendriticTransform.position.z);
+        return dendriticTransform.InverseTransformPoint(headPosition);
+    }
+
+    private bool HandleContainedDendriticClick(bool antigenIconClicked)
+    {
+        if (antigenIconClicked || !Input.GetMouseButtonDown(0) || PointerIsOverGraphicUi(Input.mousePosition))
+            return false;
+
+        if (gameplayCamera == null)
+            gameplayCamera = cameraScript != null ? cameraScript.GetComponentInChildren<Camera>() : Camera.main;
+        if (gameplayCamera == null)
+            return false;
+
+        Ray ray = gameplayCamera.ScreenPointToRay(Input.mousePosition);
+        RaycastHit[] hits = Physics.RaycastAll(ray, gameplayCamera.farClipPlane, Physics.DefaultRaycastLayers,
+            QueryTriggerInteraction.Collide);
+        Array.Sort(hits, (first, second) => first.distance.CompareTo(second.distance));
+        foreach (RaycastHit hit in hits)
+        {
+            foreach (InfectionMarker marker in activeInfectionMarkers)
+            {
+                if (marker == null || !marker.isContained || marker.isRemoving || marker.containedDendriticCell == null ||
+                    marker.containedProgressClickCollider == null || hit.collider != marker.containedProgressClickCollider)
+                {
+                    continue;
+                }
+
+                if (selectedContainedProgressMarker == marker && containmentDetailsCanvasObject != null &&
+                    containmentDetailsCanvasObject.activeSelf)
+                {
+                    CloseContainmentDetails();
+                }
+                else
+                {
+                    selectedContainedProgressMarker = marker;
+                    EnsureContainmentDetailsOverlay();
+                    containmentDetailsCanvasObject.SetActive(true);
+                    UpdateContainmentDetailsOverlay();
+                }
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool PointerIsOverGraphicUi(Vector2 screenPosition)
+    {
+        if (EventSystem.current == null)
+            return false;
+
+        PointerEventData pointerData = new PointerEventData(EventSystem.current)
+        {
+            position = screenPosition
+        };
+        List<RaycastResult> raycastResults = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(pointerData, raycastResults);
+        foreach (RaycastResult result in raycastResults)
+        {
+            if (result.module is GraphicRaycaster)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void CreateContainedDendriticClickTarget(InfectionMarker marker, Transform dendriticTransform)
+    {
+        if (marker == null || dendriticTransform == null || marker.containedProgressClickCollider != null)
+            return;
+
+        Renderer[] renderers = dendriticTransform.GetComponentsInChildren<Renderer>(true);
+        Bounds clickBounds = new Bounds(dendriticTransform.position + Vector3.up, new Vector3(1f, 2f, 1f));
+        if (renderers.Length > 0 && renderers[0] != null)
+        {
+            clickBounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                if (renderers[index] != null)
+                    clickBounds.Encapsulate(renderers[index].bounds);
+            }
+        }
+
+        GameObject clickTarget = new GameObject("Containment Click Target", typeof(BoxCollider));
+        Transform clickTransform = clickTarget.transform;
+        clickTransform.SetParent(dendriticTransform, true);
+        clickTransform.position = clickBounds.center;
+        clickTransform.rotation = Quaternion.identity;
+        Vector3 parentScale = dendriticTransform.lossyScale;
+        clickTransform.localScale = new Vector3(
+            1f / Mathf.Max(0.001f, Mathf.Abs(parentScale.x)),
+            1f / Mathf.Max(0.001f, Mathf.Abs(parentScale.y)),
+            1f / Mathf.Max(0.001f, Mathf.Abs(parentScale.z)));
+
+        BoxCollider clickCollider = clickTarget.GetComponent<BoxCollider>();
+        clickCollider.size = new Vector3(
+            Mathf.Max(0.6f, clickBounds.size.x),
+            Mathf.Max(0.8f, clickBounds.size.y),
+            Mathf.Max(0.6f, clickBounds.size.z));
+        clickCollider.isTrigger = true;
+        marker.containedProgressClickCollider = clickCollider;
+    }
+
+    private void EnsureContainmentDetailsOverlay()
+    {
+        if (containmentDetailsCanvasObject != null)
+            return;
+
+        containmentDetailsCanvasObject = new GameObject("Containment Details Overlay",
+            typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        Canvas overlayCanvas = containmentDetailsCanvasObject.GetComponent<Canvas>();
+        overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        overlayCanvas.overrideSorting = true;
+        overlayCanvas.sortingOrder = 120;
+
+        CanvasScaler scaler = containmentDetailsCanvasObject.GetComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.matchWidthOrHeight = 0.5f;
+
+        GameObject frameObject = new GameObject("Containment Details Frame",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        frameObject.transform.SetParent(containmentDetailsCanvasObject.transform, false);
+        RectTransform frameRect = frameObject.GetComponent<RectTransform>();
+        frameRect.anchorMin = new Vector2(0.5f, 1f);
+        frameRect.anchorMax = new Vector2(0.5f, 1f);
+        frameRect.pivot = new Vector2(0.5f, 1f);
+        frameRect.anchoredPosition = new Vector2(0f, -92f);
+        frameRect.sizeDelta = new Vector2(520f, 198f);
+        Image frameImage = frameObject.GetComponent<Image>();
+        frameImage.color = ContainmentProgressFillColor;
+        frameImage.raycastTarget = true;
+
+        GameObject panelObject = new GameObject("Containment Details Panel",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        panelObject.transform.SetParent(frameObject.transform, false);
+        RectTransform panelRect = panelObject.GetComponent<RectTransform>();
+        panelRect.anchorMin = Vector2.zero;
+        panelRect.anchorMax = Vector2.one;
+        panelRect.offsetMin = new Vector2(2f, 2f);
+        panelRect.offsetMax = new Vector2(-2f, -2f);
+        Image panelImage = panelObject.GetComponent<Image>();
+        panelImage.color = new Color(0.018f, 0.035f, 0.055f, 0.97f);
+        panelImage.raycastTarget = true;
+
+        containmentDetailsTitleLabel = CreateContainmentOverlayText("Containment Title", panelObject.transform,
+            new Vector2(24f, -18f), new Vector2(420f, 34f), 22f, ContainmentProgressFillColor,
+            TextAlignmentOptions.Left, new Vector2(0f, 1f), new Vector2(0f, 1f));
+        containmentDetailsDaysLabel = CreateContainmentOverlayText("Containment Days Left", panelObject.transform,
+            new Vector2(0f, 16f), new Vector2(472f, 30f), 22f, Color.white,
+            TextAlignmentOptions.Center, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), "");
+
+        GameObject closeButtonObject = new GameObject("Close Containment Details",
+            typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Button));
+        closeButtonObject.transform.SetParent(panelObject.transform, false);
+        RectTransform closeButtonRect = closeButtonObject.GetComponent<RectTransform>();
+        closeButtonRect.anchorMin = Vector2.one;
+        closeButtonRect.anchorMax = Vector2.one;
+        closeButtonRect.pivot = Vector2.one;
+        closeButtonRect.anchoredPosition = new Vector2(-16f, -14f);
+        closeButtonRect.sizeDelta = new Vector2(34f, 34f);
+        Image closeButtonImage = closeButtonObject.GetComponent<Image>();
+        closeButtonImage.color = new Color(0f, 0.85f, 1f, 0.16f);
+        Button closeButton = closeButtonObject.GetComponent<Button>();
+        closeButton.targetGraphic = closeButtonImage;
+        closeButton.onClick.AddListener(CloseContainmentDetails);
+        CreateContainmentOverlayText("Close Label", closeButtonObject.transform, Vector2.zero, new Vector2(34f, 34f),
+            19f, ContainmentProgressFillColor, TextAlignmentOptions.Center, Vector2.zero, Vector2.zero, "X");
+
+        containmentDetailsSegments = new Image[ContainmentProgressSegmentCount];
+        const float DetailBarWidth = 456f;
+        const float DetailBarHeight = 28f;
+        const float DetailBarGap = 8f;
+        float detailSegmentWidth = (DetailBarWidth - DetailBarGap * (ContainmentProgressSegmentCount - 1)) /
+            ContainmentProgressSegmentCount;
+        for (int index = 0; index < ContainmentProgressSegmentCount; index++)
+        {
+            GameObject segmentObject = new GameObject($"Detail Segment {index + 1}",
+                typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            segmentObject.transform.SetParent(panelObject.transform, false);
+            RectTransform segmentRect = segmentObject.GetComponent<RectTransform>();
+            segmentRect.anchorMin = new Vector2(0f, 1f);
+            segmentRect.anchorMax = new Vector2(0f, 1f);
+            segmentRect.pivot = new Vector2(0f, 1f);
+            segmentRect.anchoredPosition = new Vector2(24f + index * (detailSegmentWidth + DetailBarGap), -94f);
+            segmentRect.sizeDelta = new Vector2(detailSegmentWidth, DetailBarHeight);
+            Image segmentBackground = segmentObject.GetComponent<Image>();
+            segmentBackground.color = ContainmentProgressUnlitColor;
+            segmentBackground.raycastTarget = false;
+
+            GameObject fillObject = new GameObject("Fill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            fillObject.transform.SetParent(segmentObject.transform, false);
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            fillRect.anchorMin = Vector2.zero;
+            fillRect.anchorMax = Vector2.one;
+            fillRect.offsetMin = new Vector2(2f, 2f);
+            fillRect.offsetMax = new Vector2(-2f, -2f);
+            Image segmentFill = fillObject.GetComponent<Image>();
+            segmentFill.color = ContainmentProgressFillColor;
+            segmentFill.type = Image.Type.Filled;
+            segmentFill.fillMethod = Image.FillMethod.Horizontal;
+            segmentFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            segmentFill.fillAmount = 0f;
+            segmentFill.raycastTarget = false;
+            containmentDetailsSegments[index] = segmentFill;
+        }
+
+        containmentDetailsCanvasObject.SetActive(false);
+    }
+
+    private TextMeshProUGUI CreateContainmentOverlayText(string objectName, Transform parent,
+        Vector2 anchoredPosition, Vector2 size, float fontSize, Color color, TextAlignmentOptions alignment,
+        Vector2 anchor = default, Vector2 parentAnchor = default, string text = "")
+    {
+        GameObject textObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer),
+            typeof(TextMeshProUGUI));
+        textObject.transform.SetParent(parent, false);
+        RectTransform textRect = textObject.GetComponent<RectTransform>();
+        textRect.anchorMin = anchor;
+        textRect.anchorMax = parentAnchor == Vector2.zero ? anchor : parentAnchor;
+        textRect.pivot = anchor;
+        textRect.anchoredPosition = anchoredPosition;
+        textRect.sizeDelta = size;
+        TextMeshProUGUI textComponent = textObject.GetComponent<TextMeshProUGUI>();
+        TMP_FontAsset font = Resources.Load<TMP_FontAsset>(ContainmentOverlayFontResourcePath);
+        if (font != null)
+            textComponent.font = font;
+        textComponent.fontSize = fontSize;
+        textComponent.color = color;
+        textComponent.alignment = alignment;
+        textComponent.text = text;
+        textComponent.raycastTarget = false;
+        return textComponent;
+    }
+
+    private void UpdateContainmentDetailsOverlay()
+    {
+        if (containmentDetailsCanvasObject == null || !containmentDetailsCanvasObject.activeSelf)
+            return;
+
+        InfectionMarker marker = selectedContainedProgressMarker;
+        if (marker == null || marker.isRemoving || !marker.isContained || marker.containedDendriticCell == null)
+        {
+            CloseContainmentDetails();
+            return;
+        }
+
+        string infectionName = marker.infection != null ? marker.infection.displayName : "INFECTION";
+        containmentDetailsTitleLabel.text = $"{infectionName.ToUpperInvariant()}  |  CONTAINMENT";
+        int daysLeft = GetContainedDaysRemaining(marker);
+        containmentDetailsDaysLabel.text = daysLeft == 1 ? "1 DAY LEFT" : $"{daysLeft} DAYS LEFT";
+
+        float progress = GetContainedInfectionProgress(marker) * ContainmentProgressSegmentCount;
+        for (int index = 0; index < containmentDetailsSegments.Length; index++)
+        {
+            if (containmentDetailsSegments[index] != null)
+                containmentDetailsSegments[index].fillAmount = Mathf.Clamp01(progress - index);
+        }
+    }
+
+    private int GetContainedDaysRemaining(InfectionMarker marker)
+    {
+        if (marker == null)
+            return 0;
+        int currentDay = dayCounter != null ? dayCounter.CurrentDay : marker.containedStartDay;
+        return Mathf.Max(0, marker.containedResolveDay - currentDay);
+    }
+
+    private void CloseContainmentDetails()
+    {
+        selectedContainedProgressMarker = null;
+        if (containmentDetailsCanvasObject != null)
+            containmentDetailsCanvasObject.SetActive(false);
     }
 
     private static Vector3 GetInfectionVisualCenter(InfectionMarker marker)
@@ -2066,6 +2473,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         bool hasLoopingSceneAnimation = animator != null && animator.runtimeAnimatorController != null &&
             animator.HasState(0, Animator.StringToHash(DendriticAnimationStateName));
         marker.containedDendriticUsesProceduralIdle = !hasLoopingSceneAnimation;
+        if (marker.infection != null && marker.infection.pathogenType == InfectionPathogenType.Viral)
+        {
+            CreateContainedDendriticProgressBar(marker, dendriticCell.transform);
+            CreateContainedDendriticClickTarget(marker, dendriticCell.transform);
+        }
         FaceDendriticCellToward(dendriticCell, pathogenPosition);
     }
 
@@ -2112,6 +2524,13 @@ public sealed class InfectionSpawner : MonoBehaviour
             iconBasePosition = iconPosition,
             scaleAnchor = marker.worldPosition
         });
+        if (marker.containedProgressCanvas != null)
+            Destroy(marker.containedProgressCanvas.gameObject);
+        if (marker.containedProgressClickCollider != null)
+            Destroy(marker.containedProgressClickCollider.gameObject);
+        marker.containedProgressCanvas = null;
+        marker.containedProgressSegments = null;
+        marker.containedProgressClickCollider = null;
         marker.containedDendriticCell = null;
         marker.containedDendriticUsesProceduralIdle = false;
         return true;
@@ -3240,7 +3659,11 @@ public sealed class InfectionSpawner : MonoBehaviour
         int minimumContainmentDays = Mathf.Clamp(containedSelfResolveDays,
             MinimumViralContainmentDays, MaximumViralContainmentDays);
         int containmentDays = UnityEngine.Random.Range(minimumContainmentDays, MaximumViralContainmentDays + 1);
-        marker.containedResolveDay = (dayCounter != null ? dayCounter.CurrentDay : 0) + containmentDays;
+        marker.containedStartDay = dayCounter != null ? dayCounter.CurrentDay : 0;
+        marker.containedStartHour = dayCounter != null ? dayCounter.CurrentHour : 0;
+        marker.containedStartMinute = dayCounter != null ? dayCounter.CurrentMinute : 0;
+        marker.containedDurationDays = containmentDays;
+        marker.containedResolveDay = marker.containedStartDay + containmentDays;
         SpawnContainedDendriticCell(marker);
         AddLeukocyteSupply(containmentBonus);
         LogWbcSquadMessage($"WBC contained {marker.infection.displayName}, but the virus is hiding inside cells. Adaptive response is building.", ConsoleLogUI.LogType.Warning);
