@@ -170,6 +170,8 @@ public sealed class InfectionSpawner : MonoBehaviour
     private List<InfectionData> infectionEntries;
     private int hoursUntilNextInfectionSpawn;
     private bool infectionSpawnTimerInitialized;
+    private int infectionsSpawnedToday;
+    private int infectionSpawnDay = -1;
     private bool tutorialViralIsolationActive;
     private InfectionMarker isolatedTutorialViralMarker;
 
@@ -4210,6 +4212,8 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void HandleDayAdvanced(int currentDay)
     {
+        infectionSpawnDay = currentDay;
+        infectionsSpawnedToday = 0;
         UpdateContainedInfections(currentDay);
         ApplyDailyUnresolvedInfectionCosts();
     }
@@ -4269,6 +4273,21 @@ public sealed class InfectionSpawner : MonoBehaviour
 
     private void SpawnTimedInfection(int currentDay, int currentHour)
     {
+        if (infectionSpawnDay != currentDay)
+        {
+            infectionSpawnDay = currentDay;
+            infectionsSpawnedToday = 0;
+        }
+
+        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
+        int dailyInfectionLimit = difficultyStats != null ? Mathf.Max(0, difficultyStats.infectionsPerDay) : 0;
+        if (infectionsSpawnedToday >= dailyInfectionLimit)
+        {
+            string difficultyName = difficultyStats != null ? difficultyStats.difficultyName : "unknown";
+            Debug.Log($"[InfectionSpawner] Skipped scheduled infection at Day {currentDay}, Hour {currentHour:00}: daily infection limit reached ({infectionsSpawnedToday}/{dailyInfectionLimit}) for {difficultyName} difficulty.", this);
+            return;
+        }
+
         if (activeInfectionMarkers.Count >= maxActiveInfections)
         {
             Debug.LogWarning($"[InfectionSpawner] Skipped scheduled infection at Day {currentDay}, Hour {currentHour:00}: active infection cap reached ({maxActiveInfections}).", this);
@@ -4299,9 +4318,10 @@ public sealed class InfectionSpawner : MonoBehaviour
         InfectionMarker marker = SpawnMarker(infection, bodyPartButton, wasBarrierMutated);
         if (marker == null)
             return;
+
+        infectionsSpawnedToday++;
         LogInfection(infection, bodyPartButton);
-        DifficultyStats difficultyStats = DifficultySettings.CurrentStats;
-        Debug.Log($"[InfectionSpawner] Spawn roll {namedRoll}/100 with NamedChance={difficultyStats.namedInfectionChance:0.##}% => {(isGeneric ? "Generic" : "Named")}. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}.", this);
+        Debug.Log($"[InfectionSpawner] Spawn roll {namedRoll}/100 with NamedChance={difficultyStats.namedInfectionChance:0.##}% => {(isGeneric ? "Generic" : "Named")}. Profile={infection.pathogenDatabaseName}; Type={infection.pathogenType}; Rarity={infection.rarity}; Severity={infection.severityStage}; Difficulty={difficultyStats.difficultyName}; TierWeights=Common:{difficultyStats.commonPathogenWeightPercent:0.##}%/Uncommon:{difficultyStats.uncommonPathogenWeightPercent:0.##}%/Rare:{difficultyStats.rarePathogenWeightPercent:0.##}%/VeryRare:{difficultyStats.veryRarePathogenWeightPercent:0.##}%; Day={currentDay}; Hour={currentHour:00}; DailyInfections={infectionsSpawnedToday}/{dailyInfectionLimit}.", this);
     }
 
     private bool TryCreateWeightedInfection(out InfectionData infection, out bool isGeneric, out int namedRoll)

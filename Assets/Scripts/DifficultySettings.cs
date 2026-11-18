@@ -7,7 +7,7 @@ public sealed class DifficultyStats
     public string difficultyName;
     public int maxActiveSquads = 2;
     public int displayMaxActiveSquads = 2;
-    public int eventsPerDay;
+    public int infectionsPerDay;
     public float wbcHp;
     public float wbcAttack;
     public float bacteriaHp;
@@ -33,12 +33,12 @@ public sealed class DifficultyStats
     {
     }
 
-    public DifficultyStats(string name, int events, float whiteBloodCellHp, float whiteBloodCellAttack,
+    public DifficultyStats(string name, int dailyInfectionLimit, float whiteBloodCellHp, float whiteBloodCellAttack,
         float bacterialHp, float viralHp, float bacterialAttack, float viralAttack,
         float attackInterval, float damageVsBacteria, float damageVsVirus)
     {
         difficultyName = name;
-        eventsPerDay = events;
+        infectionsPerDay = dailyInfectionLimit;
         wbcHp = whiteBloodCellHp;
         wbcAttack = whiteBloodCellAttack;
         bacteriaHp = bacterialHp;
