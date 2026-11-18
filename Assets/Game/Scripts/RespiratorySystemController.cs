@@ -749,11 +749,9 @@ public sealed class RespiratorySystemController : MonoBehaviour
         {
             foreach (string eventKey in eventKeys)
             {
-                if (wellnessManager.TryAwardEventResponse(eventKey, "RespiratoryResponse", 0f, 5f, true))
-                {
-                    wellnessManager.ResolveEventQTE(eventKey);
-                    QTETracker.Unregister(QTETracker.RespiratoryLayerIndex, eventKey);
-                }
+                wellnessManager.TryAwardEventResponse(eventKey, "RespiratoryResponse", 0f, 5f, true);
+                wellnessManager.ResolveEventQTE(eventKey);
+                QTETracker.Unregister(QTETracker.RespiratoryLayerIndex, eventKey);
             }
         }
 
