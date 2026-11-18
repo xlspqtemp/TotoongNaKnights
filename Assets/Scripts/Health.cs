@@ -8,7 +8,7 @@ public sealed class Health : MonoBehaviour
 {
     [SerializeField, Min(0f)] private float currentHp = 100f;
     [SerializeField, Min(0f)] private float maxHp = 100f;
-    [SerializeField] private bool showWorldHealthBar = true;
+    [SerializeField] private bool showWorldHealthBar = false;
     [SerializeField, Min(0f)] private float deathShrinkDuration = 0.3f;
     [SerializeField] private Vector3 healthBarLocalOffset = new Vector3(0f, 1.2f, 0f);
     [SerializeField] private Vector2 healthBarSize = new Vector2(0.8f, 0.08f);
@@ -32,17 +32,12 @@ public sealed class Health : MonoBehaviour
 
     private void Awake()
     {
+        showWorldHealthBar = false;
         DifficultyStats stats = DifficultySettings.CurrentStats;
         maxHp = GetComponentInChildren<BacteriaAgent>(true) != null ? stats.bacteriaHp : stats.wbcHp;
         maxHp = Mathf.Max(0f, maxHp);
         currentHp = maxHp;
         initialScale = transform.localScale;
-    }
-
-    private void Start()
-    {
-        if (showWorldHealthBar && !IsDead)
-            CreateHealthBar();
     }
 
     private void Update()
