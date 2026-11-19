@@ -395,6 +395,104 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5ad30fe4cd83ac7468bfe1898f61834c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  showManualButton: 1
+  difficultyStats:
+  - difficultyName: Easy
+    maxActiveSquads: 3
+    displayMaxActiveSquads: 2
+    infectionsPerDay: 2
+    wbcHp: 150
+    wbcAttack: 15
+    bacteriaHp: 80
+    virusHp: 100
+    bacteriaAttack: 3
+    virusAttack: 3
+    attackIntervalSeconds: 1
+    wbcDamageMultiplierVsBacteria: 1
+    wbcDamageMultiplierVsVirus: 0.5
+    startingSupply: 100
+    maxSupply: 100
+    deployCost: 15
+    regenSecondsPerPoint: 2
+    commonPathogenWeightPercent: 80
+    uncommonPathogenWeightPercent: 20
+    rarePathogenWeightPercent: 0
+    veryRarePathogenWeightPercent: 0
+    namedInfectionChance: 20
+    barrierDamageMultiplier: 0.5
+    innateVariantSpecialistDamageMultiplier: 3
+  - difficultyName: Normal
+    maxActiveSquads: 2
+    displayMaxActiveSquads: 2
+    infectionsPerDay: 3
+    wbcHp: 100
+    wbcAttack: 10
+    bacteriaHp: 90
+    virusHp: 100
+    bacteriaAttack: 5
+    virusAttack: 4
+    attackIntervalSeconds: 1
+    wbcDamageMultiplierVsBacteria: 1
+    wbcDamageMultiplierVsVirus: 0.5
+    startingSupply: 100
+    maxSupply: 100
+    deployCost: 20
+    regenSecondsPerPoint: 3
+    commonPathogenWeightPercent: 55
+    uncommonPathogenWeightPercent: 35
+    rarePathogenWeightPercent: 10
+    veryRarePathogenWeightPercent: 0
+    namedInfectionChance: 40
+    barrierDamageMultiplier: 1
+    innateVariantSpecialistDamageMultiplier: 3
+  - difficultyName: Medium
+    maxActiveSquads: 2
+    displayMaxActiveSquads: 2
+    infectionsPerDay: 5
+    wbcHp: 100
+    wbcAttack: 10
+    bacteriaHp: 120
+    virusHp: 150
+    bacteriaAttack: 6
+    virusAttack: 5
+    attackIntervalSeconds: 1
+    wbcDamageMultiplierVsBacteria: 1
+    wbcDamageMultiplierVsVirus: 0.5
+    startingSupply: 100
+    maxSupply: 100
+    deployCost: 25
+    regenSecondsPerPoint: 4
+    commonPathogenWeightPercent: 20
+    uncommonPathogenWeightPercent: 30
+    rarePathogenWeightPercent: 30
+    veryRarePathogenWeightPercent: 20
+    namedInfectionChance: 50
+    barrierDamageMultiplier: 1.5
+    innateVariantSpecialistDamageMultiplier: 3
+  - difficultyName: Hard
+    maxActiveSquads: 2
+    displayMaxActiveSquads: 2
+    infectionsPerDay: 5
+    wbcHp: 80
+    wbcAttack: 8
+    bacteriaHp: 130
+    virusHp: 170
+    bacteriaAttack: 7
+    virusAttack: 6
+    attackIntervalSeconds: 1
+    wbcDamageMultiplierVsBacteria: 1
+    wbcDamageMultiplierVsVirus: 0.5
+    startingSupply: 100
+    maxSupply: 100
+    deployCost: 30
+    regenSecondsPerPoint: 5
+    commonPathogenWeightPercent: 5
+    uncommonPathogenWeightPercent: 5
+    rarePathogenWeightPercent: 10
+    veryRarePathogenWeightPercent: 80
+    namedInfectionChance: 60
+    barrierDamageMultiplier: 2
+    innateVariantSpecialistDamageMultiplier: 3
 --- !u!4 &672681963
 Transform:
   m_ObjectHideFlags: 0
